@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/bradgross/Library/Mobile Documents/com~apple~CloudDocs/WorkTranscripts/transcript-analyzer/bin/analyze.sh</string>
+        <string>/Users/bradgross/code/transcript-analyzer/bin/analyze.sh</string>
     </array>
 
     <!-- Run every 30 minutes. Increase to 3600 (hourly) if 30 min feels chatty. -->

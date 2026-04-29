@@ -67,6 +67,8 @@ jq '[.[] | .cost_usd] | add' .processed.json
 
 A wrapper script at `bin/analyze.sh` runs the analyzer and fires a macOS notification banner only when something actually happened (analyses written, or failures). Silent runs stay silent.
 
+> **Important: do not put this repo inside iCloud Drive** (`~/Library/Mobile Documents/com~apple~CloudDocs/...`). macOS TCC blocks launchd-spawned processes from executing files in iCloud paths, so the LaunchAgent will fail with `Operation not permitted`. Keep the working tree under `~/code/` or another non-protected location and use git/GitHub for cross-device sync.
+
 To install on a stock macOS Mac:
 
 ```bash

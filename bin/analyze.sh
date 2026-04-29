@@ -5,6 +5,12 @@
 
 set -uo pipefail
 
+# Derive repo root from the script's own location so this works wherever the
+# repo lives, without hardcoded paths.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT" || { echo "ERROR: cannot cd to $REPO_ROOT"; exit 1; }
+
 VENV_PYTHON="$HOME/.venvs/transcript-analyzer/bin/python"
 LOG_DIR="$HOME/Library/Logs"
 LOG_FILE="$LOG_DIR/transcript-analyzer.log"

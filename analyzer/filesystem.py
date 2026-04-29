@@ -3,8 +3,8 @@ from datetime import date
 from pathlib import Path
 
 from .config import CONFIG
+from .filing import LEADING_PREFIX
 
-_LEADING_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?\s*-\s*")
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -49,7 +49,7 @@ def _normalize(s: str) -> str:
 
 def _core_title(filename: str) -> str:
     stem = Path(filename).stem
-    stem = _LEADING_TIMESTAMP.sub("", stem)
+    stem = LEADING_PREFIX.sub("", stem)
     return _normalize(stem)
 
 

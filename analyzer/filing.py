@@ -3,7 +3,19 @@ from datetime import date, datetime
 from pathlib import Path
 
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_LEADING_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?\s*-\s*")
+
+# Plaud / Zap source filenames look like:
+#   "2026-04-28T10:04:27Z - 2026-04-28 10:04:27 - RCA Weekly Raid meet.txt"
+# (Finder/Drive display the colons as slashes — the on-disk character is `:`.)
+# We strip BOTH leading blocks so the title doesn't end up with a redundant
+# date+time stuck on the front. The second block is optional because some
+# sources only have one prefix.
+LEADING_PREFIX = re.compile(
+    r"^"
+    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?"
+    r"\s*-\s*"
+    r"(?:\d{4}-\d{2}-\d{2}(?:[\sT]\d{2}:\d{2}:\d{2}Z?)?\s*-\s*)?"
+)
 _TRAILING_DATE = re.compile(r"\s*-?\s*\d{4}-\d{2}-\d{2}\s*$")
 
 
@@ -19,7 +31,7 @@ def _extract_meeting_date(transcript_filename: str) -> date:
 
 def _original_title(transcript_filename: str) -> str:
     stem = Path(transcript_filename).stem
-    stem = _LEADING_TIMESTAMP.sub("", stem)
+    stem = LEADING_PREFIX.sub("", stem)
     stem = _TRAILING_DATE.sub("", stem)
     # Defensive: strip path separators in case a transcript name ever contains
     # one (would otherwise let the assembled output filename escape Analyzed/).

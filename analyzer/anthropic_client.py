@@ -39,7 +39,10 @@ def _build_system(
         {
             "type": "text",
             "text": cached_prefix,
-            "cache_control": {"type": "ephemeral"},
+            # 1-hour TTL: each file analysis takes 3+ minutes, so the default
+            # 5-minute TTL expires mid-batch and forces redundant cache writes.
+            # 1h write is 2× input rate (paid once); subsequent reads at 0.1×.
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
         }
     ]
 

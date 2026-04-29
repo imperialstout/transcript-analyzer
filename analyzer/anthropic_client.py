@@ -1,0 +1,83 @@
+from dataclasses import dataclass
+
+import anthropic
+
+from .config import CONFIG, supports_thinking
+from .manifest import Usage
+
+_FRAMING = """\
+You are analyzing meeting transcripts for an enterprise Salesforce program (SherpaX at Siemens).
+
+The user is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized. Don't sanitize. Use the Program Context Brief below to ground who's who, who reports to whom, and what's politically loaded. Prefer full names from the brief over Plaud's phonetic transcription guesses.
+"""
+
+
+@dataclass
+class AnalysisResult:
+    text: str
+    usage: Usage
+
+
+def _build_system(
+    context_brief: str, prompt_body: str, frontmatter_instruction: str
+) -> list[dict]:
+    """System as a list of text blocks. The last block carries cache_control,
+    which caches the entire stable prefix (framing + brief + frontmatter spec
+    + prompt body) across every call in the batch. The transcript itself goes
+    in the user message and stays uncached (varies per call)."""
+    cached_prefix = "\n\n".join(
+        [
+            _FRAMING.strip(),
+            "=== PROGRAM CONTEXT BRIEF ===",
+            context_brief.strip(),
+            frontmatter_instruction.strip(),
+            "=== PROMPT TO EXECUTE ===",
+            prompt_body.strip(),
+        ]
+    )
+    return [
+        {
+            "type": "text",
+            "text": cached_prefix,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def analyze(
+    *,
+    transcript_text: str,
+    prompt_body: str,
+    context_brief: str,
+    frontmatter_instruction: str,
+    model: str,
+) -> AnalysisResult:
+    client = anthropic.Anthropic(api_key=CONFIG.anthropic_api_key)
+    system = _build_system(context_brief, prompt_body, frontmatter_instruction)
+    messages = [{"role": "user", "content": f"Transcript:\n\n{transcript_text}"}]
+
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": 64000,
+        "system": system,
+        "messages": messages,
+    }
+    if supports_thinking(model):
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": CONFIG.effort}
+
+    with client.messages.stream(**kwargs) as stream:
+        message = stream.get_final_message()
+
+    text = "".join(b.text for b in message.content if b.type == "text")
+    usage = Usage(
+        input_tokens=message.usage.input_tokens,
+        output_tokens=message.usage.output_tokens,
+        cache_creation_input_tokens=getattr(
+            message.usage, "cache_creation_input_tokens", 0
+        )
+        or 0,
+        cache_read_input_tokens=getattr(message.usage, "cache_read_input_tokens", 0)
+        or 0,
+    )
+    return AnalysisResult(text=text, usage=usage)

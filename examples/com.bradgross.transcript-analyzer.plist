@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.bradgross.transcript-analyzer</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/bradgross/Library/Mobile Documents/com~apple~CloudDocs/WorkTranscripts/transcript-analyzer/bin/analyze.sh</string>
+    </array>
+
+    <!-- Run every 30 minutes. Increase to 3600 (hourly) if 30 min feels chatty. -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <!-- Don't pile up runs if the laptop wakes after a long sleep. -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/bradgross/Library/Logs/transcript-analyzer-launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/bradgross/Library/Logs/transcript-analyzer-launchd.log</string>
+
+    <!-- Inherit a minimal PATH so /usr/bin (osascript) is available. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

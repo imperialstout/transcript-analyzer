@@ -63,6 +63,43 @@ Everything is in `.env`. See `.env.example` for the full list. Highlights:
 jq '[.[] | .cost_usd] | add' .processed.json
 ```
 
+## Scheduled runs (launchd + macOS notifications)
+
+A wrapper script at `bin/analyze.sh` runs the analyzer and fires a macOS notification banner only when something actually happened (analyses written, or failures). Silent runs stay silent.
+
+To install on a stock macOS Mac:
+
+```bash
+chmod +x bin/analyze.sh
+cp examples/com.bradgross.transcript-analyzer.plist ~/Library/LaunchAgents/
+launchctl load -w ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+```
+
+That schedules a run every 30 min. Logs land at:
+
+- `~/Library/Logs/transcript-analyzer.log` — rolling history of every run
+- `~/Library/Logs/transcript-analyzer-last.log` — just the most recent run
+- `~/Library/Logs/transcript-analyzer-launchd.log` — launchd's own bookkeeping
+
+To pause or remove:
+
+```bash
+# Pause (stops scheduled runs, keeps the plist on disk):
+launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+
+# Remove entirely:
+launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+rm ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+```
+
+To force a run right now without waiting for the schedule:
+
+```bash
+launchctl start com.bradgross.transcript-analyzer
+```
+
+The first time the launch agent fires `osascript`, macOS may prompt for notification permission. Allow it once and future runs will banner silently.
+
 ## File layout
 
 ```text

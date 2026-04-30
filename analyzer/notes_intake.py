@@ -28,6 +28,7 @@ No LLM call. Pure file plumbing + a Drive `files.export` for `.gdoc`s.
 
 import json
 import re
+import subprocess
 import sys
 import time
 from datetime import date, datetime
@@ -121,6 +122,84 @@ def _read_gdoc_id(path: Path) -> str | None:
     return None
 
 
+def _read_gdoc_id_via_xattr(path: Path) -> str | None:
+    """Read doc_id from Drive's extended attribute.
+
+    Google Drive stores the document id in `com.google.drivefs.item-id#S` on
+    every `.gdoc` file. This is read via the `getxattr(2)` syscall, which
+    uses a different code path than file-content reads — it doesn't trigger
+    the File Provider materialization that causes EDEADLK in launchd-spawned
+    processes for freshly-synced files.
+    """
+    try:
+        result = subprocess.run(
+            ["/usr/bin/xattr", "-p", "com.google.drivefs.item-id#S", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        print(
+            f"  [notes] {path.name}: xattr fallback failed — "
+            f"{type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return None
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        print(
+            f"  [notes] {path.name}: xattr fallback returned "
+            f"{result.returncode} ({stderr or 'no stderr'})",
+            file=sys.stderr,
+        )
+        return None
+    doc_id = result.stdout.strip()
+    return doc_id or None
+
+
+def _resolve_doc_id_via_drive(path: Path, drive_service) -> str | None:
+    """Look up a Drive doc by its local filename.
+
+    Used when the local `.gdoc` body is unreadable due to Drive's File
+    Provider returning EDEADLK to launchd-spawned processes for newly-synced
+    files. The filename of the local shortcut matches the Doc title in
+    Drive (Drive sync names them after the title), so a name search can
+    recover the doc_id without ever touching the local file body.
+    """
+    title = path.stem.replace("'", r"\'")
+    try:
+        results = drive_service.files().list(
+            q=f"name = '{title}' and mimeType = 'application/vnd.google-apps.document' and trashed = false",
+            spaces="drive",
+            fields="files(id, name, modifiedTime)",
+            pageSize=10,
+        ).execute()
+    except Exception as e:
+        print(
+            f"  [notes] {path.name}: Drive name-search failed — "
+            f"{type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return None
+    files = results.get("files", [])
+    if not files:
+        print(
+            f"  [notes] {path.name}: no Drive doc matches name {path.stem!r}",
+            file=sys.stderr,
+        )
+        return None
+    if len(files) > 1:
+        # Multiple docs with this exact title — pick the most recent so we
+        # at least make progress instead of stalling forever.
+        files.sort(key=lambda f: f.get("modifiedTime", ""), reverse=True)
+        print(
+            f"  [notes] {path.name}: {len(files)} Drive docs match name; "
+            f"picking most recent ({files[0].get('modifiedTime')})",
+            file=sys.stderr,
+        )
+    return files[0]["id"]
+
+
 def _fetch_gdoc_text(doc_id: str, drive_service) -> str:
     """Export a Google Doc as plain text via Drive `files.export`.
 
@@ -167,8 +246,25 @@ def _process_gdoc(src: Path, drive_service) -> dict | None:
 
     doc_id = _read_gdoc_id(src)
     if not doc_id:
-        # _read_gdoc_id already logged the specific cause.
-        return None
+        # Local body read failed (typically EDEADLK from Drive's File Provider
+        # on launchd-spawned processes for freshly-synced files). Try the
+        # xattr stored by Drive — different syscall path, often unaffected by
+        # the deadlock-avoidance error. Drive name-search is the final
+        # safety net (works unless Drive renamed the file locally, e.g.,
+        # because the title contained a `/`).
+        print(
+            f"  [notes] {src.name}: local read failed; trying xattr fallback",
+            file=sys.stderr,
+        )
+        doc_id = _read_gdoc_id_via_xattr(src)
+        if not doc_id:
+            print(
+                f"  [notes] {src.name}: xattr failed; trying Drive name-search",
+                file=sys.stderr,
+            )
+            doc_id = _resolve_doc_id_via_drive(src, drive_service)
+        if not doc_id:
+            return None
 
     try:
         body = _fetch_gdoc_text(doc_id, drive_service)

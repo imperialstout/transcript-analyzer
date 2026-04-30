@@ -30,8 +30,13 @@ def list_unanalyzed_transcripts() -> tuple[list[Path], int]:
     return sorted(txts), gdocs
 
 
-def move_to_processed(transcript_path: Path, meeting_date: date) -> Path:
-    target_dir = CONFIG.processed_path / f"{meeting_date.year:04d}-{meeting_date.month:02d}"
+def move_to_processed(
+    transcript_path: Path,
+    meeting_date: date,
+    processed_root: Path | None = None,
+) -> Path:
+    root = processed_root or CONFIG.processed_path
+    target_dir = root / f"{meeting_date.year:04d}-{meeting_date.month:02d}"
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / transcript_path.name
     if target.exists():

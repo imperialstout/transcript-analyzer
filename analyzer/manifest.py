@@ -59,6 +59,7 @@ def record(
     manifest = load()
     entry = {
         "analyzed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "mode": "transcript",
         "output_filename": output_filename,
         "prompt_key": prompt_key,
         "model": model,
@@ -70,8 +71,25 @@ def record(
         "duration_seconds": round(duration_seconds, 2),
     }
     manifest[source_filename] = entry
+    _write(manifest)
+    return entry
+
+
+def record_note(source_filename: str, *, output_filename: str) -> dict:
+    """Manifest entry for a Gemini-summary note filed without an LLM call."""
+    manifest = load()
+    entry = {
+        "analyzed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "mode": "notes",
+        "output_filename": output_filename,
+    }
+    manifest[source_filename] = entry
+    _write(manifest)
+    return entry
+
+
+def _write(manifest: dict) -> None:
     CONFIG.manifest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = CONFIG.manifest_path.with_suffix(CONFIG.manifest_path.suffix + ".tmp")
     tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
     tmp.replace(CONFIG.manifest_path)
-    return entry

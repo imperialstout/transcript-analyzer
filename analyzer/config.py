@@ -43,6 +43,8 @@ class Config:
     call_transcripts_path: Path
     processed_path: Path
     analyzed_path: Path
+    notes_path: Path
+    notes_processed_path: Path
     prompt_library_path: Path
     context_brief_path: Path
     manifest_path: Path
@@ -57,6 +59,8 @@ CONFIG = Config(
     call_transcripts_path=_path("CALL_TRANSCRIPTS_PATH", f"{_DRIVE_BASE}/Call Transcripts"),
     processed_path=_path("PROCESSED_PATH", f"{_DRIVE_BASE}/Call Transcripts/_Processed"),
     analyzed_path=_path("ANALYZED_PATH", f"{_DRIVE_BASE}/Analyzed"),
+    notes_path=_path("NOTES_PATH", f"{_DRIVE_BASE}/Call Transcripts/notes"),
+    notes_processed_path=_path("NOTES_PROCESSED_PATH", f"{_DRIVE_BASE}/Call Transcripts/notes/_Processed"),
     prompt_library_path=_path("PROMPT_LIBRARY_PATH", f"{_DRIVE_BASE}/PromptLibrary.md"),
     context_brief_path=_path("CONTEXT_BRIEF_PATH", f"{_DRIVE_BASE}/Program_Context_Brief.md"),
     manifest_path=_path("MANIFEST_PATH", str(_REPO_ROOT / ".processed.json")),

@@ -3,9 +3,11 @@ import time
 
 from . import anthropic_client as ac
 from . import config as cfg_mod
+from . import drive_client
 from . import filesystem as fs
 from . import filing
 from . import manifest
+from . import notes_intake
 from . import prompts
 
 
@@ -37,13 +39,45 @@ def main() -> int:
 
     frontmatter_instr = prompts.frontmatter_instruction()
 
+    existing_manifest = manifest.load()
+
+    # Notes intake first — fast, no LLM, fails closed (file stays in place).
+    notes = notes_intake.list_pending_notes()
+    notes_pending = [n for n in notes if not manifest.is_recorded(n.name, existing_manifest)]
+    notes_filed = 0
+    notes_skipped = 0
+    if notes_pending:
+        # Only initialize Drive (and pay the OAuth-token check cost) if a
+        # .gdoc is actually pending. Failure is non-fatal: log and skip
+        # those, .txt notes still process.
+        drive_service = None
+        gdocs_pending = [n for n in notes_pending if n.suffix == ".gdoc"]
+        if gdocs_pending:
+            try:
+                drive_service = drive_client.get_drive_service()
+            except Exception as e:
+                print(
+                    f"Drive service unavailable — {len(gdocs_pending)} .gdoc note(s) "
+                    f"will be skipped: {e}",
+                    file=sys.stderr,
+                )
+
+        print(f"Found {len(notes_pending)} pending note(s) in {cfg.notes_path}.")
+        for note in notes_pending:
+            entry = notes_intake.process_note(note, drive_service=drive_service)
+            if entry:
+                notes_filed += 1
+            else:
+                notes_skipped += 1
+        # Refresh manifest in case downstream transcript dedup needs it.
+        existing_manifest = manifest.load()
+
     try:
         txts, gdoc_count = fs.list_unanalyzed_transcripts()
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
-    existing_manifest = manifest.load()
     candidates: list = []
     fuzzy_skipped: list[str] = []
     for txt in txts:
@@ -61,8 +95,6 @@ def main() -> int:
 
     n = len(candidates)
     print(f"Found {n} unanalyzed transcript{'s' if n != 1 else ''}.")
-    if n == 0:
-        return 0
 
     succeeded = 0
     failed = 0
@@ -112,11 +144,19 @@ def main() -> int:
             print(f"  [{i}/{n}] FAILED: {type(e).__name__}: {e}", file=sys.stderr)
             failed += 1
 
-    print(
-        f"All done. {succeeded} succeeded, {failed} failed. "
-        f"Total cost: ${total_cost:.2f}."
+    total_succeeded = succeeded + notes_filed
+    total_failed = failed + notes_skipped
+    notes_detail = (
+        f" (transcripts: {succeeded}/{succeeded + failed}; "
+        f"notes: {notes_filed}/{notes_filed + notes_skipped})"
+        if notes_pending
+        else ""
     )
-    return 0 if failed == 0 else 2
+    print(
+        f"All done. {total_succeeded} succeeded, {total_failed} failed. "
+        f"Total cost: ${total_cost:.2f}.{notes_detail}"
+    )
+    return 0 if total_failed == 0 else 2
 
 
 if __name__ == "__main__":

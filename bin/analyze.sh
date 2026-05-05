@@ -40,12 +40,25 @@ if [[ -n "$SUMMARY" ]]; then
     FAILED=${FAILED:-0}
     if [[ "$SUCCEEDED" -gt 0 || "$FAILED" -gt 0 ]]; then
         TITLE="Transcript Analyzer"
+        BODY="$SUMMARY"
         if [[ "$FAILED" -gt 0 ]]; then
             TITLE="Transcript Analyzer — $FAILED failed"
+            # Surface terminal failure reasons in the banner so Brad doesn't
+            # have to open the log to find which file/why.
+            FAIL_DETAILS=$(grep -E "^[[:space:]]*\[(notes|transcripts)\] .+: (missing required|Drive fetch failed|could not parse|is not a valid)" "$LAST_RUN" \
+                | sed -E 's/^[[:space:]]*\[(notes|transcripts)\] //' \
+                | head -3)
+            if [[ -n "$FAIL_DETAILS" ]]; then
+                BODY="$FAIL_DETAILS"
+            fi
         fi
+        # AppleScript embeds the body inside double quotes — escape backslashes
+        # and quotes so filenames with punctuation don't break the call.
+        BODY_ESC=$(printf '%s' "$BODY" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+        TITLE_ESC=$(printf '%s' "$TITLE" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
         # osascript may silently fail if notification permission isn't granted;
         # don't make that a fatal error.
-        osascript -e "display notification \"$SUMMARY\" with title \"$TITLE\"" || true
+        osascript -e "display notification \"$BODY_ESC\" with title \"$TITLE_ESC\"" || true
     fi
 else
     # No summary line means the script crashed before completion. Always notify.

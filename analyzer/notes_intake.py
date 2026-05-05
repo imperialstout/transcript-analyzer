@@ -26,6 +26,7 @@ Two input formats, both at the root of `notes_path`:
 No LLM call. Pure file plumbing + a Drive `files.export` for `.gdoc`s.
 """
 
+import difflib
 import json
 import re
 import subprocess
@@ -49,6 +50,34 @@ _WORKSTREAM_RE = re.compile(
 _MEETING_TYPE_RE = re.compile(
     r"^\s*Meeting\s*Type\s*:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE
 )
+
+_KEY_VALUE_LINE_RE = re.compile(
+    r"^\s*([A-Za-z][A-Za-z ]{2,40})\s*:\s*(.+?)\s*$", re.MULTILINE
+)
+
+
+def _find_typo_hints(
+    candidates: list[tuple[str, str]], missing: list[str]
+) -> list[str]:
+    # Catches `Workspace: BuildingX` when the validator wanted `Workstream:`.
+    # Brad hit this once and lost two hours of cron cycles before noticing.
+    keys = [k for k, _ in candidates]
+    keys_lc = [k.lower() for k in keys]
+    hints: list[str] = []
+    for field in missing:
+        match = difflib.get_close_matches(
+            field.lower(), keys_lc, n=1, cutoff=0.6
+        )
+        if not match:
+            continue
+        idx = keys_lc.index(match[0])
+        actual_key, actual_val = candidates[idx]
+        if actual_key.lower() == field.lower():
+            continue
+        hints.append(
+            f'did you mean "{field}"? found "{actual_key}: {actual_val}"'
+        )
+    return hints
 
 
 def list_pending_notes() -> list[Path]:
@@ -291,12 +320,17 @@ def _process_gdoc(src: Path, drive_service) -> dict | None:
         if not val
     ]
     if missing:
-        print(
+        parts = [
             f"  [notes] {src.name}: missing required body line(s): "
             f"{', '.join(missing)} (add `Workstream: X` / `Meeting Type: Y` "
-            f"anywhere in the doc)",
-            file=sys.stderr,
-        )
+            f"anywhere in the doc)"
+        ]
+        candidates = [
+            (m.group(1).strip(), m.group(2).strip())
+            for m in _KEY_VALUE_LINE_RE.finditer(body)
+        ]
+        parts.extend(f"    {h}" for h in _find_typo_hints(candidates, missing))
+        print("\n".join(parts), file=sys.stderr)
         return None
 
     # Pass the Gemini-derived title through filing so the output filename
@@ -407,10 +441,12 @@ def _process_txt(src: Path) -> dict | None:
 
     missing = validate_txt(metadata)
     if missing:
-        print(
-            f"  [notes] {src.name}: missing required field(s): {', '.join(missing)}",
-            file=sys.stderr,
-        )
+        parts = [
+            f"  [notes] {src.name}: missing required field(s): {', '.join(missing)}"
+        ]
+        candidates = [(k, str(v)) for k, v in metadata.items()]
+        parts.extend(f"    {h}" for h in _find_typo_hints(candidates, missing))
+        print("\n".join(parts), file=sys.stderr)
         return None
 
     meeting_date = _coerce_meeting_date(metadata["meeting_date"])

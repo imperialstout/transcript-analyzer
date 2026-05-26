@@ -1,4 +1,6 @@
+import errno
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -88,7 +90,26 @@ def fuzzy_is_analyzed(transcript_path: Path) -> bool:
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as e:
+        # Drive's File Provider returns EDEADLK on Python `open()` for
+        # freshly-synced files when called from a launchd-spawned process.
+        # `cat` uses a different code path that survives — same reason the
+        # xattr fallback in notes_intake works for `.gdoc`.
+        if e.errno != errno.EDEADLK:
+            raise
+        result = subprocess.run(
+            ["/bin/cat", str(path)],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            raise OSError(
+                f"cat fallback failed for {path} (exit {result.returncode}): {stderr or '<no stderr>'}"
+            )
+        return result.stdout.decode("utf-8")
 
 
 def write_text(path: Path, content: str) -> None:

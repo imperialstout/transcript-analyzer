@@ -18,6 +18,17 @@ LAST_RUN="$LOG_DIR/transcript-analyzer-last.log"
 
 mkdir -p "$LOG_DIR"
 
+# Concurrency guard. Analyses take 3+ min and launchd fires every 30 min, but
+# manual `python -m analyzer` runs can overlap with a scheduled tick — when
+# they do, both pay Claude for the same transcript and the loser collides on
+# the source-file move. `mkdir` is atomic, dependency-free, and portable.
+LOCK_DIR="$HOME/Library/Caches/transcript-analyzer.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "[$(date -Iseconds)] another run in progress (lock at $LOCK_DIR); skipping" >> "$LOG_FILE"
+    exit 0
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
 if [[ ! -x "$VENV_PYTHON" ]]; then
     echo "[$(date -Iseconds)] ERROR: venv python not found at $VENV_PYTHON" >> "$LOG_FILE"
     exit 1
@@ -44,9 +55,11 @@ if [[ -n "$SUMMARY" ]]; then
         if [[ "$FAILED" -gt 0 ]]; then
             TITLE="Transcript Analyzer — $FAILED failed"
             # Surface terminal failure reasons in the banner so Brad doesn't
-            # have to open the log to find which file/why.
-            FAIL_DETAILS=$(grep -E "^[[:space:]]*\[(notes|transcripts)\] .+: (missing required|Drive fetch failed|could not parse|is not a valid)" "$LAST_RUN" \
-                | sed -E 's/^[[:space:]]*\[(notes|transcripts)\] //' \
+            # have to open the log to find which file/why. Catches both the
+            # notes pipeline (`  [notes] file.gdoc: reason`) and the transcript
+            # pipeline (`  [1/1] FAILED: ExceptionType: message`).
+            FAIL_DETAILS=$(grep -E "^[[:space:]]*(\[notes\] .+:|\[[0-9]+/[0-9]+\] FAILED:)" "$LAST_RUN" \
+                | sed -E -e 's/^[[:space:]]*\[notes\] //' -e 's/^[[:space:]]*\[[0-9]+\/[0-9]+\] //' \
                 | head -3)
             if [[ -n "$FAIL_DETAILS" ]]; then
                 BODY="$FAIL_DETAILS"

@@ -42,26 +42,23 @@ def main() -> int:
     existing_manifest = manifest.load()
 
     # Notes intake first — fast, no LLM, fails closed (file stays in place).
+    # Drive service is used by two pipelines:
+    #   - notes intake (.gdoc body export)
+    #   - transcript reads, as the last-resort EDEADLK fallback in fs.read_text
+    # Initialize once, eagerly, so both pipelines share the same handle.
+    # Failure is non-fatal: notes pipeline skips .gdocs, transcript pipeline
+    # loses its Drive fallback but local reads still work for healthy files.
+    drive_service = None
+    try:
+        drive_service = drive_client.get_drive_service()
+    except Exception as e:
+        print(f"Drive service unavailable — {e}", file=sys.stderr)
+
     notes = notes_intake.list_pending_notes()
     notes_pending = [n for n in notes if not manifest.is_recorded(n.name, existing_manifest)]
     notes_filed = 0
     notes_skipped = 0
     if notes_pending:
-        # Only initialize Drive (and pay the OAuth-token check cost) if a
-        # .gdoc is actually pending. Failure is non-fatal: log and skip
-        # those, .txt notes still process.
-        drive_service = None
-        gdocs_pending = [n for n in notes_pending if n.suffix == ".gdoc"]
-        if gdocs_pending:
-            try:
-                drive_service = drive_client.get_drive_service()
-            except Exception as e:
-                print(
-                    f"Drive service unavailable — {len(gdocs_pending)} .gdoc note(s) "
-                    f"will be skipped: {e}",
-                    file=sys.stderr,
-                )
-
         print(f"Found {len(notes_pending)} pending note(s) in {cfg.notes_path}.")
         for note in notes_pending:
             entry = notes_intake.process_note(note, drive_service=drive_service)
@@ -106,7 +103,7 @@ def main() -> int:
         print(f"  [{i}/{n}] {src.name} → {prompt_key} ({model})")
 
         try:
-            transcript = fs.read_text(src)
+            transcript = fs.read_text(src, drive_service=drive_service)
 
             t0 = time.monotonic()
             result = ac.analyze(

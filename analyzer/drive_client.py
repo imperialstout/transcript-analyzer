@@ -63,6 +63,31 @@ def _save_token(creds: Credentials) -> None:
     TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
 
 
+def fetch_text_file_by_name(filename: str, drive_service: Resource) -> str:
+    """Download a `.txt` body from Drive by exact filename match.
+
+    Last-resort fallback for the launchd × Drive File Provider EDEADLK bug:
+    when both `open()` and `/bin/cat` refuse to read a freshly-synced .txt,
+    this bypasses the local FUSE mount entirely and pulls the body straight
+    from Google's HTTP API. Filenames in Drive match the local cache names,
+    so a `name = '...'` query resolves the file id.
+    """
+    safe = filename.replace("'", r"\'")
+    results = drive_service.files().list(
+        q=f"name = '{safe}' and mimeType = 'text/plain' and trashed = false",
+        spaces="drive",
+        fields="files(id, name, modifiedTime)",
+        pageSize=10,
+    ).execute()
+    files = results.get("files", [])
+    if not files:
+        raise FileNotFoundError(f"no Drive file matches name {filename!r} (text/plain)")
+    if len(files) > 1:
+        files.sort(key=lambda f: f.get("modifiedTime", ""), reverse=True)
+    response = drive_service.files().get_media(fileId=files[0]["id"]).execute()
+    return response.decode("utf-8") if isinstance(response, bytes) else str(response)
+
+
 def bootstrap_oauth() -> None:
     """Interactive: open browser, get user consent, save refresh token.
 

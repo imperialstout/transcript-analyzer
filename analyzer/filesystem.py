@@ -1,9 +1,12 @@
 import errno
 import re
 import subprocess
+import sys
+import time
 from datetime import date
 from pathlib import Path
 
+from . import drive_client
 from .config import CONFIG
 from .filing import LEADING_PREFIX
 
@@ -89,27 +92,65 @@ def fuzzy_is_analyzed(transcript_path: Path) -> bool:
     return False
 
 
-def read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as e:
-        # Drive's File Provider returns EDEADLK on Python `open()` for
-        # freshly-synced files when called from a launchd-spawned process.
-        # `cat` uses a different code path that survives — same reason the
-        # xattr fallback in notes_intake works for `.gdoc`.
-        if e.errno != errno.EDEADLK:
-            raise
+def read_text(path: Path, drive_service=None) -> str:
+    """Read a local file, with layered fallbacks for the Drive × launchd quirk.
+
+    Drive's File Provider returns EDEADLK to launchd-spawned processes for
+    freshly-synced files. We've observed this hit both `open()` and `/bin/cat`
+    in the same process — so retries on local reads aren't enough on their own,
+    and the Drive API is the only reliable escape hatch.
+
+    Defense layers (each only runs if the previous failed with EDEADLK):
+      1. `open()` + retry (3 attempts, 0.5s/1.0s backoff) — absorbs short locks.
+      2. `/bin/cat` + retry — uses a different syscall path than `open()`.
+      3. Drive API `files.get_media` by name — bypasses the FUSE mount entirely.
+
+    Non-EDEADLK errors propagate immediately (no point retrying a real
+    permission denied / not found). Fails closed if all layers exhaust.
+    """
+    open_err: OSError | None = None
+    for attempt in range(3):
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as e:
+            if e.errno != errno.EDEADLK:
+                raise
+            open_err = e
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+
+    cat_stderr = "<no stderr>"
+    for attempt in range(3):
         result = subprocess.run(
             ["/bin/cat", str(path)],
             capture_output=True,
             timeout=30,
         )
-        if result.returncode != 0:
-            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        if result.returncode == 0:
+            return result.stdout.decode("utf-8")
+        cat_stderr = result.stderr.decode("utf-8", errors="replace").strip() or "<no stderr>"
+        if attempt < 2:
+            time.sleep(0.5 * (attempt + 1))
+
+    if drive_service is not None:
+        print(
+            f"  read_text: local read failed for {path.name} "
+            f"(open: {open_err}; cat: {cat_stderr}); trying Drive API",
+            file=sys.stderr,
+        )
+        try:
+            return drive_client.fetch_text_file_by_name(path.name, drive_service)
+        except Exception as e:
             raise OSError(
-                f"cat fallback failed for {path} (exit {result.returncode}): {stderr or '<no stderr>'}"
-            )
-        return result.stdout.decode("utf-8")
+                f"all read fallbacks failed for {path}: "
+                f"open EDEADLK ×3; cat {cat_stderr!r} ×3; "
+                f"Drive API {type(e).__name__}: {e}"
+            ) from e
+
+    raise OSError(
+        f"local read failed for {path} (no Drive fallback configured): "
+        f"open EDEADLK ×3; cat {cat_stderr!r} ×3"
+    )
 
 
 def write_text(path: Path, content: str) -> None:

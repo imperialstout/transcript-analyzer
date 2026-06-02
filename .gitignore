@@ -5,3 +5,13 @@ __pycache__/
 .DS_Store
 .processed.json
 .claude/
+
+# Sensitive program content — lives in Drive (Workcall/), NEVER in the repo.
+# These carry stakeholder politics, career notes, and named individuals.
+# Ignored by name as a safety net in case a copy is dropped into the tree;
+# copy them to the work machine manually, out of band.
+Workcall/
+PromptLibrary.md
+Program_Context_Brief.md
+04_people_rolodex.md
+05_plaud_vocabulary.md

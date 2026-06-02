@@ -93,9 +93,16 @@ MD
 echo
 echo "==================== running analyzer (real claude -p) ===================="
 cd "$REPO" || exit 1
-# shellcheck disable=SC1090
-source ~/.venvs/transcript-analyzer/bin/activate 2>/dev/null || {
-  echo "WARN: venv ~/.venvs/transcript-analyzer not found — using current python"; }
+VENV="$HOME/.venvs/transcript-analyzer"
+if [ -x "$VENV/bin/python" ]; then
+  PY="$VENV/bin/python"
+else
+  echo "ERROR: venv not found at $VENV. Create it first:"
+  echo "    python3 -m venv \"$VENV\""
+  echo "    \"$VENV/bin/pip\" install -r \"$REPO/requirements.txt\""
+  echo "  then re-run: bash bin/smoke_test.sh"
+  exit 1
+fi
 
 env -u ANTHROPIC_API_KEY \
   BACKEND=claude-cli \
@@ -108,7 +115,7 @@ env -u ANTHROPIC_API_KEY \
   PROMPT_LIBRARY_PATH="$T/PromptLibrary.md" \
   CONTEXT_BRIEF_PATH="$T/Program_Context_Brief.md" \
   MANIFEST_PATH="$T/.processed.json" \
-  python -m analyzer
+  "$PY" -m analyzer
 rc=$?
 
 echo

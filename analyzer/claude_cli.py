@@ -23,11 +23,27 @@ Phase 0 checks in the project plan.
 """
 
 import json
+import os
 import subprocess
 
 from . import anthropic_client as ac
 from .config import CONFIG
 from .manifest import Usage
+
+
+def _seat_env() -> dict:
+    """Environment for `claude -p`, with ANTHROPIC_API_KEY stripped.
+
+    The claude-cli backend bills the Claude Code seat/subscription, never a
+    personal API key. But the analyzer loads ANTHROPIC_API_KEY from `.env` (the
+    `api` fallback backend needs it), and a subprocess would otherwise inherit
+    it and silently bill the key instead of the seat. Stripping it here makes
+    the "zero personal-key usage" guarantee structural — matches the
+    `env -u ANTHROPIC_API_KEY` the phase0 probe uses.
+    """
+    env = os.environ.copy()
+    env.pop("ANTHROPIC_API_KEY", None)
+    return env
 
 # A single analysis can take minutes (extended thinking + long output). Generous
 # ceiling; a hung call should fail closed rather than wedge the whole batch.
@@ -66,6 +82,7 @@ def run_claude_p(
             text=True,
             capture_output=True,
             timeout=timeout,
+            env=_seat_env(),
         )
     except FileNotFoundError as e:
         # `claude` not on PATH — the work seat CLI isn't installed/visible to

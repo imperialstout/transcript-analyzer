@@ -41,7 +41,27 @@ CLAUDE_BIN=/absolute/path/to/claude     # from step 0
 The seat authenticates `claude` independently of `ANTHROPIC_API_KEY` (you proved
 this with `env -u APIKEY claude -p …`), and may route through Bedrock under the
 hood — that's fine, the CLI backend never touches the key or Bedrock directly.
-The only thing that varies is **model ID strings**; the probe pins them.
+The backend now also strips `ANTHROPIC_API_KEY` from the `claude -p` subprocess
+(`claude_cli._seat_env()`), so even if `.env` defines a key for the `api`
+fallback, the seat path can't accidentally bill it. The only thing that varies
+is **model ID strings**; the probe pins them.
+
+**No standalone `claude` on PATH (extension-only machine)?** If the only Claude
+Code install is the VSCode extension, the binary lives at a versioned path like
+`~/.vscode/extensions/anthropic.claude-code-<ver>/resources/native-binary/claude`,
+which changes on every extension update. Point `CLAUDE_BIN` at a small wrapper
+that resolves the newest one at call time instead of hard-coding the version:
+
+```bash
+cat > ~/.config/transcript-analyzer/claude-wrapper.sh <<'WRAP'
+#!/bin/bash
+BIN="$(ls -dt ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | head -1)"
+[ -x "$BIN" ] || { echo "no bundled claude binary found" >&2; exit 127; }
+exec "$BIN" "$@"
+WRAP
+chmod +x ~/.config/transcript-analyzer/claude-wrapper.sh
+# then in .env:  CLAUDE_BIN=~/.config/transcript-analyzer/claude-wrapper.sh  (absolute path)
+```
 
 Point the `*_PATH` vars at wherever the transcripts live on this machine (work Google
 Drive, a synced folder, etc.) if it isn't the default personal-Drive layout.

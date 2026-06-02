@@ -81,13 +81,19 @@ def _find_typo_hints(
 
 
 def list_pending_notes() -> list[Path]:
-    """Return `.txt` and `.gdoc` files at the root of notes_path."""
+    """Return `.txt`, `.gdoc`, and `.md` files at the root of notes_path.
+
+    `.md` notes are Slack/Gemini summary *bodies* exported locally (e.g. from
+    the work machine), as opposed to `.gdoc` shortcuts (body fetched via the
+    Drive API) and `.txt` notes (YAML frontmatter). All three are dispatched
+    by suffix in `process_note`.
+    """
     root = CONFIG.notes_path
     if not root.exists():
         return []
     return sorted(
         p for p in root.iterdir()
-        if p.is_file() and p.suffix in (".txt", ".gdoc")
+        if p.is_file() and p.suffix in (".txt", ".gdoc", ".md")
     )
 
 
@@ -242,16 +248,63 @@ def _fetch_gdoc_text(doc_id: str, drive_service) -> str:
     return text.lstrip("﻿")
 
 
+# Gemini meeting notes write "Jun 01, 2026"; Daily Slack summaries write
+# "June 1, 2026" (full month, unpadded day). strptime's %d already accepts
+# unpadded days, so the only axis that varies is abbreviated vs. full month.
+_HEADER_DATE_FORMATS = ("%b %d, %Y", "%B %d, %Y")
+
+
+def _parse_header_date(line: str) -> date | None:
+    for fmt in _HEADER_DATE_FORMATS:
+        try:
+            return datetime.strptime(line, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+# Some summary bodies have no date on line 1 (the first line is the title
+# instead) — but the date is always in the filename, e.g.
+# "Daily Slack Summary – June 1, 2026" or the range "Daily Status Summary –
+# May 18–19, 2026". Match `Month D[–D], YYYY` anywhere in the stem.
+_FILENAME_DATE_RE = re.compile(
+    r"(?P<month>[A-Za-z]+)\s+(?P<d1>\d{1,2})"
+    r"(?:\s*[–—-]\s*(?P<d2>\d{1,2}))?,\s*(?P<year>\d{4})"
+)
+
+
+def _date_from_filename(stem: str) -> date | None:
+    m = _FILENAME_DATE_RE.search(stem)
+    if not m:
+        return None
+    # For a day range ("May 18–19, 2026") file under the later day — that's
+    # the most recent activity the summary covers.
+    day = m.group("d2") or m.group("d1")
+    return _parse_header_date(f"{m.group('month')} {day}, {m.group('year')}")
+
+
 def parse_gemini_header(text: str) -> tuple[date | None, str | None]:
-    """Pull meeting_date (line 1, `MMM DD, YYYY`) and title (line 2)."""
+    """Pull meeting_date (line 1) and title (line 2) from a notes body.
+
+    Line 1 is always the date (`Jun 01, 2026` for Gemini meeting notes,
+    `June 1, 2026` for Daily Slack summaries). Line 2 is the meeting title
+    for Gemini notes, but Slack summaries have no body title — line 2 is a
+    `Workstream:` / `Meeting Type:` metadata line instead. In that case the
+    title is returned as None and the caller falls back to the filename stem
+    (where Slack summaries actually carry the title).
+    """
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return None, None
+    meeting_date = _parse_header_date(lines[0])
+    if meeting_date is None:
+        return None, None
     if len(lines) < 2:
-        return None, None
-    try:
-        meeting_date = datetime.strptime(lines[0], "%b %d, %Y").date()
-    except ValueError:
-        return None, None
-    return meeting_date, lines[1] or None
+        return meeting_date, None
+    title = lines[1]
+    if _WORKSTREAM_RE.match(title) or _MEETING_TYPE_RE.match(title):
+        return meeting_date, None
+    return meeting_date, title or None
 
 
 def _extract_workstream_meeting_type(
@@ -304,14 +357,55 @@ def _process_gdoc(src: Path, drive_service) -> dict | None:
         )
         return None
 
+    return _file_summary_body(src, body)
+
+
+# ---- .md path (locally-exported summary body) ---------------------------
+
+
+def _process_md(src: Path, drive_service=None) -> dict | None:
+    """File a Slack/Gemini summary body dropped in as a local `.md` file.
+
+    Same body shape as a `.gdoc`, but the body is already on disk — read it
+    with the EDEADLK-tolerant fallback chain (Drive's File Provider can still
+    deadlock launchd reads of freshly-synced files) and file it identically.
+    """
+    try:
+        body = fs.read_text(src, drive_service)
+    except OSError as e:
+        print(f"  [notes] {src.name}: read failed — {e}", file=sys.stderr)
+        return None
+    return _file_summary_body(src, body)
+
+
+# ---- shared summary-body filing (.gdoc + .md) ---------------------------
+
+
+def _file_summary_body(src: Path, body: str) -> dict | None:
+    """File a parsed summary body into Analyzed/. Shared by `.gdoc` and `.md`.
+
+    Date comes from the body header when present, else from the filename
+    (some bodies lead with the title, not the date). Title comes from the
+    body's line 2 when it's a real title, else the filename stem (Slack
+    summaries carry the title in the filename). Workstream / Meeting Type
+    are required body lines and fail closed if absent.
+    """
     meeting_date, title = parse_gemini_header(body)
-    if meeting_date is None or not title:
+    if meeting_date is None:
+        # No date on body line 1 — recover it from the filename.
+        meeting_date = _date_from_filename(src.stem)
+    if meeting_date is None:
         print(
-            f"  [notes] {src.name}: could not parse Gemini header "
-            f"(expected `MMM DD, YYYY` on line 1, title on line 2)",
+            f"  [notes] {src.name}: could not determine meeting date "
+            f"(no `Jun 01, 2026` / `June 1, 2026` on line 1 and no date in "
+            f"the filename)",
             file=sys.stderr,
         )
         return None
+    if not title:
+        # No title in the body, so fall back to the filename stem
+        # (e.g. "Daily Slack Summary – June 1, 2026").
+        title = src.stem
 
     workstream, meeting_type = _extract_workstream_meeting_type(body)
     missing = [
@@ -333,9 +427,9 @@ def _process_gdoc(src: Path, drive_service) -> dict | None:
         print("\n".join(parts), file=sys.stderr)
         return None
 
-    # Pass the Gemini-derived title through filing so the output filename
-    # matches the title from the doc body, not the user-set Google Doc name
-    # (which can drift if Brad renames the doc later).
+    # Pass the derived title through filing so the output filename matches
+    # the title from the body/filename, not a Google Doc name that can drift
+    # if Brad renames the doc later.
     output_filename, _ = filing.build_output_filename(
         f"{title}.txt", meeting_date_override=meeting_date
     )
@@ -424,7 +518,7 @@ def _coerce_meeting_date(value) -> date | None:
 
 def _process_txt(src: Path) -> dict | None:
     try:
-        text = src.read_text(encoding="utf-8")
+        text = fs.read_text(src)
     except OSError as e:
         print(f"  [notes] {src.name}: read failed — {e}", file=sys.stderr)
         return None
@@ -491,4 +585,6 @@ def process_note(src: Path, drive_service=None) -> dict | None:
     """
     if src.suffix == ".gdoc":
         return _process_gdoc(src, drive_service)
+    if src.suffix == ".md":
+        return _process_md(src, drive_service)
     return _process_txt(src)

@@ -64,24 +64,29 @@ def _save_token(creds: Credentials) -> None:
 
 
 def fetch_text_file_by_name(filename: str, drive_service: Resource) -> str:
-    """Download a `.txt` body from Drive by exact filename match.
+    """Download a `.txt`/`.md` body from Drive by exact filename match.
 
     Last-resort fallback for the launchd × Drive File Provider EDEADLK bug:
-    when both `open()` and `/bin/cat` refuse to read a freshly-synced .txt,
+    when both `open()` and `/bin/cat` refuse to read a freshly-synced file,
     this bypasses the local FUSE mount entirely and pulls the body straight
     from Google's HTTP API. Filenames in Drive match the local cache names,
-    so a `name = '...'` query resolves the file id.
+    so a `name = '...'` query resolves the file id. Mime filter accepts both
+    text/plain (.txt) and text/markdown (.md).
     """
     safe = filename.replace("'", r"\'")
     results = drive_service.files().list(
-        q=f"name = '{safe}' and mimeType = 'text/plain' and trashed = false",
+        q=(
+            f"name = '{safe}' and "
+            f"(mimeType = 'text/plain' or mimeType = 'text/markdown') and "
+            f"trashed = false"
+        ),
         spaces="drive",
         fields="files(id, name, modifiedTime)",
         pageSize=10,
     ).execute()
     files = results.get("files", [])
     if not files:
-        raise FileNotFoundError(f"no Drive file matches name {filename!r} (text/plain)")
+        raise FileNotFoundError(f"no Drive file matches name {filename!r} (text/plain or text/markdown)")
     if len(files) > 1:
         files.sort(key=lambda f: f.get("modifiedTime", ""), reverse=True)
     response = drive_service.files().get_media(fileId=files[0]["id"]).execute()

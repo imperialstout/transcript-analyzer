@@ -37,7 +37,6 @@ The script will warn at startup if it ever loads `.env` from the repo path.
 source .venv/bin/activate
 python -m analyzer
 ```
-
 The script:
 
 1. Lists `.txt` files at the root of `Call Transcripts/` (subfolders ignored).

@@ -14,7 +14,7 @@ _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def list_unanalyzed_transcripts() -> tuple[list[Path], int]:
-    """Return (.txt files at root, count of .gdoc files seen).
+    """Return (.txt/.md files at root, count of .gdoc files seen).
 
     Subfolders (including _Processed/) are skipped — only the root counts.
     The .gdoc count is surfaced so the caller can warn Brad if the Zap
@@ -28,7 +28,7 @@ def list_unanalyzed_transcripts() -> tuple[list[Path], int]:
     for entry in root.iterdir():
         if entry.is_dir():
             continue
-        if entry.suffix == ".txt":
+        if entry.suffix in (".txt", ".md"):
             txts.append(entry)
         elif entry.suffix == ".gdoc":
             gdocs += 1

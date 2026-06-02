@@ -24,11 +24,20 @@
     <key>StandardErrorPath</key>
     <string>/Users/bradgross/Library/Logs/transcript-analyzer-launchd.log</string>
 
-    <!-- Inherit a minimal PATH so /usr/bin (osascript) is available. -->
+    <!-- Inherit a minimal PATH so /usr/bin (osascript) AND the `claude` CLI are
+         available. launchd's PATH does not include your shell's additions, so the
+         Claude Code install dir must be listed here (run `dirname "$(which claude)"`
+         to find it — often ~/.claude/local or /opt/homebrew/bin). The claude-cli
+         backend will fail closed with a clear "claude CLI not found" error if it
+         isn't reachable. Alternatively set CLAUDE_BIN to an absolute path below. -->
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin</string>
+        <!-- Absolute path to the Claude Code binary (most robust under launchd).
+             Confirmed via phase0_check.sh on the work machine. -->
+        <key>CLAUDE_BIN</key>
+        <string>/opt/homebrew/bin/claude</string>
     </dict>
 </dict>
 </plist>

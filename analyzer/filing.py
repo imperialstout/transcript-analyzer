@@ -60,3 +60,20 @@ def build_output_filename(
     # Final safety net: ensure no path components survived assembly.
     name = Path(name).name
     return name, meeting_date
+
+
+def shareable_filename(analyzed_filename: str) -> str:
+    """Derive the `[SHAREABLE]` sibling of an `[ANALYZED]` output name.
+
+    Swaps the `[ANALYZED]` tag for `[SHAREABLE]` so the redacted, leads-readable
+    version shares the exact timestamp/title/date stem as the internal file and
+    sorts adjacent to it in `Analyzed/`. Falls back to a suffix insert if the
+    tag isn't present (shouldn't happen, but never returns a colliding name).
+    """
+    if "[ANALYZED]" in analyzed_filename:
+        name = analyzed_filename.replace("[ANALYZED]", "[SHAREABLE]")
+    else:
+        stem = Path(analyzed_filename).stem
+        suffix = Path(analyzed_filename).suffix or ".txt"
+        name = f"{stem} [SHAREABLE]{suffix}"
+    return Path(name).name

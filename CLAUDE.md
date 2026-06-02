@@ -64,7 +64,7 @@ There is no test suite, linter config, or build step — runtime behavior is the
 `analyzer/main.py` orchestrates two independent pipelines in sequence per invocation:
 
 1. **Notes intake** (`notes_intake.py`): Gemini-summarized meeting notes dropped into `Call Transcripts/notes/`. **No LLM call** — Gemini's summary is already lossy compression; re-summarizing would dilute nuggets. Pure file plumbing: parse metadata, file into `Analyzed/` with canonical naming, move source to `notes/_Processed/<YYYY-MM>/`.
-2. **Transcript pass**: `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders intentionally ignored). Each runs through the Anthropic API and lands in `Analyzed/`. Output is always `.txt` regardless of source extension.
+2. **Transcript pass**: `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders intentionally ignored). Each is auto-routed to a category prompt, analyzed (via the configured backend), and lands in `Analyzed/`. Output is always `.txt` regardless of source extension. With the shareable pass on, each transcript yields **two** outputs: the internal `[ANALYZED].txt` and a redacted `[SHAREABLE].txt` sibling.
 
 A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at the end. `bin/analyze.sh` parses this exact line to decide whether to fire a macOS notification — keep the format stable.
 
@@ -72,20 +72,31 @@ A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at 
 
 Two files the analyzer reads at runtime are intentionally outside the repo:
 
-- `Workcall/PromptLibrary.md` — prompt library keyed by `A1`/`A2`/`B1` etc. Parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. Only A1–A3 and B1–B4 are picked up; C-series prompts are cross-transcript and run in Claude.ai chat, not here.
+- `Workcall/PromptLibrary.md` — prompt library parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. Recognized keys: the legacy `A1`–`A3`/`B1`–`B4`, the routed category prompts `DAILY`/`STANDUP`/`SOLUTION`/`EXEC`, and `REDACT` (shareable pass). C-series prompts are cross-transcript and run in Claude.ai chat, not here.
 - `Workcall/Program_Context_Brief.md` — program-wide context cached as a system prompt on every run.
 
 Both paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH`. **Editing prompts is a Drive operation, not a code change.**
 
-### Prompt → model tiering
+### Execution backends (`BACKEND`)
 
-`config.py` maps each prompt key to a model (`MODEL_A1`…`MODEL_B4`). The default tiering keeps high-stakes prompts (A1, B2, B4) on Opus and routes the rest to Sonnet. The default prompt is `A2` (Sonnet) — currently every transcript runs A2; there is no router yet.
+Analysis runs through one of two interchangeable backends, both producing the same `AnalysisResult`:
 
-`model_for(key)` honors `MODEL_OVERRIDE` for one-off reruns. `supports_thinking(model)` gates adaptive-thinking and `EFFORT` (`low|medium|high|max`, max is Opus-only) — keep this in sync with which model IDs support extended thinking.
+- **`claude-cli`** (`claude_cli.py`, the default): shells out to `claude -p` (headless Claude Code), billing to a **Claude Code seat** instead of a personal `ANTHROPIC_API_KEY`. The seat covers token cost, so `cost_usd` is effectively informational ($0 to the personal account). Requires the `claude` binary (`CLAUDE_BIN`, absolute path under launchd). The transcript is passed on **stdin** (never argv — the system prefix can be tens of KB); tool use is disabled via `CLAUDE_EXTRA_ARGS`. Caching is handled internally by Claude Code.
+- **`api`** (`anthropic_client.py`, legacy/fallback): the original direct Anthropic API path with explicit `cache_control` (see below). Requires `ANTHROPIC_API_KEY`. Selecting `api` reproduces the pre-routing behavior exactly (single default prompt, no shareable pass) — the regression guard.
 
-### Prompt caching
+Both compose the **identical** system prefix via `anthropic_client.system_prompt_text()` so output is backend-independent. The credential gate in `main.py` is backend-aware: `claude-cli` requires the binary (not the key), making "zero personal-key usage" structural.
 
-`anthropic_client.py` packs the entire stable prefix — framing + Program Context Brief + frontmatter spec + prompt body — into a single system block with `cache_control: {type: ephemeral, ttl: "1h"}`. The transcript itself is the only thing in the user message, so it varies per call while the prefix hits cache. The **1-hour TTL is deliberate**: each analysis takes 3+ minutes, so the default 5-minute TTL expires mid-batch and forces redundant cache writes. 1h write costs 2× input rate (paid once); reads are 0.1×.
+### Routing → 4 category prompts (`claude-cli` only)
+
+`router.classify()` runs a cheap (`CLASSIFIER_MODEL`, Haiku-tier) `claude -p` call to put each transcript into one of `DAILY` / `STANDUP` / `SOLUTION` / `EXEC`, then runs the matching prompt. Classification **never raises** — any error/ambiguity collapses to `FALLBACK` (`STANDUP`) so a misroute still yields an analysis. If a routed category prompt is missing from `PromptLibrary.md`, `main._resolve_prompt()` falls back to `STANDUP` then `DEFAULT_PROMPT_KEY`. Note: true Slack daily summaries still flow through **notes intake** (no LLM); `DAILY` only catches daily-style *transcripts*. `config.py` maps each category to a model (`MODEL_DAILY`…`MODEL_EXEC`): EXEC/SOLUTION on Opus (`claude-opus-4-7`), the rest on Sonnet, and the classifier on the dated Haiku id (`claude-haiku-4-5-20251001` — the bare alias is rejected by the seat). All ids confirmed via `bin/phase0_check.sh`; a different seat may expose different ids (re-run the probe). `model_for(key)` still honors `MODEL_OVERRIDE`.
+
+### Shareable redaction pass (`SHAREABLE_PASS`)
+
+After the internal `[ANALYZED]` file is written, `redactor.redact()` runs a second `claude -p` pass (`REDACTION_MODEL`) over the analysis text to strip internal politics / career-path notes, writing a `[SHAREABLE]` sibling (`filing.shareable_filename()`). The redaction instruction comes from a `### REDACT.` block in `PromptLibrary.md` (a built-in default is used if absent). This pass is **best-effort by design**: if it fails, only the shareable file is dropped — the internal analysis is still recorded and the source moved (we don't re-pay for the expensive internal pass). `manifest.record()` stores `shareable_filename` + `category` alongside `output_filename`.
+
+### Prompt caching (`api` backend)
+
+The `api` backend in `anthropic_client.py` packs the entire stable prefix — framing + Program Context Brief + frontmatter spec + prompt body — into a single system block with `cache_control: {type: ephemeral, ttl: "1h"}`. The transcript itself is the only thing in the user message, so it varies per call while the prefix hits cache. The **1-hour TTL is deliberate**: each analysis takes 3+ minutes, so the default 5-minute TTL expires mid-batch and forces redundant cache writes. 1h write costs 2× input rate (paid once); reads are 0.1×. (The `claude-cli` backend uses the same prefix text but lets Claude Code cache it internally.)
 
 If you change the prefix composition (add/remove a section, reorder), every existing cache entry invalidates — expect a one-time cost bump on the next batch.
 

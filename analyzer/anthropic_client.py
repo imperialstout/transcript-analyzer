@@ -18,14 +18,18 @@ class AnalysisResult:
     usage: Usage
 
 
-def _build_system(
+def system_prompt_text(
     context_brief: str, prompt_body: str, frontmatter_instruction: str
-) -> list[dict]:
-    """System as a list of text blocks. The last block carries cache_control,
-    which caches the entire stable prefix (framing + brief + frontmatter spec
-    + prompt body) across every call in the batch. The transcript itself goes
-    in the user message and stays uncached (varies per call)."""
-    cached_prefix = "\n\n".join(
+) -> str:
+    """The stable system prefix: framing + brief + frontmatter spec + prompt body.
+
+    Shared by both backends so the `claude -p` CLI path composes the exact same
+    prefix as the API path — output quality stays identical regardless of which
+    backend runs. The API path additionally wraps this in a cache_control block
+    (see `_build_system`); the CLI path passes it as a plain system prompt and
+    lets Claude Code handle caching internally.
+    """
+    return "\n\n".join(
         [
             _FRAMING.strip(),
             "=== PROGRAM CONTEXT BRIEF ===",
@@ -34,6 +38,18 @@ def _build_system(
             "=== PROMPT TO EXECUTE ===",
             prompt_body.strip(),
         ]
+    )
+
+
+def _build_system(
+    context_brief: str, prompt_body: str, frontmatter_instruction: str
+) -> list[dict]:
+    """System as a list of text blocks. The last block carries cache_control,
+    which caches the entire stable prefix (framing + brief + frontmatter spec
+    + prompt body) across every call in the batch. The transcript itself goes
+    in the user message and stays uncached (varies per call)."""
+    cached_prefix = system_prompt_text(
+        context_brief, prompt_body, frontmatter_instruction
     )
     return [
         {

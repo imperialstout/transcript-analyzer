@@ -1,7 +1,9 @@
+import shutil
 import sys
 import time
 
 from . import anthropic_client as ac
+from . import claude_cli
 from . import config as cfg_mod
 from . import drive_client
 from . import filesystem as fs
@@ -9,13 +11,56 @@ from . import filing
 from . import manifest
 from . import notes_intake
 from . import prompts
+from . import redactor
+from . import router
+
+
+def _resolve_prompt(prompt_library: dict, prompt_key: str, cfg) -> tuple[str, str]:
+    """Return (prompt_body, resolved_key), falling back if `prompt_key` is absent.
+
+    A routed category may not be in PromptLibrary.md yet (Drive edit lags the
+    code). Rather than fail the transcript, fall back to the FALLBACK category,
+    then the legacy default prompt. Raises only if nothing usable exists (caught
+    per-transcript → fails closed)."""
+    if prompt_key in prompt_library:
+        return prompt_library[prompt_key], prompt_key
+    for fb in (router.FALLBACK, cfg.default_prompt_key):
+        if fb in prompt_library:
+            print(
+                f"  [router] prompt {prompt_key!r} not in library; using {fb!r}",
+                file=sys.stderr,
+            )
+            return prompt_library[fb], fb
+    raise KeyError(
+        f"no prompt body for {prompt_key!r} and no fallback "
+        f"({router.FALLBACK!r}/{cfg.default_prompt_key!r}) in library"
+    )
 
 
 def main() -> int:
     cfg = cfg_mod.CONFIG
 
-    if not cfg.anthropic_api_key:
-        print("ERROR: ANTHROPIC_API_KEY not set in .env or environment", file=sys.stderr)
+    # Credential gate is backend-specific. The claude-cli backend uses the work
+    # Claude Code seat (no personal key) — so it must NOT require ANTHROPIC_API_KEY;
+    # it requires the `claude` binary instead. This is what makes "zero personal-key
+    # usage" structural rather than incidental.
+    if cfg.backend == "api":
+        if not cfg.anthropic_api_key:
+            print("ERROR: ANTHROPIC_API_KEY not set in .env or environment", file=sys.stderr)
+            return 1
+    elif cfg.backend == "claude-cli":
+        if shutil.which(cfg.claude_bin) is None:
+            print(
+                f"ERROR: claude CLI not found ({cfg.claude_bin!r}). Install the "
+                f"Claude Code seat or set CLAUDE_BIN to an absolute path.",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        print(
+            f"ERROR: unknown BACKEND {cfg.backend!r} (expected 'claude-cli' or 'api')",
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -24,12 +69,35 @@ def main() -> int:
         print(f"ERROR: prompt library not found — {e}", file=sys.stderr)
         return 1
 
-    if cfg.default_prompt_key not in prompt_library:
-        print(
-            f"ERROR: prompt key {cfg.default_prompt_key!r} not found in {cfg.prompt_library_path}",
-            file=sys.stderr,
-        )
-        return 1
+    if cfg.backend == "api":
+        # Legacy single-prompt path needs exactly the configured default key.
+        if cfg.default_prompt_key not in prompt_library:
+            print(
+                f"ERROR: prompt key {cfg.default_prompt_key!r} not found in {cfg.prompt_library_path}",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        # Routing path: need at least one usable prompt (fallback category or the
+        # legacy default) to analyze anything; warn on any missing categories.
+        if (
+            router.FALLBACK not in prompt_library
+            and cfg.default_prompt_key not in prompt_library
+        ):
+            print(
+                f"ERROR: no usable prompt in {cfg.prompt_library_path} — add the "
+                f"routed category prompts (### DAILY./STANDUP./SOLUTION./EXEC.) "
+                f"or a {cfg.default_prompt_key!r} fallback.",
+                file=sys.stderr,
+            )
+            return 1
+        missing = [c for c in router.CATEGORIES if c not in prompt_library]
+        if missing:
+            print(
+                f"WARNING: missing category prompt(s) {', '.join(missing)} in "
+                f"{cfg.prompt_library_path}; transcripts routed there fall back.",
+                file=sys.stderr,
+            )
 
     try:
         context_brief = prompts.load_context_brief()
@@ -97,18 +165,30 @@ def main() -> int:
     failed = 0
     total_cost = 0.0
 
-    for i, src in enumerate(candidates, 1):
-        prompt_key = cfg.default_prompt_key
-        model = cfg_mod.model_for(prompt_key)
-        print(f"  [{i}/{n}] {src.name} → {prompt_key} ({model})")
+    # claude-cli backend → run on the work seat, auto-route, and emit a shareable
+    # sibling. api backend → legacy behaviour: single default prompt, no routing,
+    # no shareable pass (the regression guard / fallback path).
+    analyze_backend = claude_cli if cfg.backend == "claude-cli" else ac
+    use_routing = cfg.backend == "claude-cli"
+    redact_instruction = prompt_library.get("REDACT")
 
+    for i, src in enumerate(candidates, 1):
         try:
             transcript = fs.read_text(src, drive_service=drive_service)
 
+            if use_routing:
+                prompt_key = router.classify(transcript, model=cfg.classifier_model)
+            else:
+                prompt_key = cfg.default_prompt_key
+            prompt_body, prompt_key = _resolve_prompt(prompt_library, prompt_key, cfg)
+            model = cfg_mod.model_for(prompt_key)
+            category = prompt_key if use_routing else None
+            print(f"  [{i}/{n}] {src.name} → {prompt_key} ({model})")
+
             t0 = time.monotonic()
-            result = ac.analyze(
+            result = analyze_backend.analyze(
                 transcript_text=transcript,
-                prompt_body=prompt_library[prompt_key],
+                prompt_body=prompt_body,
                 context_brief=context_brief,
                 frontmatter_instruction=frontmatter_instr,
                 model=model,
@@ -119,6 +199,28 @@ def main() -> int:
             output_path = cfg.analyzed_path / output_filename
             fs.write_text(output_path, result.text)
 
+            # Shareable redaction pass — BEST-EFFORT by design. The internal
+            # analysis is the primary artifact and already paid for, so a
+            # redaction failure drops only the shareable file; it does not fail
+            # the record or re-queue the (expensive) internal analysis.
+            shareable_name = None
+            if cfg.shareable_enabled:
+                try:
+                    shareable_text = redactor.redact(
+                        result.text,
+                        model=cfg.redaction_model,
+                        instruction=redact_instruction,
+                    )
+                    shareable_name = filing.shareable_filename(output_filename)
+                    fs.write_text(cfg.analyzed_path / shareable_name, shareable_text)
+                except Exception as e:
+                    print(
+                        f"  [{i}/{n}] shareable pass failed "
+                        f"({type(e).__name__}: {e}); kept internal analysis only",
+                        file=sys.stderr,
+                    )
+                    shareable_name = None
+
             entry = manifest.record(
                 src.name,
                 output_filename=output_filename,
@@ -126,15 +228,18 @@ def main() -> int:
                 model=model,
                 usage=result.usage,
                 duration_seconds=duration,
+                category=category,
+                shareable_filename=shareable_name,
             )
             cost = entry["cost_usd"]
             total_cost += cost
 
             fs.move_to_processed(src, meeting_date)
+            shareable_note = ", +shareable" if shareable_name else ""
             print(
                 f"  [{i}/{n}] done — filed as {output_filename} "
                 f"(${cost:.2f}, {duration:.1f}s, "
-                f"cache_read={result.usage.cache_read_input_tokens})"
+                f"cache_read={result.usage.cache_read_input_tokens}{shareable_note})"
             )
             succeeded += 1
         except Exception as e:

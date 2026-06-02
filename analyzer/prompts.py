@@ -2,15 +2,21 @@ import re
 
 from .config import CONFIG
 
-_HEADING = re.compile(r"^### ([A-B]\d)\.", re.MULTILINE)
+# Legacy A1–B4 keys plus the consolidated category prompts (DAILY/STANDUP/
+# SOLUTION/EXEC) and the REDACT prompt used by the shareable pass. All are
+# `### KEY.`-headed sections with a single fenced body.
+_HEADING = re.compile(
+    r"^### (DAILY|STANDUP|SOLUTION|EXEC|REDACT|[A-B]\d)\.", re.MULTILINE
+)
 _FENCED = re.compile(r"^```\s*\n(.*?)\n```", re.DOTALL | re.MULTILINE)
 
 
 def load_prompts() -> dict[str, str]:
     """Parse PromptLibrary.md → {key: fenced prompt body}.
 
-    Only A1–A3 and B1–B4 are returned; C1/C2 are cross-transcript prompts
-    that run in Claude.ai chat, not here.
+    Picks up the legacy A1–A3 / B1–B4 keys, the consolidated category prompts
+    (DAILY/STANDUP/SOLUTION/EXEC), and the REDACT prompt. C1/C2 are
+    cross-transcript prompts that run in Claude.ai chat, not here.
     """
     text = CONFIG.prompt_library_path.read_text(encoding="utf-8")
     matches = list(_HEADING.finditer(text))

@@ -11,6 +11,7 @@ _RATES: dict[str, tuple[float, float]] = {
     "claude-opus-4-6": (5.00, 25.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-haiku-4-5": (1.00, 5.00),
+    "claude-haiku-4-5-20251001": (1.00, 5.00),  # dated id used by the work seat
 }
 
 
@@ -55,12 +56,22 @@ def record(
     model: str,
     usage: Usage,
     duration_seconds: float,
+    category: str | None = None,
+    shareable_filename: str | None = None,
 ) -> dict:
     manifest = load()
     entry = {
         "analyzed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "mode": "transcript",
         "output_filename": output_filename,
+        # The routed meeting category (DAILY/STANDUP/SOLUTION/EXEC); None for the
+        # legacy single-prompt path. `prompt_key` carries the same value now that
+        # routing is keyed by category, but `category` is kept explicit for
+        # downstream grouping.
+        "category": category,
+        # The redacted, leads-readable sibling output. None when the shareable
+        # pass is disabled or failed (the internal analysis is still recorded).
+        "shareable_filename": shareable_filename,
         "prompt_key": prompt_key,
         "model": model,
         "input_tokens": usage.input_tokens,

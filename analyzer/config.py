@@ -1,4 +1,5 @@
 import os
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,13 @@ def _model(env_name: str, default: str) -> str:
     return os.environ.get(env_name, default)
 
 
+def _bool(env_name: str, default: bool) -> bool:
+    raw = os.environ.get(env_name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class Config:
     call_transcripts_path: Path
@@ -53,6 +61,18 @@ class Config:
     effort: str
     models: dict[str, str]
     model_override: str | None
+    # Execution backend: "claude-cli" drives the work Claude Code seat via
+    # `claude -p` (no personal API key consumed); "api" is the legacy direct
+    # Anthropic API path. See claude_cli.py / anthropic_client.py.
+    backend: str
+    claude_bin: str
+    classifier_model: str
+    redaction_model: str
+    shareable_enabled: bool
+    # Extra args appended to every `claude -p` call — primarily to disable tool
+    # use so the run is pure single-turn text generation. Flag names vary by CLI
+    # version; override via CLAUDE_EXTRA_ARGS (shell-quoted) without a code edit.
+    claude_extra_args: list[str]
 
 
 CONFIG = Config(
@@ -68,6 +88,7 @@ CONFIG = Config(
     default_prompt_key=os.environ.get("DEFAULT_PROMPT_KEY", "A2"),
     effort=os.environ.get("EFFORT", "high"),
     models={
+        # Legacy A/B keys — kept so the "api" backend and one-off reruns work.
         "A1": _model("MODEL_A1", "claude-opus-4-7"),
         "A2": _model("MODEL_A2", "claude-sonnet-4-6"),
         "A3": _model("MODEL_A3", "claude-sonnet-4-6"),
@@ -75,8 +96,27 @@ CONFIG = Config(
         "B2": _model("MODEL_B2", "claude-opus-4-7"),
         "B3": _model("MODEL_B3", "claude-sonnet-4-6"),
         "B4": _model("MODEL_B4", "claude-opus-4-7"),
+        # Routed meeting categories (the consolidated prompt set). High-stakes
+        # categories (EXEC, SOLUTION) on Opus; the rest on Sonnet. All IDs
+        # confirmed available on the work seat via bin/phase0_check.sh
+        # (claude-opus-4-7 resolves; claude-opus-4-8 does not).
+        "DAILY": _model("MODEL_DAILY", "claude-sonnet-4-6"),
+        "STANDUP": _model("MODEL_STANDUP", "claude-sonnet-4-6"),
+        "SOLUTION": _model("MODEL_SOLUTION", "claude-opus-4-7"),
+        "EXEC": _model("MODEL_EXEC", "claude-opus-4-7"),
     },
     model_override=os.environ.get("MODEL_OVERRIDE") or None,
+    backend=os.environ.get("BACKEND", "claude-cli"),
+    claude_bin=os.environ.get("CLAUDE_BIN", "claude"),
+    # Cheap routing model. The work seat exposes Haiku only under the DATED id
+    # (the bare `claude-haiku-4-5` alias is rejected) — confirmed via
+    # bin/phase0_check.sh on 2026-06-02.
+    classifier_model=os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5-20251001"),
+    redaction_model=os.environ.get("REDACTION_MODEL", "claude-sonnet-4-6"),
+    shareable_enabled=_bool("SHAREABLE_PASS", True),
+    claude_extra_args=shlex.split(
+        os.environ.get("CLAUDE_EXTRA_ARGS", '--allowed-tools ""')
+    ),
 )
 
 

@@ -5,7 +5,7 @@ Local CLI that runs Anthropic-API analyses against meeting transcripts in Google
 ## Prereqs
 
 1. **Google Drive for Desktop** running and syncing both `Workcall/Call Transcripts/` and `Workcall/Analyzed/`.
-2. **Update the Zap** to write transcripts as plain `.txt` files (not Google Docs `.gdoc`). The script ignores `.gdoc` and processes only `.txt`.
+2. **Write transcripts as plain `.txt` or `.md` files** (not Google Docs `.gdoc`). The script processes `.txt` and `.md` at the root of `Call Transcripts/` and skips `.gdoc` (the `.gdoc` body fetch needs Drive OAuth, which is optional). Gemini/Teams/Slack exports saved as `.md` work directly — no Plaud required.
 3. **Python 3.11+** (tested on 3.14).
 
 ## Setup
@@ -39,7 +39,7 @@ python -m analyzer
 ```
 The script:
 
-1. Lists `.txt` files at the root of `Call Transcripts/` (subfolders ignored).
+1. Lists `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders ignored).
 2. Skips ones already in `.processed.json`, or fuzzy-matched against an existing `Analyzed/` filename.
 3. Runs the configured prompt (default `A2`) via `claude-sonnet-4-6`, with the full Program Context Brief in a cached system prompt (~90% savings on the brief across the batch).
 4. Writes the analysis to `Analyzed/` per the strict naming convention.
@@ -109,12 +109,14 @@ Notes intake runs first on each invocation, then transcripts. The "All done" sum
 
 ## Content lives in Drive, not the repo
 
-Two files the analyzer reads at runtime are intentionally **not** stored in this repo:
+Files the analyzer reads at runtime are intentionally **not** stored in this repo:
 
 - `Workcall/PromptLibrary.md` — the prompt library, keyed by `A1`/`A2`/`B1`/etc. Edit this in Google Docs / Drive when you want to tune a prompt; no redeploy needed.
 - `Workcall/Program_Context_Brief.md` — the program-wide context that gets cached as a system prompt on every run.
+- `Workcall/04_people_rolodex.md` (optional) — named-individual index that complements the brief; appended after it when present.
+- `Workcall/05_plaud_vocabulary.md` (optional) — canonical spellings of names/acronyms/product terms, fed to the model so it normalizes mangled terms in non-Plaud (Gemini/Teams/Slack) transcripts.
 
-Both paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH` in `.env`. The repo holds the engine; Drive holds the content you tune.
+Paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH` / `ROLODEX_PATH` / `VOCABULARY_PATH` in `.env`. The repo holds the engine; Drive holds the content you tune.
 
 ## Workstream and meeting_type — what to write
 

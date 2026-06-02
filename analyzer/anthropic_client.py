@@ -8,7 +8,7 @@ from .manifest import Usage
 _FRAMING = """\
 You are analyzing meeting transcripts for an enterprise Salesforce program (SherpaX at Siemens).
 
-The user is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized. Don't sanitize. Use the Program Context Brief below to ground who's who, who reports to whom, and what's politically loaded. Prefer full names from the brief over Plaud's phonetic transcription guesses.
+The user is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized. Don't sanitize. Use the Program Context Brief below to ground who's who, who reports to whom, and what's politically loaded. When a People Rolodex follows the brief, use it too — it lists named individuals and the name variants they show up as. When a Term Glossary follows, treat it as the canonical spellings of names, acronyms, and product terms. Transcripts come from Plaud, Microsoft Teams, Gemini, and Slack auto-transcription, all of which mangle proper nouns — silently normalize a mangled term to its canonical form from the rolodex/glossary when the match is clear, and flag it when it isn't.
 """
 
 
@@ -19,37 +19,54 @@ class AnalysisResult:
 
 
 def system_prompt_text(
-    context_brief: str, prompt_body: str, frontmatter_instruction: str
+    context_brief: str,
+    prompt_body: str,
+    frontmatter_instruction: str,
+    rolodex: str = "",
+    vocabulary: str = "",
 ) -> str:
-    """The stable system prefix: framing + brief + frontmatter spec + prompt body.
+    """The stable system prefix: framing + brief + (rolodex) + (glossary)
+    + frontmatter spec + prompt body.
 
     Shared by both backends so the `claude -p` CLI path composes the exact same
     prefix as the API path — output quality stays identical regardless of which
     backend runs. The API path additionally wraps this in a cache_control block
     (see `_build_system`); the CLI path passes it as a plain system prompt and
     lets Claude Code handle caching internally.
+
+    Rolodex and glossary are optional: when empty their sections are omitted, so
+    the prefix (and thus the cache key) is unchanged for runs without them.
     """
-    return "\n\n".join(
-        [
-            _FRAMING.strip(),
-            "=== PROGRAM CONTEXT BRIEF ===",
-            context_brief.strip(),
-            frontmatter_instruction.strip(),
-            "=== PROMPT TO EXECUTE ===",
-            prompt_body.strip(),
-        ]
-    )
+    sections = [
+        _FRAMING.strip(),
+        "=== PROGRAM CONTEXT BRIEF ===",
+        context_brief.strip(),
+    ]
+    if rolodex.strip():
+        sections += ["=== PEOPLE ROLODEX ===", rolodex.strip()]
+    if vocabulary.strip():
+        sections += ["=== TERM GLOSSARY (canonical spellings) ===", vocabulary.strip()]
+    sections += [
+        frontmatter_instruction.strip(),
+        "=== PROMPT TO EXECUTE ===",
+        prompt_body.strip(),
+    ]
+    return "\n\n".join(sections)
 
 
 def _build_system(
-    context_brief: str, prompt_body: str, frontmatter_instruction: str
+    context_brief: str,
+    prompt_body: str,
+    frontmatter_instruction: str,
+    rolodex: str = "",
+    vocabulary: str = "",
 ) -> list[dict]:
     """System as a list of text blocks. The last block carries cache_control,
     which caches the entire stable prefix (framing + brief + frontmatter spec
     + prompt body) across every call in the batch. The transcript itself goes
     in the user message and stays uncached (varies per call)."""
     cached_prefix = system_prompt_text(
-        context_brief, prompt_body, frontmatter_instruction
+        context_brief, prompt_body, frontmatter_instruction, rolodex, vocabulary
     )
     return [
         {
@@ -70,9 +87,13 @@ def analyze(
     context_brief: str,
     frontmatter_instruction: str,
     model: str,
+    rolodex: str = "",
+    vocabulary: str = "",
 ) -> AnalysisResult:
     client = anthropic.Anthropic(api_key=CONFIG.anthropic_api_key)
-    system = _build_system(context_brief, prompt_body, frontmatter_instruction)
+    system = _build_system(
+        context_brief, prompt_body, frontmatter_instruction, rolodex, vocabulary
+    )
     messages = [{"role": "user", "content": f"Transcript:\n\n{transcript_text}"}]
 
     kwargs: dict = {

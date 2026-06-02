@@ -55,6 +55,15 @@ class Config:
     notes_processed_path: Path
     prompt_library_path: Path
     context_brief_path: Path
+    # Optional people rolodex, appended to the system prefix after the brief.
+    # Complements (does not replace) the brief: named-individual index incl.
+    # Plaud-mangled name variants. Best-effort — absent file = no section.
+    rolodex_path: Path
+    # Optional term glossary (the "Plaud vocabulary" file). Canonical spellings
+    # of names/acronyms/product terms. Originally a Plaud-app device setting; now
+    # also fed to the analyzer so it can normalize terms in transcripts that
+    # DIDN'T go through Plaud (Gemini/Teams/Slack auto-transcription). Best-effort.
+    vocabulary_path: Path
     manifest_path: Path
     anthropic_api_key: str
     default_prompt_key: str
@@ -83,6 +92,8 @@ CONFIG = Config(
     notes_processed_path=_path("NOTES_PROCESSED_PATH", f"{_DRIVE_BASE}/Call Transcripts/notes/_Processed"),
     prompt_library_path=_path("PROMPT_LIBRARY_PATH", f"{_DRIVE_BASE}/PromptLibrary.md"),
     context_brief_path=_path("CONTEXT_BRIEF_PATH", f"{_DRIVE_BASE}/Program_Context_Brief.md"),
+    rolodex_path=_path("ROLODEX_PATH", f"{_DRIVE_BASE}/04_people_rolodex.md"),
+    vocabulary_path=_path("VOCABULARY_PATH", f"{_DRIVE_BASE}/05_plaud_vocabulary.md"),
     manifest_path=_path("MANIFEST_PATH", str(_REPO_ROOT / ".processed.json")),
     anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
     default_prompt_key=os.environ.get("DEFAULT_PROMPT_KEY", "A2"),

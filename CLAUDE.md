@@ -70,12 +70,14 @@ A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at 
 
 ### Content lives in Drive, not the repo
 
-Two files the analyzer reads at runtime are intentionally outside the repo:
+Files the analyzer reads at runtime are intentionally outside the repo:
 
 - `Workcall/PromptLibrary.md` — prompt library parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. Recognized keys: the legacy `A1`–`A3`/`B1`–`B4`, the routed category prompts `DAILY`/`STANDUP`/`SOLUTION`/`EXEC`, and `REDACT` (shareable pass). C-series prompts are cross-transcript and run in Claude.ai chat, not here.
 - `Workcall/Program_Context_Brief.md` — program-wide context cached as a system prompt on every run.
+- `Workcall/04_people_rolodex.md` (**optional**) — named-individual index that *complements* the brief, incl. the mangled name variants people show up as. `prompts.load_rolodex()` reads it best-effort (`""` if absent), and `system_prompt_text()` appends a `=== PEOPLE ROLODEX ===` section after the brief — emitted only when non-empty, so the cached prefix is unchanged for runs without one.
+- `Workcall/05_plaud_vocabulary.md` (**optional**) — the "Plaud vocabulary" file: canonical spellings of names/acronyms/product terms. It still doubles as the paste-in list for Plaud's on-device Custom Vocabulary, but it's **also** an analyzer input now: transcripts from Gemini/Teams/Slack never get Plaud's device-level correction, so `prompts.load_vocabulary()` feeds the list to the model (best-effort, `""` if absent) as a `=== TERM GLOSSARY ===` section so it can normalize mangled terms itself.
 
-Both paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH`. **Editing prompts is a Drive operation, not a code change.**
+Paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH` / `ROLODEX_PATH` / `VOCABULARY_PATH`. **Editing prompts is a Drive operation, not a code change.**
 
 ### Execution backends (`BACKEND`)
 

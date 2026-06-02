@@ -35,6 +35,28 @@ def load_context_brief() -> str:
     return CONFIG.context_brief_path.read_text(encoding="utf-8")
 
 
+def load_rolodex() -> str:
+    """The people rolodex, or "" if absent. Best-effort: the rolodex
+    complements the brief but isn't required, so a missing file (e.g. a lead
+    who hasn't built one) just means no rolodex section in the system prefix.
+    """
+    p = CONFIG.rolodex_path
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def load_vocabulary() -> str:
+    """The term glossary (the "Plaud vocabulary" file), or "" if absent.
+
+    Best-effort. Originally pasted into Plaud's on-device Custom Vocabulary, but
+    transcripts from Gemini/Teams/Slack never get that device-level correction —
+    so the canonical spellings are fed to the analyzer instead, to normalize
+    mangled names/acronyms/product terms. Passed as-is (markdown headers and all);
+    they categorize terms and help the model rather than hurt it.
+    """
+    p = CONFIG.vocabulary_path
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
 _FRONTMATTER_INSTRUCTION = """\
 === OUTPUT FORMAT ===
 

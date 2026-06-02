@@ -105,6 +105,16 @@ def main() -> int:
         print(f"ERROR: context brief not found — {e}", file=sys.stderr)
         return 1
 
+    # Rolodex + term glossary are optional — best-effort, "" if absent (neither
+    # loader raises). The glossary normalizes mangled names/terms in non-Plaud
+    # transcripts (Gemini/Teams/Slack), which never got Plaud's device-level fix.
+    rolodex = prompts.load_rolodex()
+    if not rolodex:
+        print(f"No people rolodex at {cfg.rolodex_path} — proceeding without it.")
+    vocabulary = prompts.load_vocabulary()
+    if not vocabulary:
+        print(f"No term glossary at {cfg.vocabulary_path} — proceeding without it.")
+
     frontmatter_instr = prompts.frontmatter_instruction()
 
     existing_manifest = manifest.load()
@@ -192,6 +202,8 @@ def main() -> int:
                 context_brief=context_brief,
                 frontmatter_instruction=frontmatter_instr,
                 model=model,
+                rolodex=rolodex,
+                vocabulary=vocabulary,
             )
             duration = time.monotonic() - t0
 

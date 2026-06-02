@@ -129,17 +129,19 @@ def analyze(
     context_brief: str,
     frontmatter_instruction: str,
     model: str,
+    rolodex: str = "",
+    vocabulary: str = "",
 ) -> ac.AnalysisResult:
     """Drop-in for anthropic_client.analyze() that runs on the Claude Code seat.
 
-    Composes the identical system prefix (framing + brief + frontmatter + prompt
-    body) via the shared helper, passes the transcript on stdin, and returns the
-    same AnalysisResult shape. Token usage from the CLI is best-effort (the JSON
-    may not expose per-call token counts); cost is informational only since the
-    seat covers it.
+    Composes the identical system prefix (framing + brief + rolodex + glossary +
+    frontmatter + prompt body) via the shared helper, passes the transcript on
+    stdin, and returns the same AnalysisResult shape. Token usage from the CLI is
+    best-effort (the JSON may not expose per-call token counts); cost is
+    informational only since the seat covers it.
     """
     system = ac.system_prompt_text(
-        context_brief, prompt_body, frontmatter_instruction
+        context_brief, prompt_body, frontmatter_instruction, rolodex, vocabulary
     )
     data = run_claude_p(
         f"Transcript:\n\n{transcript_text}", model=model, system=system

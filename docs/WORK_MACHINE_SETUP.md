@@ -46,6 +46,23 @@ The only thing that varies is **model ID strings**; the probe pins them.
 Point the `*_PATH` vars at wherever the transcripts live on this machine (work Google
 Drive, a synced folder, etc.) if it isn't the default personal-Drive layout.
 
+**Content files this machine needs in `Workcall/`** (none are in the repo — they
+travel separately, and on a work machine without the personal Drive synced you must
+place them yourself or point the `*_PATH` vars at them):
+
+| File | `*_PATH` var | Required? | What it does |
+| --- | --- | --- | --- |
+| `PromptLibrary.md` | `PROMPT_LIBRARY_PATH` | yes | category + REDACT prompts |
+| `Program_Context_Brief.md` | `CONTEXT_BRIEF_PATH` | yes | who's-who system prefix |
+| `04_people_rolodex.md` | `ROLODEX_PATH` | optional | named-individual index incl. mangled name variants; appended after the brief. Absent = skipped with a stderr note. |
+| `05_plaud_vocabulary.md` | `VOCABULARY_PATH` | optional | canonical spellings of names/acronyms/product terms; fed as a Term Glossary so the model normalizes mangled terms. Absent = skipped with a stderr note. |
+
+`05_plaud_vocabulary.md` does double duty: it's **also** the list you paste into the Plaud
+app's Custom Vocabulary setting on the recording device. But because most of these
+transcripts come from Gemini/Teams/Slack (which never get Plaud's device-level
+correction), the file now feeds the analyzer too — so place it in `Workcall/` (or point
+`VOCABULARY_PATH` at it), not just into the Plaud app.
+
 ## 2. Add the consolidated prompts to Drive **(Drive edit, not code)**
 
 In `Workcall/PromptLibrary.md`, add five `### KEY.` sections, each with a single fenced
@@ -124,6 +141,6 @@ shareable pass) — useful to compare output quality side by side. Everything is
 
 The framing (`anthropic_client.py`) and `Program_Context_Brief.md` are user-specific. For
 another lead to run this: their own `.env` paths, their own `PromptLibrary.md` +
-`Program_Context_Brief.md` + `REDACT` prompt. Their `[SHAREABLE]` files are what they send
+`Program_Context_Brief.md` (+ optional `04_people_rolodex.md`) + `REDACT` prompt. Their `[SHAREABLE]` files are what they send
 you. No code changes needed — all paths are `*_PATH`-configurable. Build/validate the
 single-user seat path first.

@@ -1,156 +1,171 @@
 # Transcript Analyzer
 
-Local CLI that runs Anthropic-API analyses against meeting transcripts in Google Drive, replacing the chat-based workflow that was crashing on heavy weeks.
+Local CLI that runs meeting-transcript analyses through a Claude Code work seat, replacing the chat-based workflow that was crashing on heavy weeks.
 
 ## Prereqs
 
-1. **Google Drive for Desktop** running and syncing both `Workcall/Call Transcripts/` and `Workcall/Analyzed/`.
-2. **Write transcripts as plain `.txt` or `.md` files** (not Google Docs `.gdoc`). The script processes `.txt` and `.md` at the root of `Call Transcripts/` and skips `.gdoc` (the `.gdoc` body fetch needs Drive OAuth, which is optional). Gemini/Teams/Slack exports saved as `.md` work directly — no Plaud required.
-3. **Python 3.11+** (tested on 3.14).
+1. **Google Drive for Desktop** running and syncing `Workcall/` under `GoogleDrive-brad.gross@salesforce.com`.
+2. **Write transcripts as plain `.txt` or `.md` files** at the root of `Call Transcripts/`. Subfolders are ignored. `.gdoc` shortcuts are handled via Drive API (see Notes intake below).
+3. **Python 3.11+** and the **Claude Code CLI** (`claude`) on PATH (or set `CLAUDE_BIN` to an absolute path for launchd).
 
 ## Setup
 
 ```bash
-cd transcript-analyzer
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv ~/.venvs/transcript-analyzer
+source ~/.venvs/transcript-analyzer/bin/activate
 pip install -r requirements.txt
 
-# .env lives OUTSIDE the repo — this repo path is iCloud-synced and would
-# back up your API key. Store the .env at ~/.config/transcript-analyzer/.env:
 mkdir -p ~/.config/transcript-analyzer
 cp .env.example ~/.config/transcript-analyzer/.env
-# Then edit that file and set ANTHROPIC_API_KEY (and any path overrides).
+# Edit ~/.config/transcript-analyzer/.env — set path overrides if needed.
+# ANTHROPIC_API_KEY is only required for BACKEND=api (legacy). Default backend
+# is claude-cli, which bills to the Claude Code seat instead.
 ```
-
-If you accidentally created a repo-level `.env`, move it:
-
-```bash
-mv .env ~/.config/transcript-analyzer/.env
-```
-
-The script will warn at startup if it ever loads `.env` from the repo path.
 
 ## Usage
 
+### Web dashboard
+
+The quickest way to use the analyzer day-to-day:
+
 ```bash
-source .venv/bin/activate
+source ~/.venvs/transcript-analyzer/bin/activate
+python -m analyzer ui              # opens http://localhost:7070 automatically
+python -m analyzer ui --port 7071  # custom port
+```
+
+**Bookmark `http://localhost:7070`** in your browser. The server runs until you kill the terminal.
+
+For a one-click shortcut on macOS, add this to `~/.zshrc` (or equivalent):
+
+```bash
+alias ta="source ~/.venvs/transcript-analyzer/bin/activate && python -m analyzer ui"
+```
+
+Then `ta` in any terminal opens the dashboard.
+
+Dashboard features:
+- Stats strip: total files, transcript count, notes count, cumulative cost
+- Table of all analyzed files with category badge, model, cost, shareable status
+- **Daily Pulse** and **Weekly Slack Delta** buttons — run synthesis in-browser with live output
+- **Settings tab** — configure the shared meeting files URL, rolodex/vocabulary paths, shareable toggle, backend, model override
+- **Edit content files** — one-click open for PromptLibrary, Context Brief, Rolodex, and Vocabulary in your default editor
+- **Open launchd log** shortcut for troubleshooting
+
+### Analyze transcripts (normal run)
+
+```bash
+source ~/.venvs/transcript-analyzer/bin/activate
 python -m analyzer
 ```
-The script:
 
-1. Lists `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders ignored).
-2. Skips ones already in `.processed.json`, or fuzzy-matched against an existing `Analyzed/` filename.
-3. Runs the configured prompt (default `A2`) via `claude-sonnet-4-6`, with the full Program Context Brief in a cached system prompt (~90% savings on the brief across the batch).
-4. Writes the analysis to `Analyzed/` per the strict naming convention.
-5. Records token usage and cost in `.processed.json`.
-6. Moves the source from `Call Transcripts/` to `Call Transcripts/_Processed/<YYYY-MM>/`.
+Each run:
+1. Processes any pending Gemini-summary notes in `Call Transcripts/notes/`.
+2. Lists `.txt` / `.md` files at the root of `Call Transcripts/`.
+3. Skips files already in `.processed.json` or fuzzy-matched against `Analyzed/`.
+4. Routes each transcript to a category prompt (`DAILY` / `STANDUP` / `SOLUTION` / `EXEC`) via a cheap Haiku classifier call.
+5. Runs the matching prompt via `claude -p` on the Claude Code seat.
+6. Writes `[ANALYZED].txt` and a redacted `[SHAREABLE].txt` sibling to `Analyzed/`.
+7. Records token usage in `.processed.json` and moves the source to `Call Transcripts/_Processed/<YYYY-MM>/`.
 
-A failed analysis leaves the source file in place and does not record a manifest entry, so the next run picks it up again.
+### Daily Pulse and Weekly Slack Delta
+
+After transcripts are analyzed, run synthesis manually at end-of-day or end-of-week:
+
+```bash
+# D1 — Daily Pulse: bundles today's [ANALYZED] files, writes a 200-300 word pulse
+python -m analyzer synthesize --mode daily
+
+# D2 — Weekly Slack Delta: bundles this week's [ANALYZED] files, writes a paste-ready Slack delta
+python -m analyzer synthesize --mode weekly
+```
+
+Both commands:
+- Bundle the relevant `[ANALYZED]` files (today's or this ISO week's) plus the most recent prior synthesis for continuity context.
+- Run on Sonnet (inputs are already structured; these calls are cheap).
+- Write the output to `Analyzed/` with a `[DAILY PULSE]` or `[SLACK DELTA]` suffix.
+- **Archive** the bundled input files to `Analyzed/_Archive/YYYY-MM/` after a successful write.
+
+The synthesis prompts (D1, D2) live in `Workcall/dailyAndWeeklyPrompts.md` on Drive — edit them there, no code change needed.
+
+### One-off model override
+
+```bash
+MODEL_OVERRIDE=claude-opus-4-7 python -m analyzer
+```
+
+## Model tiering
+
+| Category | Default model | Rationale |
+|---|---|---|
+| `EXEC` | `claude-opus-4-7` | Highest-stakes; political read, executive dynamics |
+| `SOLUTION` | `claude-sonnet-4-6` | Technical/design sessions; Sonnet handles these well |
+| `STANDUP` | `claude-sonnet-4-6` | Internal syncs |
+| `DAILY` | `claude-sonnet-4-6` | Daily digests |
+| Classifier | `claude-haiku-4-5-20251001` | Routing only; cheap |
+| Redaction | `claude-sonnet-4-6` | Post-process pass over structured text |
+| Synthesis (D1/D2) | `claude-sonnet-4-6` | Inputs are already structured |
+
+Override any per-category model via `.env` (`MODEL_EXEC`, `MODEL_SOLUTION`, etc.).
+
+## Content lives in Drive, not the repo
+
+Runtime files are at `~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall/`:
+
+| File | Purpose |
+|---|---|
+| `PromptLibrary.md` | Four routed category prompts (`### DAILY.` / `### STANDUP.` / `### SOLUTION.` / `### EXEC.`) plus `### REDACT.`. Parsed by `### KEY.` headings + fenced blocks. |
+| `dailyAndWeeklyPrompts.md` | D1 Daily Pulse and D2 Weekly Slack Delta prompts (`### D1.` / `### D2.`). Used by `python -m analyzer synthesize`. |
+| `Program_Context_Brief.md` | Program-wide context injected as the system prefix on every analysis run. |
+| `04_people_rolodex.md` | Named-individual index (optional). Appended after the brief; helps resolve Plaud-mangled names. |
+| `05_plaud_vocabulary.md` | Canonical spellings of names/acronyms/product terms (optional). Normalizes mangled terms in non-Plaud transcripts. |
+
+Paths are configurable via `.env` (`PROMPT_LIBRARY_PATH`, `CONTEXT_BRIEF_PATH`, `ROLODEX_PATH`, `VOCABULARY_PATH`). The repo is the engine; Drive is the content you tune.
 
 ## Gemini-summary notes intake
 
-Some weeks include meetings that arrive as Gemini-generated meeting summaries instead of full Plaud transcripts (you weren't present, recording failed, the meeting was async, etc.). The analyzer files them through the same pipeline as transcripts but **skips the LLM call** — Gemini's summary is already lossy compression; re-summarizing would only dilute nuggets.
+Meetings you didn't record (absent, async, recording failed) arrive as Gemini summaries. Drop them into `Call Transcripts/notes/` — the analyzer files them with no LLM call (Gemini's summary is already lossy; re-summarizing would dilute signal).
 
-**Primary workflow (Google Doc on a locked-down work machine):**
+**Google Doc workflow:**
+1. Create a new Doc inside `Workcall/Call Transcripts/notes/` in Drive.
+2. Paste the Gemini summary.
+3. Add two lines anywhere: `Workstream: SI RCA` and `Meeting Type: internal-sync`.
+4. Close the doc. Within 30 min the analyzer fetches via Drive API, files to `Analyzed/`, and moves the `.gdoc` to `notes/_Processed/<YYYY-MM>/`.
 
-1. In Google Docs (browser), create a new doc inside `Workcall/Call Transcripts/notes/`.
-2. Paste the Gemini meeting summary into the doc.
-3. Type two lines anywhere in the body:
-
-   ```text
-   Workstream: SI RCA
-   Meeting Type: internal-sync
-   ```
-
-4. Close the doc. Drive syncs a `.gdoc` shortcut to your personal Mac.
-5. Within 30 minutes (next launchd run), the analyzer fetches the doc body via the Drive API, parses the Gemini header for date + title, files into `Analyzed/`, and moves the `.gdoc` to `Call Transcripts/notes/_Processed/<YYYY-MM>/`.
-
-The Gemini header (line 1 = `MMM DD, YYYY`, line 2 = title) is parsed automatically; participants are kept inline in the body and the cross-transcript synthesis reads them there.
-
-**Drive API setup (one-time):**
-
-A `.gdoc` in the local Drive cache is a JSON shortcut, not the document body — so the analyzer needs Drive API access to fetch the actual text.
-
-1. Create a Google Cloud project at <https://console.cloud.google.com/> and enable the Google Drive API.
-2. Create OAuth 2.0 Client ID credentials (application type: **Desktop app**).
-3. Download the JSON and save it to `~/.config/transcript-analyzer/google-credentials.json`.
-4. Run the bootstrap once interactively:
-
-   ```bash
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   python -m analyzer.drive_client
-   ```
-
-   A browser window opens for consent. On approval, a refresh token is saved to `~/.config/transcript-analyzer/google-token.json`. Subsequent runs (including launchd-driven ones) refresh silently.
-
-If the token is missing or revoked, the analyzer skips `.gdoc` notes with a stderr message and continues with everything else — `.txt` notes and transcripts still process.
-
-**Fallback: hand-written `.txt` with YAML frontmatter**
-
-You can still drop a `.txt` directly into `Call Transcripts/notes/` with frontmatter at the top:
+**Plain `.txt` fallback** — drop a `.txt` with YAML frontmatter directly into `notes/`:
 
 ```yaml
 ---
 meeting_date: 2026-04-28
 workstream: SI RCA
 meeting_type: internal-sync
-tags: [escalation]
 source: gemini-summary
 ---
 
-[Gemini summary body below]
+[Gemini summary body]
 ```
 
-Required fields: `meeting_date`, `workstream`, `meeting_type`. (`participants` is optional — listed in the body anyway.) Missing or malformed frontmatter leaves the file in place with a stderr message — no data loss. The `source: gemini-summary` marker distinguishes notes from real transcripts in `Analyzed/` for any future weighting by the cross-transcript synthesis prompts.
+**Drive API setup (one-time):**
+1. Create a Google Cloud project, enable the Drive API, create OAuth 2.0 Desktop credentials.
+2. Save the downloaded JSON to `~/.config/transcript-analyzer/google-credentials.json`.
+3. Bootstrap once: `python -m analyzer.drive_client` — a browser opens for consent; the token saves to `~/.config/transcript-analyzer/google-token.json` and refreshes silently thereafter.
 
-Notes intake runs first on each invocation, then transcripts. The "All done" summary line combines both pipelines so the macOS notification fires for either.
+## Analyzed/ folder layout
 
-## Content lives in Drive, not the repo
-
-Files the analyzer reads at runtime are intentionally **not** stored in this repo:
-
-- `Workcall/PromptLibrary.md` — the prompt library, keyed by `A1`/`A2`/`B1`/etc. Edit this in Google Docs / Drive when you want to tune a prompt; no redeploy needed.
-- `Workcall/Program_Context_Brief.md` — the program-wide context that gets cached as a system prompt on every run.
-- `Workcall/04_people_rolodex.md` (optional) — named-individual index that complements the brief; appended after it when present.
-- `Workcall/05_plaud_vocabulary.md` (optional) — canonical spellings of names/acronyms/product terms, fed to the model so it normalizes mangled terms in non-Plaud (Gemini/Teams/Slack) transcripts.
-
-Paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH` / `ROLODEX_PATH` / `VOCABULARY_PATH` in `.env`. The repo holds the engine; Drive holds the content you tune.
-
-## Workstream and meeting_type — what to write
-
-These are freeform short tags **you** pick. The analyzer doesn't validate against a taxonomy. They land in the YAML frontmatter of the filed `Analyzed/` output so the weekly cross-transcript synthesis (in Claude.ai) can group meetings by theme.
-
-Pick values you'll reuse across meetings — consistency matters more than precision. Examples:
-
-- `Workstream:` — the program/initiative the meeting belongs to. e.g., `ACD`, `Price Propagation`, `SI RCA`, `Internal`.
-- `Meeting Type:` — the shape of the meeting. e.g., `status sync`, `working session`, `escalation`, `1-on-1`, `external`, `decision`.
-
-Keep them short (1-3 words), lowercase or consistently cased. If you're not sure, copy whatever you used for the most similar prior meeting.
-
-## Configuration
-
-Everything is in `.env`. See `.env.example` for the full list. Highlights:
-
-- `MODEL_A2`, `MODEL_A1`, etc. — per-prompt model choice. Defaults: high-stakes prompts (A1, B2, B4) use Opus 4.7; the rest use Sonnet 4.6.
-- `MODEL_OVERRIDE=claude-opus-4-7 python -m analyzer` — force a specific model for a one-off rerun.
-- `EFFORT=high` — adaptive thinking effort. `low | medium | high | max` (max is Opus-only).
-- `NOTES_PATH`, `NOTES_PROCESSED_PATH` — override the Gemini-summary notes intake folders. Defaults: `Call Transcripts/notes/` and `Call Transcripts/notes/_Processed/`.
-
-## Cost dashboard
-
-```bash
-jq '[.[] | .cost_usd] | add' .processed.json
+```
+Analyzed/
+├── 2026-05-14T09-30-00 - RCA Weekly - 2026-05-14 [ANALYZED].txt
+├── 2026-05-14T09-30-00 - RCA Weekly - 2026-05-14 [SHAREABLE].txt
+├── 2026-05-14T18-30-00 - Daily Pulse - 2026-05-14 [DAILY PULSE].md
+├── 2026-05-16T17-00-00 - Slack Delta - Week of 2026-05-12 [SLACK DELTA].md
+└── _Archive/
+    └── 2026-05/
+        └── (archived [ANALYZED] files after synthesis)
 ```
 
-## Scheduled runs (launchd + macOS notifications)
+`[ANALYZED]` files are archived to `_Archive/YYYY-MM/` when synthesis runs. `[SHAREABLE]` siblings are archived alongside them. Synthesis outputs (`[DAILY PULSE]`, `[SLACK DELTA]`) stay in the root as context for future synthesis runs.
 
-A wrapper script at `bin/analyze.sh` runs the analyzer and fires a macOS notification banner only when something actually happened (analyses written, or failures). Silent runs stay silent.
-
-> **Important: do not put this repo inside iCloud Drive** (`~/Library/Mobile Documents/com~apple~CloudDocs/...`). macOS TCC blocks launchd-spawned processes from executing files in iCloud paths, so the LaunchAgent will fail with `Operation not permitted`. Keep the working tree under `~/code/` or another non-protected location and use git/GitHub for cross-device sync.
-
-To install on a stock macOS Mac:
+## Scheduled runs (launchd)
 
 ```bash
 chmod +x bin/analyze.sh
@@ -158,54 +173,66 @@ cp examples/com.bradgross.transcript-analyzer.plist ~/Library/LaunchAgents/
 launchctl load -w ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
 ```
 
-That schedules a run every 30 min. Logs land at:
+Schedules a run every 30 min. The wrapper at `bin/analyze.sh` fires a macOS notification only when something happened. Logs:
 
-- `~/Library/Logs/transcript-analyzer.log` — rolling history of every run
-- `~/Library/Logs/transcript-analyzer-last.log` — just the most recent run
-- `~/Library/Logs/transcript-analyzer-launchd.log` — launchd's own bookkeeping
-
-To pause or remove:
+- `~/Library/Logs/transcript-analyzer.log` — rolling history
+- `~/Library/Logs/transcript-analyzer-last.log` — most recent run only
+- `~/Library/Logs/transcript-analyzer-launchd.log` — launchd bookkeeping
 
 ```bash
-# Pause (stops scheduled runs, keeps the plist on disk):
-launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
-
-# Remove entirely:
-launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
-rm ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+launchctl start com.bradgross.transcript-analyzer   # force a run now
+launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist  # pause
 ```
 
-To force a run right now without waiting for the schedule:
+> **Do not put this repo inside iCloud Drive.** macOS TCC blocks launchd-spawned processes from executing files in iCloud paths. Keep it under `~/code/`.
+
+## Cost dashboard
 
 ```bash
-launchctl start com.bradgross.transcript-analyzer
+jq '[.[] | .cost_usd] | add' .processed.json
 ```
 
-The first time the launch agent fires `osascript`, macOS may prompt for notification permission. Allow it once and future runs will banner silently.
+Cost on the `claude-cli` backend is informational only — the Claude Code seat covers it.
+
+## Configuration reference
+
+All settings in `~/.config/transcript-analyzer/.env`. Key overrides:
+
+```bash
+BACKEND=claude-cli              # or "api" for legacy direct-API path
+CLAUDE_BIN=/usr/local/bin/claude  # absolute path required under launchd
+SHAREABLE_PASS=true             # set false to skip [SHAREABLE] output
+MODEL_EXEC=claude-opus-4-7      # per-category overrides
+MODEL_SOLUTION=claude-sonnet-4-6
+MODEL_OVERRIDE=claude-opus-4-7  # wins over per-category defaults for one run
+EFFORT=high                     # low | medium | high | max (max is Opus-only)
+```
 
 ## File layout
 
-```text
+```
 transcript-analyzer/
 ├── analyzer/
-│   ├── __main__.py          # python -m analyzer entry
-│   ├── main.py              # CLI flow (notes intake → transcript pass)
+│   ├── __main__.py          # entry point: dispatches to main, synthesize, or ui
+│   ├── main.py              # transcript + notes intake pipeline
+│   ├── synthesize.py        # D1/D2 synthesis + archive
+│   ├── ui.py                # Flask web dashboard (python -m analyzer ui)
 │   ├── config.py            # .env loading + model tiering
+│   ├── router.py            # Haiku-based transcript classifier
+│   ├── redactor.py          # [SHAREABLE] redaction pass
 │   ├── filesystem.py        # list, move-to-_Processed, fuzzy backstop
 │   ├── manifest.py          # .processed.json + cost calc
 │   ├── prompts.py           # parse PromptLibrary.md, build frontmatter spec
-│   ├── filing.py            # output filename per convention
-│   ├── notes_intake.py      # Gemini-summary notes (.gdoc + .txt) → Analyzed/
+│   ├── filing.py            # output filename convention
+│   ├── notes_intake.py      # Gemini-summary notes → Analyzed/
 │   ├── drive_client.py      # OAuth + Drive API for .gdoc body fetch
-│   └── anthropic_client.py  # streaming, prompt caching, adaptive thinking
+│   ├── claude_cli.py        # claude -p backend (work seat)
+│   └── anthropic_client.py  # direct API backend (legacy/fallback)
 ├── bin/
 │   └── analyze.sh           # launchd wrapper (notifications)
+├── docs/
+│   └── prompt_starters.md   # canonical prompt bodies to paste into PromptLibrary.md
 ├── .env.example
-├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
-
-## Plan reference
-
-Full design rationale (model tiering, marking strategy, frontmatter taxonomy, deferred features) lives at `~/.claude/plans/have-a-little-project-jazzy-star.md`.

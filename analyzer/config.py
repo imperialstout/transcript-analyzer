@@ -28,7 +28,7 @@ elif _REPO_ENV.exists():
         file=sys.stderr,
     )
 
-_DRIVE_BASE = "~/Library/CloudStorage/GoogleDrive-brad@bradgross.org/My Drive/Workcall"
+_DRIVE_BASE = "~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall"
 
 
 def _path(env_name: str, default: str) -> Path:
@@ -113,7 +113,7 @@ CONFIG = Config(
         # (claude-opus-4-7 resolves; claude-opus-4-8 does not).
         "DAILY": _model("MODEL_DAILY", "claude-sonnet-4-6"),
         "STANDUP": _model("MODEL_STANDUP", "claude-sonnet-4-6"),
-        "SOLUTION": _model("MODEL_SOLUTION", "claude-opus-4-7"),
+        "SOLUTION": _model("MODEL_SOLUTION", "claude-sonnet-4-6"),
         "EXEC": _model("MODEL_EXEC", "claude-opus-4-7"),
     },
     model_override=os.environ.get("MODEL_OVERRIDE") or None,

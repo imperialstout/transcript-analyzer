@@ -70,23 +70,44 @@ def _dates_in(name: str) -> set[str]:
 def fuzzy_is_analyzed(transcript_path: Path) -> bool:
     """Backstop for when the manifest is missing or out of sync.
 
-    Returns True only when an analyzed filename shares both a date token
-    AND the transcript's core title as a substring. Date overlap prevents
-    short common titles ("Sync") from collapsing distinct meetings; the
-    title-substring requirement still tolerates the inconsistent legacy
-    naming in the existing Analyzed/ corpus.
+    Primary path: source filename has a 4-digit year date token — requires
+    both a date-token overlap AND the core title as a substring. Date overlap
+    prevents short common titles ("Sync") from collapsing distinct meetings.
+
+    Fallback path: source filename has NO 4-digit year (e.g. Slack exports
+    like "06-02 Title.txt") — does a title-only match with a higher confidence
+    bar (needle >= 15 chars) so short generic titles still can't false-positive.
+
+    Both paths search Analyzed/ AND Analyzed/_Archive/ so a file that was
+    archived after a prior synthesis run is still detected as already done.
     """
-    if not CONFIG.analyzed_path.exists():
+    analyzed_root = CONFIG.analyzed_path
+    if not analyzed_root.exists():
         return False
     needle = _core_title(transcript_path.name)
     if len(needle) < 5:
         return False
     transcript_dates = _dates_in(transcript_path.name)
-    if not transcript_dates:
+    no_date_source = not transcript_dates
+
+    # Higher confidence bar when source has no date to anchor the match.
+    if no_date_source and len(needle) < 15:
         return False
-    for analyzed in CONFIG.analyzed_path.iterdir():
-        if not transcript_dates & _dates_in(analyzed.stem):
-            continue
+
+    def _all_analyzed():
+        for f in analyzed_root.iterdir():
+            if not f.is_dir():
+                yield f
+        archive = analyzed_root / "_Archive"
+        if archive.exists():
+            for f in archive.rglob("*"):
+                if not f.is_dir():
+                    yield f
+
+    for analyzed in _all_analyzed():
+        if not no_date_source:
+            if not transcript_dates & _dates_in(analyzed.stem):
+                continue
         if needle in _normalize(analyzed.stem):
             return True
     return False

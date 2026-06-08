@@ -75,6 +75,9 @@ def _save_env_key(key: str, value: str) -> None:
     _ENV_PATH.write_text("".join(lines), encoding="utf-8")
 
 
+_SYNTHESIS_TAGS = ("[DAILY PULSE]", "[SLACK DELTA]", "[WEEKLY SUMMARY]")
+
+
 def _analyzed_files() -> list[dict]:
     from .config import CONFIG
     from .manifest import load as load_manifest
@@ -92,11 +95,62 @@ def _analyzed_files() -> list[dict]:
             "duration": entry.get("duration_seconds", 0),
             "mode": entry.get("mode", "transcript"),
         })
+
+    # Synthesis outputs ([DAILY PULSE], [SLACK DELTA]) are never in the manifest —
+    # scan Analyzed/ directly and append them.
+    try:
+        import os
+        from datetime import datetime as _dt
+        analyzed_path = CONFIG.analyzed_path
+        for fname in sorted(os.listdir(analyzed_path), reverse=True):
+            if not any(tag in fname for tag in _SYNTHESIS_TAGS):
+                continue
+            fpath = analyzed_path / fname
+            if fpath.is_dir():
+                continue
+            mtime = fpath.stat().st_mtime
+            analyzed_at = _dt.fromtimestamp(mtime).strftime("%Y-%m-%dT%H:%M:%S")
+            if "[DAILY PULSE]" in fname:
+                category = "pulse"
+            elif "[SLACK DELTA]" in fname:
+                category = "delta"
+            else:
+                category = "synthesis"
+            rows.append({
+                "source": fname,
+                "output": fname,
+                "shareable": "",
+                "category": category,
+                "model": "",
+                "cost": 0.0,
+                "analyzed_at": analyzed_at,
+                "duration": 0,
+                "mode": "synthesis",
+            })
+    except Exception:
+        pass
+
+    rows.sort(key=lambda r: r.get("analyzed_at", ""), reverse=True)
     return rows
 
 
 def _total_cost(rows: list[dict]) -> float:
     return round(sum(r["cost"] for r in rows), 4)
+
+
+def _last_analyzed_at(rows: list[dict]) -> str:
+    """Return the most recent analyzed_at timestamp across all manifest entries."""
+    timestamps = [r["analyzed_at"] for r in rows if r.get("analyzed_at")]
+    if not timestamps:
+        return ""
+    ts = max(timestamps)
+    # Format as "Jun 6, 2026 14:32" for display
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(ts)
+        return dt.strftime("%b %-d, %Y %H:%M")
+    except Exception:
+        return ts[:16]
 
 
 def _analyzed_path_url() -> str:
@@ -152,6 +206,9 @@ _HTML = """\
   .badge-daily  { background: #1e3a2c; color: var(--green); }
   .badge-standup { background: #2a2c1e; color: var(--orange); }
   .badge-notes  { background: #2a1e3a; color: #b08ef7; }
+  .badge-pulse  { background: #1e3020; color: #5ecf6e; }
+  .badge-delta  { background: #1e2820; color: #3ecf8e; }
+  .badge-synthesis { background: #1e2820; color: #3ecf8e; }
   .muted { color: var(--muted); }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
   button, .btn { background: var(--accent); color: #fff; border: none; border-radius: 6px;
@@ -217,18 +274,21 @@ _HTML = """\
 {{ body | safe }}
 </div>
 <script>
-// Synthesis job polling
+// Job polling (synthesis + analysis)
 let _pollTimer = null;
-function startPoll() {
+function startPoll(label) {
   if (_pollTimer) return;
+  const indicator = document.getElementById('job-indicator');
+  if (indicator && label) indicator.innerHTML = '<span class="spinner"></span> ' + label;
   document.getElementById('job-status').style.display = 'block';
+  document.getElementById('job-done').style.display = 'none';
+  if (indicator) indicator.style.display = 'inline';
   _pollTimer = setInterval(async () => {
     const r = await fetch('/job-status');
     const d = await r.json();
     document.getElementById('job-output').textContent = d.output || '';
     const el = document.getElementById('job-output');
     el.scrollTop = el.scrollHeight;
-    const indicator = document.getElementById('job-indicator');
     if (d.done) {
       clearInterval(_pollTimer); _pollTimer = null;
       if (indicator) indicator.style.display = 'none';
@@ -245,18 +305,25 @@ _HOME_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
 <div class="stats">
-  <div class="stat"><div class="val">{{ rows|length }}</div><div class="lbl">Total analyzed</div></div>
+  <div class="stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
   <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","transcript")|list|length }}</div><div class="lbl">Transcripts</div></div>
   <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","notes")|list|length }}</div><div class="lbl">Notes filed</div></div>
+  <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","synthesis")|list|length }}</div><div class="lbl">Syntheses</div></div>
   <div class="stat"><div class="val">${{ "%.2f"|format(total_cost) }}</div><div class="lbl">Total cost</div></div>
+  {% if last_analyzed %}
+  <div class="stat"><div class="val" style="font-size:13px">{{ last_analyzed }}</div><div class="lbl">Last analyzed</div></div>
+  {% endif %}
 </div>
 
 <div class="actions">
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll()">
+  <form method="post" action="/run-analysis" style="display:inline" onsubmit="startPoll('Running transcript analysis…')">
+    <button type="submit" class="secondary">⚡ Run Analysis</button>
+  </form>
+  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Daily Pulse synthesis…')">
     <input type="hidden" name="mode" value="daily">
     <button type="submit">▶ Daily Pulse</button>
   </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll()">
+  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Weekly Slack Delta…')">
     <input type="hidden" name="mode" value="weekly">
     <button type="submit" class="secondary">▶ Weekly Slack Delta</button>
   </form>
@@ -284,7 +351,11 @@ _HOME_BODY = """\
     <tr>
       <td class="muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
       <td>
-        <span title="{{ r.source }}">{{ r.output or r.source }}</span>
+        {% if r.mode == "synthesis" %}
+          <a class="quick-link" href="/open-file?path={{ analyzed_path }}/{{ r.output }}" title="{{ r.source }}">{{ r.output }}</a>
+        {% else %}
+          <span title="{{ r.source }}">{{ r.output or r.source }}</span>
+        {% endif %}
       </td>
       <td>
         {% if r.mode == "notes" %}
@@ -385,11 +456,14 @@ def create_app():
         rows = _analyzed_files()
         flash = request.args.get("flash", "")
         flash_type = request.args.get("ft", "ok")
+        from .config import CONFIG
         return _render(
             _HOME_BODY,
             page="home",
             rows=rows,
             total_cost=_total_cost(rows),
+            last_analyzed=_last_analyzed_at(rows),
+            analyzed_path=str(CONFIG.analyzed_path),
             flash=flash,
             flash_type=flash_type,
         )
@@ -411,6 +485,37 @@ def create_app():
             python = sys.executable
             proc = subprocess.Popen(
                 [python, "-m", "analyzer", "synthesize", "--mode", mode],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=str(Path(__file__).parent.parent),
+            )
+            buf = []
+            for line in proc.stdout:
+                buf.append(line)
+                with _job_lock:
+                    _job["output"] = "".join(buf)
+            proc.wait()
+            with _job_lock:
+                _job["done"] = True
+                _job["returncode"] = proc.returncode
+
+        threading.Thread(target=_run, daemon=True).start()
+        return redirect(url_for("home"))
+
+    @app.post("/run-analysis")
+    def run_analysis():
+        global _job
+        with _job_lock:
+            if _job and not _job["done"]:
+                return redirect(url_for("home", flash="A job is already running", ft="err"))
+            _job = {"mode": "analysis", "output": "", "done": False, "returncode": None}
+
+        def _run():
+            global _job
+            python = sys.executable
+            proc = subprocess.Popen(
+                [python, "-m", "analyzer"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 .processed.json
 .claude/
+docs/dailyAndWeeklyPrompts.md
 
 # Sensitive program content — lives in Drive (Workcall/), NEVER in the repo.
 # These carry stakeholder politics, career notes, and named individuals.
@@ -15,3 +16,4 @@ PromptLibrary.md
 Program_Context_Brief.md
 04_people_rolodex.md
 05_plaud_vocabulary.md
+

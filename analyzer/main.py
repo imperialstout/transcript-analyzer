@@ -208,6 +208,7 @@ def main(force: bool = False) -> int:
     pending_docs = [d for d in pending_docs if not manifest.is_recorded(d.name, existing_manifest)]
     docs_succeeded = 0
     docs_failed = 0
+    total_cost = 0.0
 
     if pending_docs:
         print(f"Found {len(pending_docs)} pending document(s) in {cfg.docs_path}.")
@@ -340,7 +341,6 @@ def main(force: bool = False) -> int:
 
     succeeded = 0
     failed = 0
-    total_cost = 0.0
 
     # claude-cli backend → run on the work seat, auto-route, and emit a shareable
     # sibling. api backend → legacy behaviour: single default prompt, no routing,

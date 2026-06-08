@@ -261,7 +261,10 @@ def _read_pdf(path: Path) -> str:
         raise RuntimeError(
             f"no extractable text in {path.name} — may be a scanned/image-only PDF"
         )
-    return "\n\n".join(pages)
+    raw = "\n\n".join(pages)
+    # pypdf can yield lone surrogates from malformed PDF encodings; strip them
+    # so the text can be passed to subprocess (text=True / UTF-8).
+    return raw.encode("utf-8", errors="replace").decode("utf-8")
 
 
 def _read_docx(path: Path) -> str:

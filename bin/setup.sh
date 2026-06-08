@@ -143,7 +143,7 @@ done
 
 echo "=== 5. Drive content files (from workcall-templates/) ==="
 
-for tpl in PromptLibrary.md Program_Context_Brief.md 04_people_rolodex.md 05_vocabulary.md; do
+for tpl in PromptLibrary.md Program_Context_Brief.md 04_people_rolodex.md 05_vocabulary.md dailyAndWeeklyPrompts.md; do
   src="$REPO/workcall-templates/$tpl"
   dest="$DRIVE_BASE/$tpl"
   if [ -f "$dest" ]; then

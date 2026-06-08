@@ -7,13 +7,14 @@ __pycache__/
 .claude/
 docs/dailyAndWeeklyPrompts.md
 
-# Sensitive program content — lives in Drive (Workcall/), NEVER in the repo.
+# Sensitive program content — lives in Drive (Workcall/), NEVER in the repo root.
 # These carry stakeholder politics, career notes, and named individuals.
-# Ignored by name as a safety net in case a copy is dropped into the tree;
-# copy them to the work machine manually, out of band.
+# Scoped to root-level only (/filename) so workcall-templates/ can be tracked.
 Workcall/
-PromptLibrary.md
-Program_Context_Brief.md
-04_people_rolodex.md
-05_plaud_vocabulary.md
+/PromptLibrary.md
+/Program_Context_Brief.md
+/04_people_rolodex.md
+/05_plaud_vocabulary.md
+/05_vocabulary.md
+/dailyAndWeeklyPrompts.md
 

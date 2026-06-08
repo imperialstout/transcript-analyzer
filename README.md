@@ -334,7 +334,8 @@ transcript-analyzer/
 ├── bin/
 │   └── analyze.sh         # Shell script launchd calls — runs analyzer, fires macOS notification
 ├── workcall-templates/    # ← Starting-point files to copy into your Drive Workcall/ folder
-│   ├── PromptLibrary.md           # Four analysis prompts (DAILY/STANDUP/SOLUTION/EXEC) + REDACT
+│   ├── PromptLibrary.md           # Analysis prompts: DAILY/STANDUP/SOLUTION/EXEC + B4/A3 + REDACT
+│   ├── dailyAndWeeklyPrompts.md   # Synthesis prompts: D1 Daily Pulse, D2 Slack Delta, D3 Career
 │   ├── Program_Context_Brief.md   # Fillable template for program context, stakeholders, workstreams
 │   ├── 04_people_rolodex.md       # Template for tracking named individuals across the program
 │   └── 05_vocabulary.md           # Template for canonical spellings fed to the analyzer
@@ -389,6 +390,54 @@ These are optional and build up incrementally. Start empty (the templates have p
 
 - **Rolodex:** Add an entry for each person who recurs across your meetings. The "Name variants" field is where you note how your transcription tool spells their name.
 - **Vocabulary:** Add product names, acronyms, and terms your transcription tool consistently misspells. One term per line inside the fenced blocks.
+
+---
+
+## Part 3c: Running political and career analysis on a work machine
+
+Nothing in the tool prevents this — it's a config choice. If you want the B4 (Political Read) and A3 (1:1/Career) prompts alongside your work analysis, here's what to set up.
+
+### Why you'd want this
+
+The work profile (`DAILY`/`STANDUP`/`SOLUTION`/`EXEC`) captures *what happened* in meetings. The personal profile adds a second lens: *what does this mean for me politically and for my career*. You can run both on a work machine — you just need to tell the tool which profile to use and make sure sensitive output never ends up in a shareable file.
+
+### Step 1 — Turn off the shareable pass
+
+This is the critical one. The B4 political read contains candid analysis that should never land in a `[SHAREABLE]` file. Open `~/.config/transcript-analyzer/.env` and set:
+
+```
+SHAREABLE_PASS=false
+```
+
+Do this before you run the personal profile for the first time.
+
+### Step 2 — Switch the routing profile
+
+```
+ROUTING_PROFILE=personal
+```
+
+This switches the classifier to route meetings into `B4` (Political Read) or `A3` (1:1/Career) instead of `DAILY`/`STANDUP`/`SOLUTION`/`EXEC`. You can switch back and forth between `work` and `personal` at any time — it's a one-line change in `.env`.
+
+### Step 3 — Verify the prompts are in your Drive
+
+`bin/setup.sh` already copied `PromptLibrary.md` to your Drive. Open it and confirm the `### B4.` and `### A3.` sections are present at the bottom. They were included in the template — if you customized the file heavily, you may need to add them manually. The prompts are at the bottom of `workcall-templates/PromptLibrary.md` in the repo.
+
+### Step 4 — Add the synthesis prompts
+
+Career synthesis (`python -m analyzer synthesize --mode career`) requires a `### D3.` block in `Workcall/dailyAndWeeklyPrompts.md`. If `setup.sh` copied that file for you, it's already there. If not, copy `workcall-templates/dailyAndWeeklyPrompts.md` into your Drive `Workcall/` folder — it has all three synthesis prompts (D1 Daily Pulse, D2 Slack Delta, D3 Career Trajectory).
+
+### Running it
+
+```bash
+source ~/.venvs/transcript-analyzer/bin/activate
+python -m analyzer          # analyzes transcripts through the B4/A3 lens
+python -m analyzer synthesize --mode career   # career trajectory synthesis
+```
+
+Or use the dashboard — the synthesis buttons work the same regardless of profile.
+
+> **Model note:** `B4` defaults to `claude-opus-4-7`, which is available on Salesforce work seats. The personal machine uses `claude-opus-4-8` (a newer model not available on all seats) — if you want to match that, check whether your seat has it with `bin/phase0_check.sh`, then add `MODEL_B4=claude-opus-4-8` to your `.env`.
 
 ---
 

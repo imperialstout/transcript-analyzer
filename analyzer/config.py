@@ -28,7 +28,16 @@ elif _REPO_ENV.exists():
         file=sys.stderr,
     )
 
-_DRIVE_BASE = "~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall"
+# Drive root for all content paths. This codebase is deployed to two machines
+# with two different Google Drives (work `…@salesforce.com`, personal
+# `…@bradgross.org`), so the base must NOT be hardcoded to one account — each
+# machine sets DRIVE_BASE in its .env. The default keeps the work layout so an
+# unconfigured work checkout still works; the personal machine overrides it.
+# (Individual path vars below — CALL_TRANSCRIPTS_PATH etc. — still win if set.)
+_DRIVE_BASE = os.environ.get(
+    "DRIVE_BASE",
+    "~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall",
+)
 
 
 def _path(env_name: str, default: str) -> Path:
@@ -75,6 +84,12 @@ class Config:
     # Anthropic API path. See claude_cli.py / anthropic_client.py.
     backend: str
     claude_bin: str
+    # Routing taxonomy selector (claude-cli backend only). "work" routes into the
+    # operational meeting categories (DAILY/STANDUP/SOLUTION/EXEC); "personal"
+    # routes into the political-vs-career lens (B4/A3) for the personal-account
+    # machine, which keeps sensitive content instead of sharing it. See
+    # router.PROFILES.
+    routing_profile: str
     classifier_model: str
     redaction_model: str
     shareable_enabled: bool
@@ -119,6 +134,7 @@ CONFIG = Config(
     model_override=os.environ.get("MODEL_OVERRIDE") or None,
     backend=os.environ.get("BACKEND", "claude-cli"),
     claude_bin=os.environ.get("CLAUDE_BIN", "claude"),
+    routing_profile=os.environ.get("ROUTING_PROFILE", "work"),
     # Cheap routing model. The work seat exposes Haiku only under the DATED id
     # (the bare `claude-haiku-4-5` alias is rejected) — confirmed via
     # bin/phase0_check.sh on 2026-06-02.
@@ -138,4 +154,4 @@ def model_for(prompt_key: str) -> str:
 
 
 def supports_thinking(model: str) -> bool:
-    return any(tag in model for tag in ("opus-4-7", "opus-4-6", "sonnet-4-6"))
+    return any(tag in model for tag in ("opus-4-8", "opus-4-7", "opus-4-6", "sonnet-4-6"))

@@ -131,7 +131,7 @@ decisions/risks survive.
 
 ## 4. Schedule **(work machine)**
 
-Install the LaunchAgent from `examples/com.bradgross.transcript-analyzer.plist` (PATH now
+Install the LaunchAgent from `examples/com.transcript-analyzer.plist` (PATH now
 includes the Claude install dir; or set `CLAUDE_BIN` in the plist). Only do this after the
 step-0 launchd check passed.
 

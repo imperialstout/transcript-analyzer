@@ -3,12 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.bradgross.transcript-analyzer</string>
+    <string>com.transcript-analyzer</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/bradgross/code/transcript-analyzer/bin/analyze.sh</string>
+        <!-- Update this path to match where you cloned the repo -->
+        <string>/Users/YOUR_USERNAME/code/transcript-analyzer/bin/analyze.sh</string>
     </array>
 
     <!-- Run every 30 minutes. Increase to 3600 (hourly) if 30 min feels chatty. -->
@@ -20,9 +21,10 @@
     <integer>60</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/bradgross/Library/Logs/transcript-analyzer-launchd.log</string>
+    <!-- Update this path to match your username -->
+    <string>/Users/YOUR_USERNAME/Library/Logs/transcript-analyzer-launchd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/bradgross/Library/Logs/transcript-analyzer-launchd.log</string>
+    <string>/Users/YOUR_USERNAME/Library/Logs/transcript-analyzer-launchd.log</string>
 
     <!-- Inherit a minimal PATH so /usr/bin (osascript) AND the `claude` CLI are
          available. launchd's PATH does not include your shell's additions, so the
@@ -35,7 +37,7 @@
         <key>PATH</key>
         <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin</string>
         <!-- Absolute path to the Claude Code binary (most robust under launchd).
-             Confirmed via phase0_check.sh on the work machine. -->
+             Find yours with: which claude -->
         <key>CLAUDE_BIN</key>
         <string>/opt/homebrew/bin/claude</string>
     </dict>

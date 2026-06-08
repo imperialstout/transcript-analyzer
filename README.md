@@ -102,7 +102,7 @@ Then clone the repo into a `code` folder in your home directory:
 mkdir -p ~/code
 
 # Copy the repository
-git clone https://github.com/bradgross-salesforce/transcript-analyzer ~/code/transcript-analyzer
+git clone https://github.com/YOUR_ORG/transcript-analyzer ~/code/transcript-analyzer
 
 # Move into the folder
 cd ~/code/transcript-analyzer
@@ -450,11 +450,11 @@ On the work machine, you can have the analyzer run automatically every 30 minute
 chmod +x ~/code/transcript-analyzer/bin/analyze.sh
 
 # Copy the scheduler config to the right place
-cp ~/code/transcript-analyzer/examples/com.bradgross.transcript-analyzer.plist \
+cp ~/code/transcript-analyzer/examples/com.transcript-analyzer.plist \
    ~/Library/LaunchAgents/
 
 # Register it with macOS
-launchctl load -w ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+launchctl load -w ~/Library/LaunchAgents/com.transcript-analyzer.plist
 ```
 
 From now on, macOS launches the analyzer every 30 minutes. A notification fires only when something was actually processed — silent runs don't interrupt you.
@@ -463,13 +463,13 @@ From now on, macOS launches the analyzer every 30 minutes. A notification fires 
 
 ```bash
 # Force a run right now (don't wait for the 30-min tick)
-launchctl start com.bradgross.transcript-analyzer
+launchctl start com.transcript-analyzer
 
 # Pause the scheduler
-launchctl unload ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+launchctl unload ~/Library/LaunchAgents/com.transcript-analyzer.plist
 
 # Resume it
-launchctl load -w ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
+launchctl load -w ~/Library/LaunchAgents/com.transcript-analyzer.plist
 ```
 
 **Log files** (if something goes wrong):
@@ -548,7 +548,7 @@ All settings live in `~/.config/transcript-analyzer/.env`:
 
 ```bash
 # Which Google Drive root to use (REQUIRED — set to this machine's path)
-DRIVE_BASE=~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall
+DRIVE_BASE=~/Library/CloudStorage/GoogleDrive-you@yourcompany.com/My Drive/Workcall
 
 # "work" = DAILY/STANDUP/SOLUTION/EXEC routing; "personal" = B4/A3 routing
 ROUTING_PROFILE=work
@@ -573,7 +573,7 @@ MODEL_OVERRIDE=claude-opus-4-7
 EFFORT=high
 ```
 
-> On the personal machine: set `DRIVE_BASE` to `…@bradgross.org`, `ROUTING_PROFILE=personal`, `SHAREABLE_PASS=false`, and add `MODEL_B4=claude-opus-4-8`.
+> On the personal machine: set `DRIVE_BASE` to `…@yourpersonaldomain.com`, `ROUTING_PROFILE=personal`, `SHAREABLE_PASS=false`, and add `MODEL_B4=claude-opus-4-8`.
 
 ### Cost dashboard
 

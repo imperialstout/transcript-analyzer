@@ -247,7 +247,7 @@ def run(mode: str, week: str = "current") -> int:
     rolodex = prompts_mod.load_rolodex()
     program_reference = prompts_mod.load_program_reference()
 
-    system_parts = ["You are analyzing filed meeting analyses for an enterprise Salesforce program (SherpaX at Siemens). The reader is Brad — Revenue Cloud CTO."]
+    system_parts = ["You are analyzing filed meeting analyses for an enterprise program. Use the Program Context Brief below for background on the program and its people."]
     if context_brief:
         system_parts.append(f"=== PROGRAM CONTEXT BRIEF ===\n{context_brief}")
     if program_reference:

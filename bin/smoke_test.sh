@@ -23,20 +23,20 @@ mkdir -p "$T/Call Transcripts/notes/_Processed" "$T/Call Transcripts/_Processed"
 
 # ---- sample transcript (exec-flavored; should route to EXEC) ----------------
 cat > "$T/Call Transcripts/2026-06-02 - Leadership Steering Review.txt" <<'TXT'
-Leadership Steering Review — Siemens SherpaX — June 2, 2026
+Leadership Steering Review — June 2, 2026
 
-Brad Gross: Let's start with the RCA go-live decision. Gunnar, where do we land on the April milestone?
-Gunnar Ulle: We're holding the date, but I want to flag the data migration risk — the CML mapping isn't validated yet.
-Christoph Hallmann: From the business side, leadership expects the date to hold. Slipping it sends the wrong signal upward.
-Brad Gross: Understood, but I'm not going to commit the team to a date we can't hit on quality. I'd rather frame it as a phased go-live.
-Imad Sghoul: Agreed. The integration layer needs another two weeks of SIT regardless of how we message it.
-Gunnar Ulle: If we phase it, I need exec air cover when the partner pushes back.
-Christoph Hallmann: I'll take that to the steering committee. But Brad, I need you to own the technical narrative — last review it felt like we were hedging.
-Brad Gross: I'll own it. I'll be the final technical approver on the go-live gate.
-Lisa Jehle: One concern — staffing. We're down two engineers and the roadmap assumes full capacity.
-Brad Gross: Noted. I'll escalate the staffing gap to leadership this week; it's a real risk to the Q3 commitments.
-Christoph Hallmann: Let's be careful how we position staffing. We don't want it read as the program being under-resourced.
-Brad Gross: Decisions then: phased go-live, I'm the final technical approver, and I escalate staffing. Eike-Oliver sent regrets, so I'll brief him separately.
+Alex Rivera: Let's start with the platform go-live decision. Jordan, where do we land on the June milestone?
+Jordan Kim: We're holding the date, but I want to flag the data migration risk — the config mapping isn't validated yet.
+Sam Patel: From the business side, leadership expects the date to hold. Slipping it sends the wrong signal upward.
+Alex Rivera: Understood, but I'm not going to commit the team to a date we can't hit on quality. I'd rather frame it as a phased go-live.
+Morgan Chen: Agreed. The integration layer needs another two weeks of SIT regardless of how we message it.
+Jordan Kim: If we phase it, I need exec air cover when the client pushes back.
+Sam Patel: I'll take that to the steering committee. But Alex, I need you to own the technical narrative — last review it felt like we were hedging.
+Alex Rivera: I'll own it. I'll be the final technical approver on the go-live gate.
+Dana Lee: One concern — staffing. We're down two engineers and the roadmap assumes full capacity.
+Alex Rivera: Noted. I'll escalate the staffing gap to leadership this week; it's a real risk to the Q3 commitments.
+Sam Patel: Let's be careful how we position staffing. We don't want it read as the program being under-resourced.
+Alex Rivera: Decisions then: phased go-live, I'm the final technical approver, and I escalate staffing. Taylor sent regrets, so I'll brief them separately.
 TXT
 
 # ---- minimal prompt library (trimmed starters; keep the Private-read heading) -
@@ -84,10 +84,10 @@ MD
 cat > "$T/Program_Context_Brief.md" <<'MD'
 Program Context Brief (smoke-test stub)
 
-Program: SherpaX — enterprise Salesforce Revenue Cloud at Siemens.
-Cast: Brad Gross (Revenue Cloud CTO), Gunnar Ulle (delivery lead), Christoph Hallmann (business),
-Imad Sghoul (integration), Lisa Jehle (staffing/PMO), Eike-Oliver Steffen (exec sponsor).
-Workstreams include SI RCA. This is a stub brief for testing only.
+Program: Platform Delivery — enterprise program for Acme Corp.
+Cast: Alex Rivera (delivery lead), Jordan Kim (technical architect), Sam Patel (business lead),
+Morgan Chen (integration), Dana Lee (PMO), Taylor (exec sponsor).
+Workstreams include Platform Delivery. This is a stub brief for testing only.
 MD
 
 echo

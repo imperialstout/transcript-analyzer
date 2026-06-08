@@ -28,15 +28,14 @@ elif _REPO_ENV.exists():
         file=sys.stderr,
     )
 
-# Drive root for all content paths. This codebase is deployed to two machines
-# with two different Google Drives (work `…@salesforce.com`, personal
-# `…@bradgross.org`), so the base must NOT be hardcoded to one account — each
-# machine sets DRIVE_BASE in its .env. The default keeps the work layout so an
-# unconfigured work checkout still works; the personal machine overrides it.
+# Drive root for all content paths. Set DRIVE_BASE in your .env to the path of
+# your Workcall folder in Google Drive on this machine. Each machine has its own
+# .env — the same codebase can serve multiple deployments.
+# Example: ~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/Workcall
 # (Individual path vars below — CALL_TRANSCRIPTS_PATH etc. — still win if set.)
 _DRIVE_BASE = os.environ.get(
     "DRIVE_BASE",
-    "~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall",
+    "~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/Workcall",
 )
 
 
@@ -73,10 +72,9 @@ class Config:
     # Complements (does not replace) the brief: named-individual index incl.
     # Plaud-mangled name variants. Best-effort — absent file = no section.
     rolodex_path: Path
-    # Optional term glossary (the "Plaud vocabulary" file). Canonical spellings
-    # of names/acronyms/product terms. Originally a Plaud-app device setting; now
-    # also fed to the analyzer so it can normalize terms in transcripts that
-    # DIDN'T go through Plaud (Gemini/Teams/Slack auto-transcription). Best-effort.
+    # Optional term glossary. Canonical spellings of names/acronyms/product terms.
+    # Fed to the analyzer so it can normalize mangled terms from Gemini, Teams,
+    # Slack, and other auto-transcription sources. Best-effort.
     vocabulary_path: Path
     manifest_path: Path
     anthropic_api_key: str

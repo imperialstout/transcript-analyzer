@@ -61,7 +61,7 @@ Scheduled-run wrapper (the script launchd invokes; reproduces a single cron tick
 Force a launchd-scheduled run immediately:
 
 ```bash
-launchctl start com.bradgross.transcript-analyzer
+launchctl start com.transcript-analyzer
 ```
 
 Cost dashboard (totals across `.processed.json`):
@@ -86,8 +86,8 @@ There is no test suite, linter config, or build step — runtime behavior is the
 This repo runs on **two machines with two different Google Drives**, differentiated entirely by `.env` — **not** a fork. The engine is identical; reliability fixes land once and serve both. Two env knobs do the splitting:
 
 - **`DRIVE_BASE`** — the Drive root for all content paths. **Must not be hardcoded** (the default in `config.py` keeps the work layout so an unconfigured work checkout still works; the personal machine overrides it). Individual `*_PATH` vars still win if set.
-  - Work: `~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall`
-  - Personal: `~/Library/CloudStorage/GoogleDrive-brad@bradgross.org/My Drive/Workcall`
+  - Work: `~/Library/CloudStorage/GoogleDrive-you@yourcompany.com/My Drive/Workcall`
+  - Personal: `~/Library/CloudStorage/GoogleDrive-you@yourpersonaldomain.com/My Drive/Workcall`
 - **`ROUTING_PROFILE`** (`router.PROFILES`) — which classifier taxonomy the `claude-cli` backend routes into:
   - `work` (default): operational meeting set — `DAILY` / `STANDUP` / `SOLUTION` / `EXEC`.
   - `personal`: the career+political lens — **`B4` (Political Read)** vs **`A3` (1:1/Career)**, with `SHAREABLE_PASS=false` (it keeps sensitive content rather than sharing it).
@@ -129,13 +129,13 @@ Synthesis files themselves are **never** archived — they stay in `Analyzed/` a
 
 ### Content lives in Drive, not the repo
 
-Drive base: **`$DRIVE_BASE`** (env-driven — work `…@salesforce.com`, personal `…@bradgross.org`; see the two-deployment section).
+Drive base: **`$DRIVE_BASE`** (env-driven — set per machine in `.env`; see the two-deployment section).
 
 - **`PromptLibrary.md`** — prompt library parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. The **work** profile uses `DAILY` / `STANDUP` / `SOLUTION` / `EXEC` + `REDACT` + `DOCUMENT`; the **personal** profile routes into `B4` (Political Read) / `A3` (1:1/Career) from the legacy A/B set. The Drive copy must contain whichever keys the active `ROUTING_PROFILE` needs. A built-in default is used for `DOCUMENT` if the key is absent. C-series prompts are cross-transcript and run in Claude.ai chat, not here.
 - **`dailyAndWeeklyPrompts.md`** — synthesis prompts D1 (Daily Pulse), D2 (Weekly Slack Delta), **D3 (Career & Position Trajectory)**. Parsed by `synthesize._load_synthesis_prompts()` (`### D\d.` headings + fenced blocks). **`synthesize.py` reads this Drive copy, not the repo `docs/dailyAndWeeklyPrompts.md`** — the repo file is gitignored reference material only. Each machine's Drive needs the keys for the modes it runs (personal needs D3).
 - **`Program_Context_Brief.md`** — program-wide context injected as the system prefix on every run.
 - **`04_people_rolodex.md`** (**optional**) — named-individual index that complements the brief, incl. Plaud-mangled name variants. `prompts.load_rolodex()` reads best-effort (`""` if absent).
-- **`05_plaud_vocabulary.md`** (**optional**) — canonical spellings of names/acronyms/product terms. Fed to the model to normalize mangled terms in non-Plaud (Gemini/Teams/Slack) transcripts.
+- **`05_vocabulary.md`** (**optional**) — canonical spellings of names/acronyms/product terms. Fed to the model to normalize mangled terms in Gemini/Teams/Slack transcripts.
 
 Paths are configurable via `PROMPT_LIBRARY_PATH` / `CONTEXT_BRIEF_PATH` / `ROLODEX_PATH` / `VOCABULARY_PATH`. **Editing prompts is a Drive operation, not a code change.**
 

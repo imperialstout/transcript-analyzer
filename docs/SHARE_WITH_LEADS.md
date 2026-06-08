@@ -7,7 +7,7 @@ candid one for yourself. It runs on **your** work Claude seat, so it costs you n
 personally.
 
 You point it at your own meetings, your own people, and your own prompts. The clean
-`[SHAREABLE]` summaries are also what you'd send back to Brad to give him signal across
+`[SHAREABLE]` summaries are also what you'd share with your program lead to give them signal across
 the program without anyone re-reading every transcript.
 
 ---
@@ -34,7 +34,7 @@ step says "run a script," *run* it, don't paste the script's contents.)
 ```bash
 # 1. Get the code (you'll sign into GitHub once if asked)
 cd ~                      # or wherever you keep projects — NOT iCloud/Desktop
-git clone <REPO_URL>      # Brad will give you this link
+git clone <REPO_URL>      # your program lead will give you this link
 cd transcript-analyzer
 
 # 2. Run setup — it checks prerequisites and sets up everything safe automatically
@@ -87,7 +87,7 @@ setup script already filled in the Claude settings for you.
 - **Always read your first `[SHAREABLE]` file before sending it to anyone** — confirm it
   kept the substance and cut what you wanted cut. Adjust your `REDACT` prompt if not.
 
-(Brad can help you set it to run automatically on a schedule once you're comfortable.)
+(Your program lead can help you set it to run automatically on a schedule once you're comfortable.)
 
 ---
 
@@ -111,8 +111,7 @@ transcripts — and you keep your private `[ANALYZED]` versions to yourself.
   `/` after `~`. Re-type it carefully (or use `$HOME` instead of `~`).
 - **You pasted a script and got a wall of errors** — don't paste script *contents*; run
   them with `bash bin/<script>.sh`.
-- **Anything else** — send Brad the exact terminal output (an easy way: open a GitHub
-  issue and paste it there).
+- **Anything else** — open a GitHub issue and paste the exact terminal output there.
 
 ---
 

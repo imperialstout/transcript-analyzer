@@ -6,9 +6,9 @@ from .config import CONFIG, supports_thinking
 from .manifest import Usage
 
 _FRAMING = """\
-You are analyzing meeting transcripts for an enterprise Salesforce program (SherpaX at Siemens).
+You are analyzing meeting transcripts for an enterprise program.
 
-The user is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized. Don't sanitize. Use the Program Context Brief below to ground who's who, who reports to whom, and what's politically loaded. When a People Rolodex follows the brief, use it too — it lists named individuals and the name variants they show up as. When a Term Glossary follows, treat it as the canonical spellings of names, acronyms, and product terms. Transcripts come from Plaud, Microsoft Teams, Gemini, and Slack auto-transcription, all of which mangle proper nouns — silently normalize a mangled term to its canonical form from the rolodex/glossary when the match is clear, and flag it when it isn't.
+Posture: attributed, specific, non-neutralized. Don't sanitize. Use the Program Context Brief below to ground who's who, who reports to whom, and what's politically loaded. When a People Rolodex follows the brief, use it too — it lists named individuals and the name variants they show up as. When a Term Glossary follows, treat it as the canonical spellings of names, acronyms, and product terms. Transcripts may come from Microsoft Teams, Gemini, Slack, or other auto-transcription sources, all of which mangle proper nouns — silently normalize a mangled term to its canonical form from the rolodex/glossary when the match is clear, and flag it when it isn't.
 """
 
 

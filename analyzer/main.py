@@ -15,8 +15,7 @@ from . import redactor
 from . import router
 
 _REFERENCE_UPDATE_SYSTEM = """\
-You are maintaining a program reference document for the SherpaX / Siemens
-Revenue Cloud program. You will receive:
+You are maintaining a program reference document. You will receive:
   1. The current contents of [PROGRAM REFERENCE].md (may be empty on first run).
   2. A "Reference Updates" section extracted from a newly analyzed document.
 

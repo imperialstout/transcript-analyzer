@@ -580,7 +580,7 @@ def _process_txt(src: Path) -> dict | None:
 def process_note(src: Path, drive_service=None) -> dict | None:
     """File a single note. Returns manifest entry on success, None on failure.
 
-    On any failure the source is left in place so Brad can fix and retry.
+    On any failure the source is left in place so the user can fix and retry.
     Errors are logged to stderr; we never raise.
     """
     if src.suffix == ".gdoc":

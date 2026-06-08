@@ -71,7 +71,7 @@ def load_program_reference() -> str:
 # reference documents (roadmaps, org charts, governance docs). The model
 # determines which it is from the content itself.
 _DEFAULT_DOCUMENT_PROMPT = """\
-You are analyzing a document from the SherpaX / Siemens Revenue Cloud program.
+You are analyzing a document from the program described in the Program Context Brief.
 This may be a presentation shared in a meeting, a strategic plan, a governance
 document, or other program artifact. Analyze it as follows:
 
@@ -114,13 +114,13 @@ Begin your response with a YAML frontmatter block bounded by `---` lines, then a
 Required fields:
 
 - `meeting_date`: ISO date YYYY-MM-DD. Use the date in the source filename if present; otherwise infer from transcript content.
-- `participants`: list of full names. If a Plaud-mistranscribed name is unclear, resolve to the most likely full name from the Cast of Characters in the Program Context Brief (e.g. "Ikem" → "Eike-Oliver Steffen").
-- `workstream`: one of `DI-SW`, `SI`, `SI RCA`, `SI CPQ+`, `SI BuildingX`, `SI Services`, `SI SolSys`, `XMP`, `SFS`, `RCA-PoC`, `cross-stream`, `internal-salesforce`, `unclassified`.
+- `participants`: list of full names. If a mistranscribed name is unclear, resolve to the most likely full name using the Program Context Brief and People Rolodex.
+- `workstream`: a workstream name from your Program Context Brief (e.g. the project area or team this meeting belongs to). Use `cross-stream`, `internal`, or `unclassified` if none fits.
 - `meeting_type`: one of `client-steerco`, `client-working-session`, `internal-sync`, `1-on-1`, `escalation`, `design-review`, `discovery`, `architecture`, `planning`, `retrospective`, `interview`, `other`.
 
 Optional fields, include when applicable:
 
-- `tags`: free-form list. Suggested vocabulary (extend as needed): `escalation`, `devops`, `integration`, `data-cloud`, `agentforce`, `governance`, `staffing`, `deadline-risk`, `pricing`, `cml`, `mdm`, `sit`, `uat`, `roadmap`, `political`, `commitment`, `unresolved`, `decision-deferred`.
+- `tags`: free-form list. Suggested vocabulary (extend as needed): `escalation`, `devops`, `integration`, `data-cloud`, `agentforce`, `governance`, `staffing`, `deadline-risk`, `pricing`, `sit`, `uat`, `roadmap`, `political`, `commitment`, `unresolved`, `decision-deferred`.
 - `decisions_count`: integer count of decisions captured (0 is valid).
 - `risks_surfaced`: integer count of new or escalated risks.
 - `key_stakeholders_absent`: list of named people whose absence is materially relevant.
@@ -129,13 +129,13 @@ Example:
 
 ---
 meeting_date: 2026-04-23
-participants: [Brad Gross, Gunnar Ulle, Imad Sghoul]
-workstream: SI RCA
+participants: [Alice Smith, Bob Jones, Carol Wu]
+workstream: Platform Delivery
 meeting_type: escalation
 tags: [escalation, governance, deadline-risk]
 decisions_count: 3
 risks_surfaced: 2
-key_stakeholders_absent: [Eike-Oliver Steffen, Lisa Jehle]
+key_stakeholders_absent: [Dana Lee]
 ---
 
 After the frontmatter, produce the analysis exactly as specified by the prompt below.

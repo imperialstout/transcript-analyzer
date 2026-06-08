@@ -112,71 +112,34 @@ cd ~/code/transcript-analyzer
 
 ---
 
-### Step 5 — Create a Python virtual environment
+### Steps 5 & 6 — Run the setup script
 
-A virtual environment is an isolated copy of Python just for this project, so its dependencies don't conflict with anything else on your Mac. The venv lives *outside* the repo folder because the scheduled-run script expects it there.
-
-```bash
-# Create the virtual environment
-python3 -m venv ~/.venvs/transcript-analyzer
-
-# Activate it (you'll need to do this any time you open a new Terminal)
-source ~/.venvs/transcript-analyzer/bin/activate
-```
-
-Your Terminal prompt will change to show `(transcript-analyzer)` at the start — that means the venv is active.
-
-Now install the project's dependencies:
+The repo includes a setup script that handles everything remaining in one go:
 
 ```bash
-# Install required Python packages
-pip install -r requirements.txt
+bash ~/code/transcript-analyzer/bin/setup.sh
 ```
 
-This may take a minute. When it finishes, you'll see a summary of what was installed.
+It will:
+1. Create the Python virtual environment at `~/.venvs/transcript-analyzer`
+2. Install all Python dependencies
+3. Create `~/.config/transcript-analyzer/.env` from the example template
+4. Auto-detect your Google Drive path (or ask you to paste it)
+5. Create the full `Call Transcripts/` and `Analyzed/` folder structure in your Drive
+6. Copy the starter content files (`PromptLibrary.md`, `Program_Context_Brief.md`, `04_people_rolodex.md`, `05_vocabulary.md`) into your Drive — skipping any that already exist
+7. Verify your Claude Code seat works
 
----
+When it finishes, it prints the two commands you need to get started.
 
-### Step 6 — Create your config file
-
-The tool reads its settings from a file at `~/.config/transcript-analyzer/.env`. This file is *not* in the repo — it lives on your machine, and each machine has its own copy.
-
-```bash
-# Create the config folder
-mkdir -p ~/.config/transcript-analyzer
-
-# Copy the example config as your starting point
-cp ~/code/transcript-analyzer/.env.example ~/.config/transcript-analyzer/.env
-```
-
-Now open the file in a text editor to fill in your values:
-
-```bash
-open -e ~/.config/transcript-analyzer/.env
-```
-
-The file will open in TextEdit. The two most important settings are:
-
-**`DRIVE_BASE`** — the path to your `Workcall` folder in Google Drive on this Mac. Find it in Finder under your Google Drive, copy the path, and paste it here. It will look something like:
-
-```
-DRIVE_BASE=~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall
-```
-
-**`ROUTING_PROFILE`** — use `work` on the work machine, `personal` on the personal machine:
-
-```
-ROUTING_PROFILE=work
-```
-
-On the personal machine, also add:
-
-```
-SHAREABLE_PASS=false
-MODEL_B4=claude-opus-4-8
-```
-
-Save and close TextEdit when done.
+> **If the script fails** (proxy issues, permissions, etc.), the manual steps are:
+> ```bash
+> python3 -m venv ~/.venvs/transcript-analyzer
+> source ~/.venvs/transcript-analyzer/bin/activate
+> pip install -r ~/code/transcript-analyzer/requirements.txt
+> mkdir -p ~/.config/transcript-analyzer
+> cp ~/code/transcript-analyzer/.env.example ~/.config/transcript-analyzer/.env
+> open -e ~/.config/transcript-analyzer/.env   # set DRIVE_BASE to your Workcall path
+> ```
 
 ---
 

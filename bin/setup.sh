@@ -73,10 +73,87 @@ else
   sed -i '' "s|^# CLAUDE_BIN=.*|CLAUDE_BIN=$CLAUDE_PATH|" "$ENVDIR/.env" 2>/dev/null \
     || printf '\nCLAUDE_BIN=%s\n' "$CLAUDE_PATH" >> "$ENVDIR/.env"
   ok "created $ENVDIR/.env (BACKEND=claude-cli, CLAUDE_BIN=$CLAUDE_PATH)"
-  todo "edit $ENVDIR/.env and set the *_PATH vars to where YOUR transcripts live"
+  todo "edit $ENVDIR/.env and set DRIVE_BASE to your Workcall folder in Google Drive"
 fi
 
-echo "=== 4. Seat check (uses your seat, no personal API key) ==="
+echo "=== 4. Google Drive folder structure ==="
+
+# Auto-detect DRIVE_BASE from .env, falling back to scanning CloudStorage.
+DRIVE_BASE=""
+DRIVE_BASE=$(grep -E '^DRIVE_BASE=' "$ENVDIR/.env" 2>/dev/null \
+  | sed 's/^DRIVE_BASE=//' | tr -d '"'"'" | sed "s|~|$HOME|g" | xargs 2>/dev/null || true)
+
+if [ -z "$DRIVE_BASE" ] || echo "$DRIVE_BASE" | grep -qE 'CHANGE_ME|example'; then
+  DRIVE_BASE=""
+  # Scan for Google Drive mounts
+  MOUNTS=()
+  if [ -d "$HOME/Library/CloudStorage" ]; then
+    while IFS= read -r -d '' dir; do
+      case "$(basename "$dir")" in GoogleDrive-*) MOUNTS+=("$dir/My Drive/Workcall");; esac
+    done < <(find "$HOME/Library/CloudStorage" -maxdepth 1 -type d -print0 2>/dev/null)
+  fi
+
+  if [ ${#MOUNTS[@]} -eq 1 ]; then
+    DRIVE_BASE="${MOUNTS[0]}"
+    ok "Auto-detected Drive: $DRIVE_BASE"
+  elif [ ${#MOUNTS[@]} -gt 1 ]; then
+    echo "  Multiple Google Drive accounts found. Pick the one with your Workcall folder:"
+    for i in "${!MOUNTS[@]}"; do printf "    %d) %s\n" $((i+1)) "${MOUNTS[$i]}"; done
+    printf "  Enter number: "; read -r CHOICE
+    DRIVE_BASE="${MOUNTS[$((CHOICE-1))]}"
+  fi
+fi
+
+if [ -z "$DRIVE_BASE" ]; then
+  echo "  Could not auto-detect your Drive path."
+  printf "  Paste the full path to your Workcall folder: "; read -r DRIVE_BASE
+  DRIVE_BASE="${DRIVE_BASE/#\~/$HOME}"
+fi
+
+ok "Drive root: $DRIVE_BASE"
+
+# Write DRIVE_BASE into .env if not already there.
+if ! grep -qE '^DRIVE_BASE=.+' "$ENVDIR/.env" 2>/dev/null || \
+     grep -qE '^DRIVE_BASE=.*(CHANGE_ME|example)' "$ENVDIR/.env" 2>/dev/null; then
+  if grep -qE '^DRIVE_BASE=' "$ENVDIR/.env" 2>/dev/null; then
+    sed -i '' "s|^DRIVE_BASE=.*|DRIVE_BASE=$DRIVE_BASE|" "$ENVDIR/.env"
+  else
+    printf '\nDRIVE_BASE=%s\n' "$DRIVE_BASE" >> "$ENVDIR/.env"
+  fi
+  ok "Wrote DRIVE_BASE to $ENVDIR/.env"
+fi
+
+# Create the folder structure inside Drive.
+for folder in \
+  "$DRIVE_BASE" \
+  "$DRIVE_BASE/Call Transcripts" \
+  "$DRIVE_BASE/Call Transcripts/notes" \
+  "$DRIVE_BASE/Call Transcripts/notes/_Processed" \
+  "$DRIVE_BASE/Call Transcripts/docs" \
+  "$DRIVE_BASE/Call Transcripts/docs/_Processed" \
+  "$DRIVE_BASE/Analyzed" \
+  "$DRIVE_BASE/Analyzed/_Archive"
+do
+  if [ -d "$folder" ]; then
+    ok "exists:  $folder"
+  else
+    mkdir -p "$folder" && ok "created: $folder"
+  fi
+done
+
+echo "=== 5. Drive content files (from workcall-templates/) ==="
+
+for tpl in PromptLibrary.md Program_Context_Brief.md 04_people_rolodex.md 05_vocabulary.md; do
+  src="$REPO/workcall-templates/$tpl"
+  dest="$DRIVE_BASE/$tpl"
+  if [ -f "$dest" ]; then
+    ok "already present — skipping: $tpl"
+  else
+    cp "$src" "$dest" && ok "copied → $dest"
+  fi
+done
+
+echo "=== 6. Seat check (uses your seat, no personal API key) ==="
 if env -u ANTHROPIC_API_KEY "$CLAUDE" -p "ok" --model claude-sonnet-4-6 \
      --output-format json >/dev/null 2>/tmp/ta_setup.err; then
   ok "claude -p works headless on your seat"
@@ -87,10 +164,16 @@ fi
 
 echo
 echo "=== You're set. Next: ==="
-echo "  1) Edit your config:        $ENVDIR/.env   (point *_PATH at your transcripts)"
-echo "  2) Add YOUR prompts:        copy docs/prompt_starters.md into your Drive PromptLibrary.md"
-echo "     and write your Program_Context_Brief.md (your people / your program)."
-echo "  3) Dry run (safe sandbox):  bash bin/smoke_test.sh"
-echo "  4) Real run:                \"$VENV/bin/python\" -m analyzer"
-echo
+echo "  1) Fill in your program context (most important step):"
+echo "       open -e \"$DRIVE_BASE/Program_Context_Brief.md\""
+echo "     Add your program name, client, stakeholders, and workstreams."
+echo "     This is injected into every analysis run — the more detail you add, the better."
+echo ""
+echo "  2) Drop a transcript into:  $DRIVE_BASE/Call Transcripts/"
+echo "     (plain .txt or .md — the filename doesn't matter)"
+echo ""
+echo "  3) Launch the dashboard:    source $VENV/bin/activate && python -m analyzer ui"
+echo "     Or for a shortcut, add to ~/.zshrc:"
+echo "       alias ta=\"source $VENV/bin/activate && python -m analyzer ui\""
+echo ""
 echo "Tip: always RUN scripts (bash bin/...), never paste their contents into the terminal."

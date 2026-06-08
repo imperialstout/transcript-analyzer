@@ -259,7 +259,8 @@ def run(mode: str, week: str = "current") -> int:
     print(f"Running {mode} synthesis with {model}...")
 
     try:
-        data = claude_cli.run_claude_p(bundle, model=model, system=system)
+        task = {"daily": "Generate the Daily Pulse.", "weekly": "Generate the Weekly Slack Delta.", "career": "Generate the Career Trajectory synthesis."}[mode]
+        data = claude_cli.run_claude_p(f"{task}\n\n{bundle}", model=model, system=system)
         text = claude_cli.result_text(data)
     except Exception as e:
         print(f"ERROR: synthesis failed — {type(e).__name__}: {e}", file=sys.stderr)

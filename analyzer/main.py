@@ -37,7 +37,7 @@ def _resolve_prompt(prompt_library: dict, prompt_key: str, cfg) -> tuple[str, st
     )
 
 
-def main() -> int:
+def main(force: bool = False) -> int:
     cfg = cfg_mod.CONFIG
 
     # Credential gate is backend-specific. The claude-cli backend uses the work
@@ -158,7 +158,7 @@ def main() -> int:
     for txt in txts:
         if manifest.is_recorded(txt.name, existing_manifest):
             continue
-        if fs.fuzzy_is_analyzed(txt):
+        if not force and fs.fuzzy_is_analyzed(txt):
             fuzzy_skipped.append(txt.name)
             continue
         candidates.append(txt)

@@ -76,31 +76,40 @@ def _meeting_date_from_filename(name: str) -> date | None:
     return None
 
 
-def _files_for_mode(mode: str, analyzed_path: Path) -> list[Path]:
+def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current") -> list[Path]:
     """Return [ANALYZED] files whose meeting date falls in the target window."""
     today = date.today()
     if mode == "daily":
         target_dates = {today}
     else:
-        # Current ISO week: Monday through today
+        # Current ISO week: Monday through today; "last" shifts back 7 days
         monday = today - timedelta(days=today.weekday())
-        target_dates = {monday + timedelta(days=i) for i in range(today.weekday() + 1)}
+        if week == "last":
+            monday = monday - timedelta(weeks=1)
+        week_end = monday + timedelta(days=6)
+        target_dates = {monday + timedelta(days=i) for i in range(7) if monday + timedelta(days=i) <= min(week_end, today)}
+
+    # Determine which archive month folders to also scan
+    archive_months = {f"{d.year:04d}-{d.month:02d}" for d in target_dates}
+    archive_root = analyzed_path / "_Archive"
+    scan_dirs = [analyzed_path] + [
+        archive_root / m for m in archive_months
+        if (archive_root / m).is_dir()
+    ]
 
     found = []
-    for f in sorted(analyzed_path.iterdir()):
-        if f.is_dir():
-            continue
-        name = f.name
-        if not any(name.endswith(tag + ".txt") or tag in name for tag in []):
-            pass
-        # Skip synthesis outputs and shareables
-        if any(tag in name for tag in _SKIP_TAGS):
-            continue
-        if "[ANALYZED]" not in name:
-            continue
-        d = _meeting_date_from_filename(name)
-        if d and d in target_dates:
-            found.append(f)
+    for scan_dir in scan_dirs:
+        for f in sorted(scan_dir.iterdir()):
+            if f.is_dir():
+                continue
+            name = f.name
+            if any(tag in name for tag in _SKIP_TAGS):
+                continue
+            if "[ANALYZED]" not in name:
+                continue
+            d = _meeting_date_from_filename(name)
+            if d and d in target_dates:
+                found.append(f)
     return found
 
 
@@ -116,6 +125,9 @@ def _most_recent_synthesis(analyzed_path: Path, tag: str) -> Path | None:
 def _archive(files: list[Path], analyzed_path: Path) -> None:
     archive_root = analyzed_path / "_Archive"
     for f in files:
+        # Already in the archive — was included for bundling but needs no move.
+        if archive_root in f.parents:
+            continue
         d = _meeting_date_from_filename(f.name)
         folder = f"{d.year:04d}-{d.month:02d}" if d else "unknown"
         target_dir = archive_root / folder
@@ -157,7 +169,7 @@ def _output_filename(mode: str) -> str:
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
 
 
-def run(mode: str) -> int:
+def run(mode: str, week: str = "current") -> int:
     analyzed_path = CONFIG.analyzed_path
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
@@ -178,7 +190,7 @@ def run(mode: str) -> int:
         )
         return 1
 
-    files = _files_for_mode(mode, analyzed_path)
+    files = _files_for_mode(mode, analyzed_path, week=week)
     if not files:
         label = "today" if mode == "daily" else "this week"
         print(f"No [ANALYZED] files found for {label} — nothing to synthesize.")
@@ -252,8 +264,14 @@ def main() -> int:
         required=True,
         help="daily = D1 pulse over today's analyses; weekly = D2 delta over this week's",
     )
+    parser.add_argument(
+        "--week",
+        choices=["current", "last"],
+        default="current",
+        help="weekly only: 'current' = Mon–today (default); 'last' = prior full Mon–Sun week",
+    )
     args = parser.parse_args()
-    return run(args.mode)
+    return run(args.mode, week=args.week)
 
 
 if __name__ == "__main__":

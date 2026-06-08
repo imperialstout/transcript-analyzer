@@ -1,22 +1,27 @@
-"""Daily Pulse (D1) and Weekly Slack Delta (D2) synthesis.
+"""Daily Pulse (D1), Weekly Slack Delta (D2), and Career Trajectory (D3) synthesis.
 
 Reads filed [ANALYZED] outputs from Analyzed/, bundles them with the matching
 prompt from dailyAndWeeklyPrompts.md, runs a single claude -p call, writes
-the synthesis to Analyzed/, and archives the inputs to Analyzed/_Archive/YYYY-MM/.
+the synthesis to Analyzed/, and (for daily/weekly) archives the inputs to
+Analyzed/_Archive/YYYY-MM/.
 
 Usage:
     python -m analyzer synthesize --mode daily
     python -m analyzer synthesize --mode weekly
+    python -m analyzer synthesize --mode career
 
 Design choices:
 - Only [ANALYZED] files are bundled — [SHAREABLE] and prior synthesis outputs
-  ([DAILY PULSE], [WEEKLY SUMMARY], [SLACK DELTA]) are excluded.
+  ([DAILY PULSE], [WEEKLY SUMMARY], [SLACK DELTA], [CAREER TRAJECTORY]) are excluded.
 - Archive moves files to Analyzed/_Archive/YYYY-MM/ keyed on the meeting date
   embedded in the filename. Refuses to overwrite existing targets (fail closed).
+- career mode does NOT archive: its trajectory is cumulative, so it keeps its
+  inputs and chains off the prior [CAREER TRAJECTORY] for continuity. daily/weekly
+  use a date window (today / this ISO week); career bundles all current analyses.
 - The synthesis file itself is NOT archived — it stays in Analyzed/ as context
-  for the next pulse/delta.
+  for the next pulse/delta/review.
 - dailyAndWeeklyPrompts.md is parsed by the same `### KEY.` + fenced-block
-  convention as PromptLibrary.md; keys are D1 and D2.
+  convention as PromptLibrary.md; keys are D1, D2, D3.
 - If the synthesis prompt is missing, the run fails with a clear message.
 """
 
@@ -28,7 +33,7 @@ from pathlib import Path
 
 from . import claude_cli
 from . import prompts as prompts_mod
-from .config import CONFIG
+from .config import CONFIG, model_for
 from .filesystem import write_text
 
 _DAILY_PROMPTS_PATH = (
@@ -36,11 +41,21 @@ _DAILY_PROMPTS_PATH = (
 )
 
 # Keys in dailyAndWeeklyPrompts.md
-_MODE_KEY = {"daily": "D1", "weekly": "D2"}
-_MODE_SUFFIX = {"daily": "[DAILY PULSE]", "weekly": "[SLACK DELTA]"}
+_MODE_KEY = {"daily": "D1", "weekly": "D2", "career": "D3"}
+_MODE_SUFFIX = {
+    "daily": "[DAILY PULSE]",
+    "weekly": "[SLACK DELTA]",
+    "career": "[CAREER TRAJECTORY]",
+}
 
 # Only bundle internal analyses — skip shareable siblings and prior synthesis outputs.
-_SKIP_TAGS = ("[SHAREABLE]", "[DAILY PULSE]", "[WEEKLY SUMMARY]", "[SLACK DELTA]")
+_SKIP_TAGS = (
+    "[SHAREABLE]",
+    "[DAILY PULSE]",
+    "[WEEKLY SUMMARY]",
+    "[SLACK DELTA]",
+    "[CAREER TRAJECTORY]",
+)
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -77,9 +92,16 @@ def _meeting_date_from_filename(name: str) -> date | None:
 
 
 def _files_for_mode(mode: str, analyzed_path: Path) -> list[Path]:
-    """Return [ANALYZED] files whose meeting date falls in the target window."""
+    """Return the [ANALYZED] files to bundle for this mode.
+
+    daily  → today's meetings; weekly → this ISO week's (Mon–today); career →
+    all current analyses (no date window — the trajectory is a bigger-picture
+    read over everything still in Analyzed/).
+    """
     today = date.today()
-    if mode == "daily":
+    if mode == "career":
+        target_dates = None  # no window
+    elif mode == "daily":
         target_dates = {today}
     else:
         # Current ISO week: Monday through today
@@ -91,12 +113,13 @@ def _files_for_mode(mode: str, analyzed_path: Path) -> list[Path]:
         if f.is_dir():
             continue
         name = f.name
-        if not any(name.endswith(tag + ".txt") or tag in name for tag in []):
-            pass
         # Skip synthesis outputs and shareables
         if any(tag in name for tag in _SKIP_TAGS):
             continue
         if "[ANALYZED]" not in name:
+            continue
+        if target_dates is None:
+            found.append(f)
             continue
         d = _meeting_date_from_filename(name)
         if d and d in target_dates:
@@ -152,6 +175,8 @@ def _output_filename(mode: str) -> str:
     suffix = _MODE_SUFFIX[mode]
     if mode == "daily":
         return f"{iso} - Daily Pulse - {today} {suffix}.md"
+    elif mode == "career":
+        return f"{iso} - Career Trajectory - {today} {suffix}.md"
     else:
         monday = date.today() - timedelta(days=date.today().weekday())
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
@@ -180,7 +205,7 @@ def run(mode: str) -> int:
 
     files = _files_for_mode(mode, analyzed_path)
     if not files:
-        label = "today" if mode == "daily" else "this week"
+        label = {"daily": "today", "weekly": "this week", "career": "in Analyzed/"}[mode]
         print(f"No [ANALYZED] files found for {label} — nothing to synthesize.")
         return 0
 
@@ -188,7 +213,8 @@ def run(mode: str) -> int:
     for f in files:
         print(f"  {f.name}")
 
-    prior_tag = "[DAILY PULSE]" if mode == "daily" else "[SLACK DELTA]"
+    # Chain off the most recent synthesis of the same kind for continuity.
+    prior_tag = _MODE_SUFFIX[mode]
     prior = _most_recent_synthesis(analyzed_path, prior_tag)
     if prior:
         print(f"Including prior {mode} for context: {prior.name}")
@@ -207,7 +233,10 @@ def run(mode: str) -> int:
     system_parts.append(f"=== SYNTHESIS INSTRUCTIONS ===\n{prompt_body}")
     system = "\n\n".join(system_parts)
 
-    model = CONFIG.models.get("STANDUP", "claude-sonnet-4-6")  # Sonnet — synthesis is cheap
+    # Daily/weekly pulses are cheap recaps → Sonnet. Career trajectory is
+    # high-value strategic reasoning → the B4 (political/career) model, which is
+    # Opus on the personal machine. model_for honors MODEL_OVERRIDE.
+    model = model_for("B4") if mode == "career" else CONFIG.models.get("STANDUP", "claude-sonnet-4-6")
     print(f"Running {mode} synthesis with {model}...")
 
     try:
@@ -226,7 +255,13 @@ def run(mode: str) -> int:
     write_text(out_path, text)
     print(f"Synthesis written → {out_name}")
 
-    # Archive input files after successful write
+    # career keeps its inputs: the trajectory is cumulative and chains off the
+    # prior review, so we don't archive (or pay to re-derive) the analyses.
+    if mode == "career":
+        print(f"All done. {len(files)} analysis file(s) reviewed (kept in place — not archived).")
+        return 0
+
+    # Archive input files after successful write (daily/weekly only)
     try:
         _archive(files, analyzed_path)
     except Exception as e:
@@ -244,13 +279,16 @@ def run(mode: str) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="python -m analyzer synthesize",
-        description="Run D1 (daily pulse) or D2 (weekly slack delta) synthesis.",
+        description="Run D1 (daily pulse), D2 (weekly slack delta), or D3 (career trajectory) synthesis.",
     )
     parser.add_argument(
         "--mode",
-        choices=["daily", "weekly"],
+        choices=["daily", "weekly", "career"],
         required=True,
-        help="daily = D1 pulse over today's analyses; weekly = D2 delta over this week's",
+        help=(
+            "daily = D1 pulse over today's analyses; weekly = D2 delta over this "
+            "week's; career = D3 position-trajectory review over all current analyses"
+        ),
     )
     args = parser.parse_args()
     return run(args.mode)

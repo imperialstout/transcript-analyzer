@@ -16,6 +16,7 @@ Credentials and tokens live at `~/.config/transcript-analyzer/` —
 outside the repo (which is in iCloud) and outside Drive sync.
 """
 
+import unicodedata
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -63,34 +64,87 @@ def _save_token(creds: Credentials) -> None:
     TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
 
 
+_MIME_FILTER = "(mimeType = 'text/plain' or mimeType = 'text/markdown')"
+
+
+def _drive_escape(value: str) -> str:
+    """Escape a string for inclusion in a Drive query literal."""
+    return value.replace("\\", "\\\\").replace("'", r"\'")
+
+
+def _contains_token(filename: str) -> str:
+    """A distinctive ASCII prefix safe to use in a `name contains` query.
+
+    Drive's exact `name =` match is byte-sensitive, so it fails when the local
+    name differs from Drive's at the byte level (notably NFD vs NFC). A
+    `contains` query on the leading ASCII run sidesteps that: we stop at the
+    first non-ASCII char (where normalization differences live) so the token is
+    identical in both forms, then disambiguate the candidates in Python. Returns
+    "" if the prefix is too short to be distinctive.
+    """
+    token = []
+    for ch in filename:
+        if ord(ch) > 127 or ch in "'\\":
+            break
+        token.append(ch)
+    token = "".join(token).strip()
+    return token if len(token) >= 8 else ""
+
+
+def _list_drive_files(drive_service: Resource, q: str) -> list[dict]:
+    return drive_service.files().list(
+        q=f"{q} and {_MIME_FILTER} and trashed = false",
+        spaces="drive",
+        fields="files(id, name, modifiedTime)",
+        pageSize=25,
+    ).execute().get("files", [])
+
+
+def _download_best(drive_service: Resource, filename: str, files: list[dict]) -> str:
+    """Pick the best candidate (exact NFC match preferred, else newest) and fetch it."""
+    target = unicodedata.normalize("NFC", filename).casefold()
+    exact = [f for f in files if unicodedata.normalize("NFC", f["name"]).casefold() == target]
+    pool = exact or files
+    pool.sort(key=lambda f: f.get("modifiedTime", ""), reverse=True)
+    response = drive_service.files().get_media(fileId=pool[0]["id"]).execute()
+    return response.decode("utf-8") if isinstance(response, bytes) else str(response)
+
+
 def fetch_text_file_by_name(filename: str, drive_service: Resource) -> str:
-    """Download a `.txt`/`.md` body from Drive by exact filename match.
+    """Download a `.txt`/`.md` body from Drive, matching by filename.
 
     Last-resort fallback for the launchd × Drive File Provider EDEADLK bug:
     when both `open()` and `/bin/cat` refuse to read a freshly-synced file,
     this bypasses the local FUSE mount entirely and pulls the body straight
-    from Google's HTTP API. Filenames in Drive match the local cache names,
-    so a `name = '...'` query resolves the file id. Mime filter accepts both
-    text/plain (.txt) and text/markdown (.md).
+    from Google's HTTP API. Mime filter accepts both text/plain and
+    text/markdown.
+
+    Matching is layered because the local cache name and Drive's stored name
+    can differ at the byte level — macOS stores filenames NFD-decomposed
+    (`Re` + combining accent) while Drive stores them NFC-composed (`é`), so a
+    raw `name = '...'` query silently returns nothing:
+
+      1. Exact `name =` match across NFC / NFD / raw forms (precise, cheap).
+      2. `name contains '<ASCII prefix>'` narrowed set, disambiguated in Python
+         with NFC-normalized comparison (survives accent + other byte skew).
     """
-    safe = filename.replace("'", r"\'")
-    results = drive_service.files().list(
-        q=(
-            f"name = '{safe}' and "
-            f"(mimeType = 'text/plain' or mimeType = 'text/markdown') and "
-            f"trashed = false"
-        ),
-        spaces="drive",
-        fields="files(id, name, modifiedTime)",
-        pageSize=10,
-    ).execute()
-    files = results.get("files", [])
-    if not files:
-        raise FileNotFoundError(f"no Drive file matches name {filename!r} (text/plain or text/markdown)")
-    if len(files) > 1:
-        files.sort(key=lambda f: f.get("modifiedTime", ""), reverse=True)
-    response = drive_service.files().get_media(fileId=files[0]["id"]).execute()
-    return response.decode("utf-8") if isinstance(response, bytes) else str(response)
+    forms = list(dict.fromkeys([
+        unicodedata.normalize("NFC", filename),
+        unicodedata.normalize("NFD", filename),
+        filename,
+    ]))
+    for name in forms:
+        files = _list_drive_files(drive_service, f"name = '{_drive_escape(name)}'")
+        if files:
+            return _download_best(drive_service, filename, files)
+
+    token = _contains_token(filename)
+    if token:
+        files = _list_drive_files(drive_service, f"name contains '{_drive_escape(token)}'")
+        if files:
+            return _download_best(drive_service, filename, files)
+
+    raise FileNotFoundError(f"no Drive file matches name {filename!r} (text/plain or text/markdown)")
 
 
 def bootstrap_oauth() -> None:

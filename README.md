@@ -1,10 +1,25 @@
 # Transcript Analyzer
 
-Local CLI that runs meeting-transcript analyses through a Claude Code work seat, replacing the chat-based workflow that was crashing on heavy weeks.
+Local CLI that runs meeting-transcript analyses through a Claude Code seat, replacing the chat-based workflow that was crashing on heavy weeks.
+
+## Two deployments, one codebase
+
+The same engine runs on **two machines with two Google Drives**, differentiated only by `.env` — not a fork, so reliability fixes land once:
+
+| | **Work machine** | **Personal machine** |
+|---|---|---|
+| Drive (`DRIVE_BASE`) | `…@salesforce.com` | `…@bradgross.org` |
+| `ROUTING_PROFILE` | `work` — `DAILY`/`STANDUP`/`SOLUTION`/`EXEC` | `personal` — `B4` (Political) / `A3` (Career) |
+| Primary use | per-meeting analyze + daily/weekly synthesis | **Career Trajectory** synthesis (bigger picture) |
+| `SHAREABLE_PASS` | on (sharing with leads) | off (keeps sensitive content) |
+| Scheduling | launchd, every 30 min | **UI-driven on demand** (launchd disabled) |
+| Top Opus model | `opus-4-7` | `opus-4-8` (available on this seat) |
+
+Everything below applies to both; differences are called out inline.
 
 ## Prereqs
 
-1. **Google Drive for Desktop** running and syncing `Workcall/` under `GoogleDrive-brad.gross@salesforce.com`.
+1. **Google Drive for Desktop** running and syncing `Workcall/`. Set `DRIVE_BASE` in `.env` to this machine's Drive root (work `…@salesforce.com` or personal `…@bradgross.org`).
 2. **Write transcripts as plain `.txt` or `.md` files** at the root of `Call Transcripts/`. Subfolders are ignored. `.gdoc` shortcuts are handled via Drive API (see Notes intake below).
 3. **Python 3.11+** and the **Claude Code CLI** (`claude`) on PATH (or set `CLAUDE_BIN` to an absolute path for launchd).
 
@@ -47,7 +62,7 @@ Then `ta` in any terminal opens the dashboard.
 Dashboard features:
 - Stats strip: total files, transcript count, notes count, cumulative cost
 - Table of all analyzed files with category badge, model, cost, shareable status
-- **Daily Pulse** and **Weekly Slack Delta** buttons — run synthesis in-browser with live output
+- **Daily Pulse**, **Weekly Slack Delta**, and **Career Trajectory** buttons — run synthesis in-browser with live output
 - **Settings tab** — configure the shared meeting files URL, rolodex/vocabulary paths, shareable toggle, backend, model override
 - **Edit content files** — one-click open for PromptLibrary, Context Brief, Rolodex, and Vocabulary in your default editor
 - **Open launchd log** shortcut for troubleshooting
@@ -63,14 +78,14 @@ Each run:
 1. Processes any pending Gemini-summary notes in `Call Transcripts/notes/`.
 2. Lists `.txt` / `.md` files at the root of `Call Transcripts/`.
 3. Skips files already in `.processed.json` or fuzzy-matched against `Analyzed/`.
-4. Routes each transcript to a category prompt (`DAILY` / `STANDUP` / `SOLUTION` / `EXEC`) via a cheap Haiku classifier call.
+4. Routes each transcript to a category prompt via a cheap Haiku classifier call — `DAILY`/`STANDUP`/`SOLUTION`/`EXEC` on the work profile, or `B4` (Political) / `A3` (Career) on the personal profile (`ROUTING_PROFILE`).
 5. Runs the matching prompt via `claude -p` on the Claude Code seat.
-6. Writes `[ANALYZED].txt` and a redacted `[SHAREABLE].txt` sibling to `Analyzed/`.
+6. Writes `[ANALYZED].txt`, plus a redacted `[SHAREABLE].txt` sibling when `SHAREABLE_PASS=true` (off on the personal machine).
 7. Records token usage in `.processed.json` and moves the source to `Call Transcripts/_Processed/<YYYY-MM>/`.
 
-### Daily Pulse and Weekly Slack Delta
+### Synthesis: Daily Pulse, Weekly Slack Delta, Career Trajectory
 
-After transcripts are analyzed, run synthesis manually at end-of-day or end-of-week:
+After transcripts are analyzed, run synthesis manually (or via the UI buttons):
 
 ```bash
 # D1 — Daily Pulse: bundles today's [ANALYZED] files, writes a 200-300 word pulse
@@ -78,15 +93,21 @@ python -m analyzer synthesize --mode daily
 
 # D2 — Weekly Slack Delta: bundles this week's [ANALYZED] files, writes a paste-ready Slack delta
 python -m analyzer synthesize --mode weekly
+
+# D3 — Career Trajectory: bundles ALL current analyses, writes a position/career review
+python -m analyzer synthesize --mode career
 ```
 
-Both commands:
-- Bundle the relevant `[ANALYZED]` files (today's or this ISO week's) plus the most recent prior synthesis for continuity context.
-- Run on Sonnet (inputs are already structured; these calls are cheap).
-- Write the output to `Analyzed/` with a `[DAILY PULSE]` or `[SLACK DELTA]` suffix.
-- **Archive** the bundled input files to `Analyzed/_Archive/YYYY-MM/` after a successful write.
+All three bundle `[ANALYZED]` files plus the most recent prior synthesis of the same kind (continuity), and write to `Analyzed/` with a `[DAILY PULSE]` / `[SLACK DELTA]` / `[CAREER TRAJECTORY]` suffix.
 
-The synthesis prompts (D1, D2) live in `Workcall/dailyAndWeeklyPrompts.md` on Drive — edit them there, no code change needed.
+| Mode | Window | Model | Archives inputs? |
+|---|---|---|---|
+| `daily` / `weekly` | today / this ISO week | Sonnet (cheap recap) | **yes** → `_Archive/YYYY-MM/` |
+| `career` | **all current `[ANALYZED]` files** | **Opus** (B4 model — strategic) | **no** (trajectory is cumulative) |
+
+`career` is the personal machine's primary tool: it answers *"how is **my** position and career going"* rather than *"how is the project going,"* and deliberately keeps its inputs so each review chains off the prior one. It needs meaningful material in `Analyzed/` to be useful — feed it summaries/analyses first.
+
+The synthesis prompts (D1, D2, D3) live in `Workcall/dailyAndWeeklyPrompts.md` on Drive — edit them there, no code change needed. (The repo's `docs/dailyAndWeeklyPrompts.md` is a gitignored reference copy; the code reads the Drive one.)
 
 ### One-off model override
 
@@ -98,24 +119,25 @@ MODEL_OVERRIDE=claude-opus-4-7 python -m analyzer
 
 | Category | Default model | Rationale |
 |---|---|---|
-| `EXEC` | `claude-opus-4-7` | Highest-stakes; political read, executive dynamics |
-| `SOLUTION` | `claude-sonnet-4-6` | Technical/design sessions; Sonnet handles these well |
-| `STANDUP` | `claude-sonnet-4-6` | Internal syncs |
-| `DAILY` | `claude-sonnet-4-6` | Daily digests |
+| `EXEC` | `claude-opus-4-7` | Highest-stakes; executive dynamics (work) |
+| `SOLUTION` / `STANDUP` / `DAILY` | `claude-sonnet-4-6` | Technical/design + internal syncs/digests (work) |
+| `B4` (Political Read) | `claude-opus-4-7`, **`opus-4-8` on personal** | Political dynamics; strategic (personal) |
+| `A3` (1:1/Career) | `claude-sonnet-4-6` | People/career notes (personal) |
 | Classifier | `claude-haiku-4-5-20251001` | Routing only; cheap |
 | Redaction | `claude-sonnet-4-6` | Post-process pass over structured text |
-| Synthesis (D1/D2) | `claude-sonnet-4-6` | Inputs are already structured |
+| Synthesis D1/D2 | `claude-sonnet-4-6` | Cheap recap; inputs already structured |
+| Synthesis D3 (career) | B4 model (**`opus-4-8` on personal**) | Strategic trajectory reasoning |
 
-Override any per-category model via `.env` (`MODEL_EXEC`, `MODEL_SOLUTION`, etc.).
+Override any per-key model via `.env` (`MODEL_EXEC`, `MODEL_B4`, etc.). The personal `.env` sets `MODEL_B4=claude-opus-4-8` (the latest Opus, available on the personal seat but not the work seat).
 
 ## Content lives in Drive, not the repo
 
-Runtime files are at `~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall/`:
+Runtime files are at **`$DRIVE_BASE/`** (work `…@salesforce.com`, personal `…@bradgross.org`):
 
 | File | Purpose |
 |---|---|
-| `PromptLibrary.md` | Four routed category prompts (`### DAILY.` / `### STANDUP.` / `### SOLUTION.` / `### EXEC.`) plus `### REDACT.`. Parsed by `### KEY.` headings + fenced blocks. |
-| `dailyAndWeeklyPrompts.md` | D1 Daily Pulse and D2 Weekly Slack Delta prompts (`### D1.` / `### D2.`). Used by `python -m analyzer synthesize`. |
+| `PromptLibrary.md` | Category prompts parsed by `### KEY.` headings + fenced blocks. Work profile: `### DAILY.` / `### STANDUP.` / `### SOLUTION.` / `### EXEC.` + `### REDACT.`. Personal profile: `### B4.` (Political) / `### A3.` (Career). |
+| `dailyAndWeeklyPrompts.md` | Synthesis prompts `### D1.` (Daily Pulse) / `### D2.` (Slack Delta) / `### D3.` (Career Trajectory). Used by `python -m analyzer synthesize`. The repo `docs/` copy is gitignored reference only. |
 | `Program_Context_Brief.md` | Program-wide context injected as the system prefix on every analysis run. |
 | `04_people_rolodex.md` | Named-individual index (optional). Appended after the brief; helps resolve Plaud-mangled names. |
 | `05_plaud_vocabulary.md` | Canonical spellings of names/acronyms/product terms (optional). Normalizes mangled terms in non-Plaud transcripts. |
@@ -158,12 +180,13 @@ Analyzed/
 ├── 2026-05-14T09-30-00 - RCA Weekly - 2026-05-14 [SHAREABLE].txt
 ├── 2026-05-14T18-30-00 - Daily Pulse - 2026-05-14 [DAILY PULSE].md
 ├── 2026-05-16T17-00-00 - Slack Delta - Week of 2026-05-12 [SLACK DELTA].md
+├── 2026-06-08T09-00-00 - Career Trajectory - 2026-06-08 [CAREER TRAJECTORY].md
 └── _Archive/
     └── 2026-05/
-        └── (archived [ANALYZED] files after synthesis)
+        └── (archived [ANALYZED] files after daily/weekly synthesis)
 ```
 
-`[ANALYZED]` files are archived to `_Archive/YYYY-MM/` when synthesis runs. `[SHAREABLE]` siblings are archived alongside them. Synthesis outputs (`[DAILY PULSE]`, `[SLACK DELTA]`) stay in the root as context for future synthesis runs.
+`[ANALYZED]` files are archived to `_Archive/YYYY-MM/` when **daily/weekly** synthesis runs (the `career` review keeps its inputs). Synthesis outputs (`[DAILY PULSE]`, `[SLACK DELTA]`, `[CAREER TRAJECTORY]`) stay in the root as context for future synthesis runs.
 
 ## Scheduled runs (launchd)
 
@@ -173,7 +196,7 @@ cp examples/com.bradgross.transcript-analyzer.plist ~/Library/LaunchAgents/
 launchctl load -w ~/Library/LaunchAgents/com.bradgross.transcript-analyzer.plist
 ```
 
-Schedules a run every 30 min. The wrapper at `bin/analyze.sh` fires a macOS notification only when something happened. Logs:
+Schedules a run every 30 min. **This is the work machine's setup** — the personal machine runs on demand via the UI and keeps its launchd agent disabled (`…transcript-analyzer.plist.disabled`); re-enable with `launchctl bootstrap gui/$(id -u) <plist>` after restoring the name. The wrapper at `bin/analyze.sh` fires a macOS notification only when something happened. Logs:
 
 - `~/Library/Logs/transcript-analyzer.log` — rolling history
 - `~/Library/Logs/transcript-analyzer-last.log` — most recent run only
@@ -199,14 +222,18 @@ Cost on the `claude-cli` backend is informational only — the Claude Code seat 
 All settings in `~/.config/transcript-analyzer/.env`. Key overrides:
 
 ```bash
+DRIVE_BASE=~/Library/CloudStorage/GoogleDrive-brad@bradgross.org/My Drive/Workcall  # this machine's Drive root
+ROUTING_PROFILE=personal        # "work" (DAILY/STANDUP/SOLUTION/EXEC) or "personal" (B4/A3)
 BACKEND=claude-cli              # or "api" for legacy direct-API path
 CLAUDE_BIN=/usr/local/bin/claude  # absolute path required under launchd
-SHAREABLE_PASS=true             # set false to skip [SHAREABLE] output
+SHAREABLE_PASS=false            # true on work (sharing); false on personal (keeps sensitive content)
 MODEL_EXEC=claude-opus-4-7      # per-category overrides
-MODEL_SOLUTION=claude-sonnet-4-6
+MODEL_B4=claude-opus-4-8        # personal: latest Opus for the political/career read
 MODEL_OVERRIDE=claude-opus-4-7  # wins over per-category defaults for one run
 EFFORT=high                     # low | medium | high | max (max is Opus-only)
 ```
+
+> The example above shows a **personal** machine's `.env`. On the work machine, set `DRIVE_BASE` to the `…@salesforce.com` path, `ROUTING_PROFILE=work`, and `SHAREABLE_PASS=true`.
 
 ## File layout
 
@@ -215,10 +242,10 @@ transcript-analyzer/
 ├── analyzer/
 │   ├── __main__.py          # entry point: dispatches to main, synthesize, or ui
 │   ├── main.py              # transcript + notes intake pipeline
-│   ├── synthesize.py        # D1/D2 synthesis + archive
+│   ├── synthesize.py        # D1/D2/D3 synthesis (+ archive for daily/weekly)
 │   ├── ui.py                # Flask web dashboard (python -m analyzer ui)
-│   ├── config.py            # .env loading + model tiering
-│   ├── router.py            # Haiku-based transcript classifier
+│   ├── config.py            # .env loading, DRIVE_BASE, model tiering
+│   ├── router.py            # Haiku classifier; work/personal routing profiles
 │   ├── redactor.py          # [SHAREABLE] redaction pass
 │   ├── filesystem.py        # list, move-to-_Processed, fuzzy backstop
 │   ├── manifest.py          # .processed.json + cost calc

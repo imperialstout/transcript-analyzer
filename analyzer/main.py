@@ -84,9 +84,10 @@ def main(force: bool = False) -> int:
             router.FALLBACK not in prompt_library
             and cfg.default_prompt_key not in prompt_library
         ):
+            wanted = "/".join(f"### {c}." for c in router.CATEGORIES)
             print(
                 f"ERROR: no usable prompt in {cfg.prompt_library_path} — add the "
-                f"routed category prompts (### DAILY./STANDUP./SOLUTION./EXEC.) "
+                f"routed category prompts ({wanted}) "
                 f"or a {cfg.default_prompt_key!r} fallback.",
                 file=sys.stderr,
             )

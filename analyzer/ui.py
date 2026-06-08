@@ -327,6 +327,10 @@ _HOME_BODY = """\
     <input type="hidden" name="mode" value="weekly">
     <button type="submit" class="secondary">▶ Weekly Slack Delta</button>
   </form>
+  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Career Trajectory review…')">
+    <input type="hidden" name="mode" value="career">
+    <button type="submit" class="secondary">▶ Career Trajectory</button>
+  </form>
 </div>
 
 <div id="job-status">
@@ -472,7 +476,7 @@ def create_app():
     def synthesize():
         global _job
         mode = request.form.get("mode", "daily")
-        if mode not in ("daily", "weekly"):
+        if mode not in ("daily", "weekly", "career"):
             return redirect(url_for("home", flash="Invalid mode", ft="err"))
 
         with _job_lock:

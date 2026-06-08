@@ -75,13 +75,7 @@ place them yourself or point the `*_PATH` vars at them):
 | `PromptLibrary.md` | `PROMPT_LIBRARY_PATH` | yes | category + REDACT prompts |
 | `Program_Context_Brief.md` | `CONTEXT_BRIEF_PATH` | yes | who's-who system prefix |
 | `04_people_rolodex.md` | `ROLODEX_PATH` | optional | named-individual index incl. mangled name variants; appended after the brief. Absent = skipped with a stderr note. |
-| `05_plaud_vocabulary.md` | `VOCABULARY_PATH` | optional | canonical spellings of names/acronyms/product terms; fed as a Term Glossary so the model normalizes mangled terms. Absent = skipped with a stderr note. |
-
-`05_plaud_vocabulary.md` does double duty: it's **also** the list you paste into the Plaud
-app's Custom Vocabulary setting on the recording device. But because most of these
-transcripts come from Gemini/Teams/Slack (which never get Plaud's device-level
-correction), the file now feeds the analyzer too — so place it in `Workcall/` (or point
-`VOCABULARY_PATH` at it), not just into the Plaud app.
+| `05_vocabulary.md` | `VOCABULARY_PATH` | optional | canonical spellings of names/acronyms/product terms; fed as a Term Glossary so the model normalizes mangled terms in transcripts. Absent = skipped with a stderr note. |
 
 ## 2. Add the consolidated prompts to Drive **(Drive edit, not code)**
 

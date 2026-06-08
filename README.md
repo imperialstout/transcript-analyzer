@@ -6,7 +6,7 @@ An automated tool that reads your meeting transcripts and notes, runs them throu
 
 ## What this tool does
 
-Every time it runs, it looks at your `Call Transcripts/` folder in Google Drive and:
+Every time it runs, it looks at your `Call Transcripts/` folder in a local drive that is also connected to Google Drive and:
 
 1. **Analyzes transcripts** — classifies each meeting (standup? executive? solution design?), runs the matching AI prompt, and writes a structured `[ANALYZED]` file.
 2. **Processes documents** — PDFs, DOCX, and Markdown files you drop in `docs/` get analyzed and their key facts merged into a living `[PROGRAM REFERENCE]` knowledge base.
@@ -23,7 +23,7 @@ This tool is designed to run on **two different machines** with slightly differe
 
 | | **Work machine** | **Personal machine** |
 |---|---|---|
-| Google Drive account | `…@salesforce.com` | `…@bradgross.org` |
+| Google Drive account | `…@salesforce.com` | `…@your personal account` |
 | Meeting categories | `DAILY` / `STANDUP` / `SOLUTION` / `EXEC` | `B4` (Political) / `A3` (Career) |
 | Shareable pass | On — produces a `[SHAREABLE]` version for leads | Off — keeps sensitive content private |
 | Scheduling | Runs automatically every 30 min | Runs on demand via the UI |
@@ -180,24 +180,13 @@ Save and close TextEdit when done.
 
 ---
 
-### Step 7 — Set up Google Drive API access (one-time, for `.gdoc` fetching)
+### Step 7 — Google Drive API access (Salesforce machines: skip this step)
 
-The notes intake pipeline fetches Google Doc bodies via the Drive API. This requires a one-time OAuth consent flow.
-
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (name it anything, e.g. `transcript-analyzer`).
-2. In the left sidebar, go to **APIs & Services → Library**. Search for **Google Drive API** and click **Enable**.
-3. Go to **APIs & Services → Credentials**. Click **Create Credentials → OAuth 2.0 Client ID**.
-4. Choose **Desktop app**, name it anything, click **Create**.
-5. Click the download icon next to your new credential. Save the downloaded JSON file to:
-   ```
-   ~/.config/transcript-analyzer/google-credentials.json
-   ```
-6. Back in Terminal (with your venv active), run:
-   ```bash
-   source ~/.venvs/transcript-analyzer/bin/activate
-   python -m analyzer.drive_client
-   ```
-   A browser window opens asking you to sign in to Google and grant access. Do so. A token file is saved to `~/.config/transcript-analyzer/google-token.json` and refreshes automatically from here on.
+> **Salesforce work machines cannot create Google Cloud API keys** due to IT restrictions. Skip this step entirely.
+>
+> The Drive API is only needed to fetch the body of `.gdoc` shortcut files (Gemini meeting summaries saved as Google Docs). Without it, the notes intake pipeline falls back gracefully — `.gdoc` files are skipped, but plain `.txt` notes and full transcript files work normally. If you want to use the Gemini notes workflow, drop the summary as a `.txt` file with YAML frontmatter instead (see **Part 5** below).
+>
+> On a **personal machine** where you can create API credentials, the setup is: create a Google Cloud project, enable the Drive API, create an OAuth 2.0 Desktop credential, save the downloaded JSON to `~/.config/transcript-analyzer/google-credentials.json`, then run `python -m analyzer.drive_client` once to complete the browser consent flow.
 
 ---
 
@@ -304,7 +293,7 @@ All the *content you tune* — prompts, context briefs, rolodex — lives in you
 | `dailyAndWeeklyPrompts.md` | The synthesis prompts for D1 (Daily Pulse), D2 (Slack Delta), D3 (Career Trajectory). | When you want to change what the synthesis outputs — different structure, different focus, different audience. |
 | `Program_Context_Brief.md` | Program-wide context injected into *every* analysis run as background knowledge — who the stakeholders are, what the program is doing, key terminology. | When the program structure changes: new workstreams, new stakeholders, major decisions. |
 | `04_people_rolodex.md` | Index of named individuals, including variants of how speech-to-text mangles their names. Optional but helpful. | When someone new joins or their name keeps getting mangled by the transcription tool. |
-| `05_plaud_vocabulary.md` | Canonical spellings of product names, acronyms, and terms. Optional. | When the transcription tool consistently misspells something important. |
+| `05_vocabulary.md` | Canonical spellings of product names, acronyms, and terms. Optional. | When the transcription tool consistently misspells something important. |
 
 ### The `Call Transcripts/` folder (in Drive)
 
@@ -381,12 +370,62 @@ transcript-analyzer/
 │   └── anthropic_client.py  # Backend: direct Anthropic API (legacy fallback)
 ├── bin/
 │   └── analyze.sh         # Shell script launchd calls — runs analyzer, fires macOS notification
+├── workcall-templates/    # ← Starting-point files to copy into your Drive Workcall/ folder
+│   ├── PromptLibrary.md           # Four analysis prompts (DAILY/STANDUP/SOLUTION/EXEC) + REDACT
+│   ├── Program_Context_Brief.md   # Fillable template for program context, stakeholders, workstreams
+│   ├── 04_people_rolodex.md       # Template for tracking named individuals across the program
+│   └── 05_vocabulary.md           # Template for canonical spellings fed to the analyzer
 ├── docs/
 │   └── prompt_starters.md # Reference prompt bodies to paste into PromptLibrary.md
 ├── .env.example           # Template for ~/.config/transcript-analyzer/.env
 ├── requirements.txt       # Python package dependencies
 └── README.md              # This file
 ```
+
+---
+
+## Part 3b: Setting up your Drive content files (first time)
+
+The analyzer reads four files from your `Workcall/` folder in Drive. None of them exist yet — you need to create them. The repo includes ready-to-use templates in `workcall-templates/`.
+
+### Step 1 — Copy the templates into Drive
+
+In Finder, open `~/code/transcript-analyzer/workcall-templates/`. Copy all four files into your `Workcall/` folder in Google Drive (the same folder you set as `DRIVE_BASE` in your `.env`).
+
+```
+Workcall/
+├── PromptLibrary.md            ← copy from workcall-templates/
+├── Program_Context_Brief.md    ← copy from workcall-templates/
+├── 04_people_rolodex.md        ← copy from workcall-templates/
+└── 05_vocabulary.md            ← copy from workcall-templates/
+```
+
+### Step 2 — Fill in `Program_Context_Brief.md`
+
+This is the most important file. Open it in your text editor and fill in:
+
+- Your program name and client
+- Key client stakeholders (names, roles, what they care about)
+- Active workstreams and their leads
+- Your delivery team
+- Key decisions and constraints the model should always know about
+- Program-level risks
+- Key acronyms and terms
+
+This file is injected into every analysis run as background context. The better it is, the more specific and useful every analysis will be. You don't need to be exhaustive — a one-page brief is better than a five-page one that never gets updated.
+
+### Step 3 — Customize `PromptLibrary.md` (optional at first)
+
+The template prompts in `PromptLibrary.md` work out of the box for most programs — DAILY, STANDUP, SOLUTION, and EXEC cover the four main meeting types. You can run the analyzer with them as-is and refine later.
+
+When you do customize: each prompt is a fenced code block under a `### KEY.` heading. The framing and frontmatter are injected automatically — you only write the analysis structure. The `## Private read — internal only` section at the end of each prompt is where political and positioning signal goes; it's stripped by the `REDACT` pass for the shareable version.
+
+### Step 4 — Populate `04_people_rolodex.md` and `05_vocabulary.md` over time
+
+These are optional and build up incrementally. Start empty (the templates have placeholder entries) and add:
+
+- **Rolodex:** Add an entry for each person who recurs across your meetings. The "Name variants" field is where you note how your transcription tool spells their name.
+- **Vocabulary:** Add product names, acronyms, and terms your transcription tool consistently misspells. One term per line inside the fenced blocks.
 
 ---
 

@@ -28,7 +28,7 @@ _SETTINGS_FIELDS = [
     ("ROLODEX_PATH", "People rolodex path", "text",
      "Absolute path to 04_people_rolodex.md (leave blank to use Drive default)."),
     ("VOCABULARY_PATH", "Term glossary path", "text",
-     "Absolute path to 05_plaud_vocabulary.md (leave blank to use Drive default)."),
+     "Absolute path to 05_vocabulary.md (leave blank to use Drive default)."),
     ("SHAREABLE_PASS", "Enable shareable redaction pass", "toggle",
      "Generate a redacted [SHAREABLE] sibling for every analysis."),
     ("BACKEND", "Execution backend", "text",
@@ -557,7 +557,7 @@ def create_app():
             ("PromptLibrary.md", str(CONFIG.prompt_library_path)),
             ("Program_Context_Brief.md", str(CONFIG.context_brief_path)),
             ("People Rolodex (04_people_rolodex.md)", str(CONFIG.rolodex_path)),
-            ("Term Glossary (05_plaud_vocabulary.md)", str(CONFIG.vocabulary_path)),
+            ("Term Glossary (05_vocabulary.md)", str(CONFIG.vocabulary_path)),
         ]
         return _render(
             _SETTINGS_BODY,

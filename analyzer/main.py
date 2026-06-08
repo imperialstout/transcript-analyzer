@@ -214,7 +214,7 @@ def main(force: bool = False) -> int:
         print(f"Found {len(pending_docs)} pending document(s) in {cfg.docs_path}.")
         for i, doc in enumerate(pending_docs, 1):
             try:
-                doc_text = fs.read_pdf(doc)
+                doc_text = fs.read_document(doc)
 
                 system = ac.system_prompt_text(
                     context_brief,

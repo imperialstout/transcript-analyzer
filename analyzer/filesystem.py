@@ -11,16 +11,22 @@ from . import drive_client
 from .config import CONFIG
 from .filing import LEADING_PREFIX
 
-# PDF support — optional import so the rest of the pipeline works even if
-# pypdf isn't installed yet (e.g. on a fresh checkout before pip install).
+# Optional imports — graceful degradation so uninstalled packages only break
+# the specific format, not the whole pipeline.
 try:
     import pypdf
     _PYPDF_AVAILABLE = True
 except ImportError:
     _PYPDF_AVAILABLE = False
 
+try:
+    import docx as _docx
+    _DOCX_AVAILABLE = True
+except ImportError:
+    _DOCX_AVAILABLE = False
+
 _PROGRAM_REFERENCE_FILENAME = "[PROGRAM REFERENCE].md"
-_DOCUMENT_EXTENSIONS = {".pdf"}  # extend as more types are supported
+_DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt"}
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -215,37 +221,60 @@ def list_pending_documents() -> list[Path]:
     return sorted(files)
 
 
-def read_pdf(path: Path) -> str:
-    """Extract text content from a PDF file using pypdf.
+def read_document(path: Path) -> str:
+    """Extract text from a document file in docs/.
 
-    Returns the concatenated text of all pages, with page breaks as double
-    newlines. Raises ImportError if pypdf isn't installed, RuntimeError if
-    the PDF can't be read or yields no text.
+    Dispatches by extension:
+      .pdf   — pypdf text layer extraction
+      .docx  — python-docx paragraph extraction
+      .md / .txt — plain read_text() (same EDEADLK-safe path as transcripts)
+
+    Raises ImportError if a required package is missing, RuntimeError if the
+    file can't be read or yields no text.
     """
+    ext = path.suffix.lower()
+    if ext == ".pdf":
+        return _read_pdf(path)
+    if ext == ".docx":
+        return _read_docx(path)
+    if ext in (".md", ".txt"):
+        return read_text(path)
+    raise ValueError(f"unsupported document extension: {ext!r}")
+
+
+def _read_pdf(path: Path) -> str:
     if not _PYPDF_AVAILABLE:
-        raise ImportError(
-            "pypdf is not installed — run: pip install pypdf>=4.0.0"
-        )
+        raise ImportError("pypdf is not installed — run: pip install pypdf>=4.0.0")
     try:
         reader = pypdf.PdfReader(str(path))
     except Exception as e:
         raise RuntimeError(f"could not open PDF {path.name}: {e}") from e
-
     pages = []
-    for i, page in enumerate(reader.pages):
+    for page in reader.pages:
         try:
             text = page.extract_text() or ""
         except Exception:
             text = ""
         if text.strip():
             pages.append(text.strip())
-
     if not pages:
         raise RuntimeError(
-            f"no extractable text in {path.name} — "
-            f"may be a scanned/image-only PDF"
+            f"no extractable text in {path.name} — may be a scanned/image-only PDF"
         )
     return "\n\n".join(pages)
+
+
+def _read_docx(path: Path) -> str:
+    if not _DOCX_AVAILABLE:
+        raise ImportError("python-docx is not installed — run: pip install python-docx>=1.0.0")
+    try:
+        doc = _docx.Document(str(path))
+    except Exception as e:
+        raise RuntimeError(f"could not open DOCX {path.name}: {e}") from e
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    if not paragraphs:
+        raise RuntimeError(f"no extractable text in {path.name}")
+    return "\n\n".join(paragraphs)
 
 
 def read_program_reference() -> str:

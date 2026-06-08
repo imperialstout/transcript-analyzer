@@ -87,9 +87,9 @@ Each run:
 
 ### Document pipeline
 
-Drop PDFs into `Call Transcripts/docs/` (create the folder if it doesn't exist — the pipeline creates `_Processed/` automatically on first run). Each document:
+Drop documents into `Call Transcripts/docs/` (create the folder if it doesn't exist — the pipeline creates `_Processed/` automatically on first run). Supported formats: **PDF**, **DOCX**, **MD**, **TXT**. Each document:
 
-1. Text is extracted via `pypdf` (text-layer PDFs — scanned/image-only PDFs are not supported).
+1. Text is extracted: `pypdf` for PDFs (text-layer only — scanned/image-only not supported), `python-docx` for DOCX, plain read for MD/TXT.
 2. Analyzed with the `DOCUMENT` prompt (Opus) — produces `[ANALYZED].md` in `Analyzed/`, participates in D1/D2/D3 synthesis like any transcript.
 3. The `## Reference Updates` section is extracted from the analysis and merged into `Analyzed/[PROGRAM REFERENCE].md` — the pipeline-maintained program knowledge base of durable facts (team structure, milestones, process decisions, capability ownership).
 4. Source moves to `docs/_Processed/<YYYY-MM>/`.

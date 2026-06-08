@@ -12,7 +12,7 @@ source ~/.venvs/transcript-analyzer/bin/activate
 pip install -r requirements.txt
 ```
 
-Run the analyzer once:
+Run the analyzer once (processes transcripts, notes, and any documents in `docs/`):
 
 ```bash
 source ~/.venvs/transcript-analyzer/bin/activate
@@ -100,12 +100,13 @@ Division of labor: **work** machine does per-meeting `analyze` + daily/weekly `s
 `python -m analyzer synthesize --mode daily|weekly|career` → `synthesize.main()` (D1/D2/D3 synthesis)
 `python -m analyzer ui [--port N]` → `ui.main()` (Flask dashboard)
 
-### Two-pipeline flow (main.py)
+### Three-pipeline flow (main.py)
 
-`analyzer/main.py` orchestrates two independent pipelines in sequence per invocation:
+`analyzer/main.py` orchestrates three independent pipelines in sequence per invocation:
 
 1. **Notes intake** (`notes_intake.py`): Gemini-summarized meeting notes dropped into `Call Transcripts/notes/`. **No LLM call** — Gemini's summary is already lossy compression; re-summarizing would dilute nuggets. Pure file plumbing: parse metadata, file into `Analyzed/` with canonical naming, move source to `notes/_Processed/<YYYY-MM>/`.
-2. **Transcript pass**: `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders intentionally ignored). Each is auto-routed to a category prompt, analyzed (via the configured backend), and lands in `Analyzed/`. Output is always `.txt` regardless of source extension. With the shareable pass on, each transcript yields **two** outputs: the internal `[ANALYZED].txt` and a redacted `[SHAREABLE].txt` sibling.
+2. **Document pipeline**: PDFs dropped into `Call Transcripts/docs/`. Each is extracted (text layer via `pypdf`), analyzed with the `DOCUMENT` prompt (Opus), and written to `Analyzed/` as `[ANALYZED].md`. After each analysis, a second Claude call extracts the `## Reference Updates` section and rewrites `Analyzed/[PROGRAM REFERENCE].md` with the durable facts — the pipeline-maintained program knowledge base. Source moves to `docs/_Processed/<YYYY-MM>/`.
+3. **Transcript pass**: `.txt` and `.md` files at the root of `Call Transcripts/` (subfolders intentionally ignored). Each is auto-routed to a category prompt, analyzed (via the configured backend), and lands in `Analyzed/`. Output is always `.txt` regardless of source extension. With the shareable pass on, each transcript yields **two** outputs: the internal `[ANALYZED].txt` and a redacted `[SHAREABLE].txt` sibling.
 
 A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at the end. `bin/analyze.sh` parses this exact line to decide whether to fire a macOS notification — keep the format stable.
 
@@ -119,7 +120,7 @@ A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at 
 | `weekly` | `D2` Slack Delta | this ISO week (Mon–today) | Sonnet | yes |
 | `career` | `D3` Career & Position Trajectory | **all current `[ANALYZED]` files** | **B4 model (Opus on personal)** | **no** |
 
-Common flow: collect the in-window `[ANALYZED]` files (skipping `[SHAREABLE]`/`[DAILY PULSE]`/`[WEEKLY SUMMARY]`/`[SLACK DELTA]`/`[CAREER TRAJECTORY]`), prepend the most recent prior synthesis **of the same type** as continuity context, bundle into one `claude -p` call, write to `Analyzed/` with the mode's tag (`.md`).
+Common flow: collect the in-window `[ANALYZED]` files (skipping `[SHAREABLE]`/`[DAILY PULSE]`/`[WEEKLY SUMMARY]`/`[SLACK DELTA]`/`[CAREER TRAJECTORY]`/`[PROGRAM REFERENCE]`), prepend the most recent prior synthesis **of the same type** as continuity context, bundle into one `claude -p` call, write to `Analyzed/` with the mode's tag (`.md`). The **program reference** (`[PROGRAM REFERENCE].md`) is injected as system context, not bundled as an input file.
 
 - **daily/weekly** then **archive** the bundled inputs to `Analyzed/_Archive/YYYY-MM/` (keyed on the meeting date; refuses to overwrite; an archive failure after a successful write logs a warning but doesn't fail the synthesis — nothing is lost).
 - **career is deliberately different**: it bundles *all* current analyses (no date window), runs on the higher tier because it's strategic reasoning rather than a recap, and **does not archive** — the trajectory is cumulative, so inputs stay put and each review chains off the prior `[CAREER TRAJECTORY]`. This is the personal machine's primary tool.
@@ -130,7 +131,7 @@ Synthesis files themselves are **never** archived — they stay in `Analyzed/` a
 
 Drive base: **`$DRIVE_BASE`** (env-driven — work `…@salesforce.com`, personal `…@bradgross.org`; see the two-deployment section).
 
-- **`PromptLibrary.md`** — prompt library parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. The **work** profile uses `DAILY` / `STANDUP` / `SOLUTION` / `EXEC` + `REDACT`; the **personal** profile routes into `B4` (Political Read) / `A3` (1:1/Career) from the legacy A/B set. The Drive copy must contain whichever keys the active `ROUTING_PROFILE` needs (the personal Drive has the A/B prompts; the work Drive needs the routed-category prompts authored). C-series prompts are cross-transcript and run in Claude.ai chat, not here.
+- **`PromptLibrary.md`** — prompt library parsed by `prompts.load_prompts()` looking for `### KEY.` headings followed by fenced code blocks. The **work** profile uses `DAILY` / `STANDUP` / `SOLUTION` / `EXEC` + `REDACT` + `DOCUMENT`; the **personal** profile routes into `B4` (Political Read) / `A3` (1:1/Career) from the legacy A/B set. The Drive copy must contain whichever keys the active `ROUTING_PROFILE` needs. A built-in default is used for `DOCUMENT` if the key is absent. C-series prompts are cross-transcript and run in Claude.ai chat, not here.
 - **`dailyAndWeeklyPrompts.md`** — synthesis prompts D1 (Daily Pulse), D2 (Weekly Slack Delta), **D3 (Career & Position Trajectory)**. Parsed by `synthesize._load_synthesis_prompts()` (`### D\d.` headings + fenced blocks). **`synthesize.py` reads this Drive copy, not the repo `docs/dailyAndWeeklyPrompts.md`** — the repo file is gitignored reference material only. Each machine's Drive needs the keys for the modes it runs (personal needs D3).
 - **`Program_Context_Brief.md`** — program-wide context injected as the system prefix on every run.
 - **`04_people_rolodex.md`** (**optional**) — named-individual index that complements the brief, incl. Plaud-mangled name variants. `prompts.load_rolodex()` reads best-effort (`""` if absent).
@@ -158,6 +159,7 @@ Both compose the **identical** system prefix via `anthropic_client.system_prompt
 
 Model tiering (`config.models`, each overridable via `MODEL_<KEY>`):
 - `EXEC` → `claude-opus-4-7`; `SOLUTION` / `STANDUP` / `DAILY` → `claude-sonnet-4-6`
+- `DOCUMENT` → `claude-opus-4-7` (dense strategic content; override with `MODEL_DOCUMENT`)
 - `B4` → `claude-opus-4-7` by default; **the personal `.env` sets `MODEL_B4=claude-opus-4-8`** (the latest Opus, available on the personal seat but not the work seat). `A3` → `claude-sonnet-4-6`.
 - Classifier → `claude-haiku-4-5-20251001` (bare alias rejected by the seat — use dated id); Redaction → `claude-sonnet-4-6`; Synthesis → Sonnet for D1/D2, the **B4 model** for D3.
 - `supports_thinking()` (api backend only) recognizes `opus-4-8` / `opus-4-7` / `opus-4-6` / `sonnet-4-6`.
@@ -208,6 +210,10 @@ The Gemini-export response starts with a UTF-8 BOM — `_fetch_gdoc_text` strips
 
 ### Output filename convention
 
-`filing.build_output_filename()` produces `[ISO-timestamp] - [Title] - [Date] [ANALYZED].txt`. `LEADING_PREFIX` strips both date+time prefix blocks that Plaud/Zap source filenames carry. Path separators in the title are sanitized. The same `LEADING_PREFIX` is reused by `filesystem._core_title()` for fuzzy matching — keep them coupled.
+`filing.build_output_filename()` produces `[ISO-timestamp] - [Title] - [Date] [ANALYZED]<ext>`. The `extension` parameter defaults to `.txt` for transcripts; document analyses use `.md`. `LEADING_PREFIX` strips both date+time prefix blocks that Plaud/Zap source filenames carry. Path separators in the title are sanitized. The same `LEADING_PREFIX` is reused by `filesystem._core_title()` for fuzzy matching — keep them coupled.
 
-Synthesis outputs use `.md` extension and `[DAILY PULSE]` / `[SLACK DELTA]` / `[CAREER TRAJECTORY]` tags instead of `[ANALYZED]`.
+Synthesis outputs use `.md` extension and `[DAILY PULSE]` / `[SLACK DELTA]` / `[CAREER TRAJECTORY]` tags instead of `[ANALYZED]`. The program reference file uses `[PROGRAM REFERENCE].md` and lives permanently in `Analyzed/` root — never archived, never bundled into synthesis inputs, but injected as system context.
+
+### Program reference (`[PROGRAM REFERENCE].md`)
+
+Pipeline-maintained file in `Analyzed/`. Created and updated automatically when documents are processed. Contains durable program facts (team structure, milestones, process decisions, capability ownership) that survive across synthesis windows. Injected into all three synthesis modes (D1/D2/D3) between the context brief and the rolodex in the system prefix. The DOCUMENT prompt instructs the model to emit a `## Reference Updates` section; `main._extract_reference_updates()` splits on that heading and feeds the content to a second Claude call that merges it into the reference file. Override the document prompt via `### DOCUMENT.` in `PromptLibrary.md`.

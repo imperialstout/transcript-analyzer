@@ -48,13 +48,15 @@ _MODE_SUFFIX = {
     "career": "[CAREER TRAJECTORY]",
 }
 
-# Only bundle internal analyses — skip shareable siblings and prior synthesis outputs.
+# Only bundle internal analyses — skip shareable siblings, prior synthesis
+# outputs, and the program reference file (it's injected as context, not bundled).
 _SKIP_TAGS = (
     "[SHAREABLE]",
     "[DAILY PULSE]",
     "[WEEKLY SUMMARY]",
     "[SLACK DELTA]",
     "[CAREER TRAJECTORY]",
+    "[PROGRAM REFERENCE]",
 )
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -243,10 +245,13 @@ def run(mode: str, week: str = "current") -> int:
 
     context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8") if CONFIG.context_brief_path.exists() else ""
     rolodex = prompts_mod.load_rolodex()
+    program_reference = prompts_mod.load_program_reference()
 
     system_parts = ["You are analyzing filed meeting analyses for an enterprise Salesforce program (SherpaX at Siemens). The reader is Brad — Revenue Cloud CTO."]
     if context_brief:
         system_parts.append(f"=== PROGRAM CONTEXT BRIEF ===\n{context_brief}")
+    if program_reference:
+        system_parts.append(f"=== PROGRAM REFERENCE (pipeline-maintained facts) ===\n{program_reference}")
     if rolodex:
         system_parts.append(f"=== PEOPLE ROLODEX ===\n{rolodex}")
     system_parts.append(f"=== SYNTHESIS INSTRUCTIONS ===\n{prompt_body}")

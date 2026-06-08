@@ -3,10 +3,10 @@ import re
 from .config import CONFIG
 
 # Legacy A1–B4 keys plus the consolidated category prompts (DAILY/STANDUP/
-# SOLUTION/EXEC) and the REDACT prompt used by the shareable pass. All are
-# `### KEY.`-headed sections with a single fenced body.
+# SOLUTION/EXEC), the REDACT prompt, and the DOCUMENT prompt for PDF/deck
+# intake. All are `### KEY.`-headed sections with a single fenced body.
 _HEADING = re.compile(
-    r"^### (DAILY|STANDUP|SOLUTION|EXEC|REDACT|[A-B]\d)\.", re.MULTILINE
+    r"^### (DAILY|STANDUP|SOLUTION|EXEC|REDACT|DOCUMENT|[A-B]\d)\.", re.MULTILINE
 )
 _FENCED = re.compile(r"^```\s*\n(.*?)\n```", re.DOTALL | re.MULTILINE)
 
@@ -55,6 +55,55 @@ def load_vocabulary() -> str:
     """
     p = CONFIG.vocabulary_path
     return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def load_program_reference() -> str:
+    """The current [PROGRAM REFERENCE].md, or "" if it hasn't been created yet.
+
+    Best-effort — the file is pipeline-maintained and starts empty. Never raises.
+    """
+    from . import filesystem as fs  # local import avoids circular dependency
+    return fs.read_program_reference()
+
+
+# Used when PromptLibrary.md does not contain a ### DOCUMENT. block.
+# Handles both meeting artifacts (decks shared in a session) and standalone
+# reference documents (roadmaps, org charts, governance docs). The model
+# determines which it is from the content itself.
+_DEFAULT_DOCUMENT_PROMPT = """\
+You are analyzing a document from the SherpaX / Siemens Revenue Cloud program.
+This may be a presentation shared in a meeting, a strategic plan, a governance
+document, or other program artifact. Analyze it as follows:
+
+## Document Summary
+One short paragraph: what this document is, when it was issued, and its primary purpose.
+
+## Key Content
+Extract the most important information. Focus on:
+- Decisions, commitments, or policies that are now in effect
+- Milestones, dates, and release targets
+- Org structure, role assignments, or ownership changes
+- Process or workflow changes
+- Risks, dependencies, or open items explicitly called out
+
+## Relevance to Current Work
+How does this document affect day-to-day delivery? What should the reader act on
+or be aware of this week?
+
+## Reference Updates
+List only durable facts that will still be true in 30 days — things that should
+update the program's standing knowledge base. Do NOT include status updates,
+action items, or meeting-specific observations. Format as concise bullet points.
+If there are no durable facts worth extracting, write "None."
+
+## Private read — internal only
+Any politically sensitive observations, stakeholder positioning notes, or
+internal-only context not safe to share outside the Salesforce delivery team.
+"""
+
+
+def default_document_prompt() -> str:
+    return _DEFAULT_DOCUMENT_PROMPT
 
 
 _FRONTMATTER_INSTRUCTION = """\

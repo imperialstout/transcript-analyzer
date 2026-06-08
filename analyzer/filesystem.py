@@ -1,4 +1,5 @@
 import errno
+import io
 import re
 import subprocess
 import sys
@@ -9,6 +10,17 @@ from pathlib import Path
 from . import drive_client
 from .config import CONFIG
 from .filing import LEADING_PREFIX
+
+# PDF support — optional import so the rest of the pipeline works even if
+# pypdf isn't installed yet (e.g. on a fresh checkout before pip install).
+try:
+    import pypdf
+    _PYPDF_AVAILABLE = True
+except ImportError:
+    _PYPDF_AVAILABLE = False
+
+_PROGRAM_REFERENCE_FILENAME = "[PROGRAM REFERENCE].md"
+_DOCUMENT_EXTENSIONS = {".pdf"}  # extend as more types are supported
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -181,3 +193,68 @@ def write_text(path: Path, content: str) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(content, encoding="utf-8")
     tmp.replace(path)
+
+
+def list_pending_documents() -> list[Path]:
+    """Return PDF/document files in the docs/ subfolder, sorted by name.
+
+    Only files with supported extensions are returned. Subfolders (including
+    _Processed/) are skipped — only the root of docs/ is scanned.
+    Returns [] if the docs/ folder doesn't exist yet (not an error — the
+    folder is optional and created on first drop).
+    """
+    docs_root = CONFIG.docs_path
+    if not docs_root.exists():
+        return []
+    files = []
+    for entry in docs_root.iterdir():
+        if entry.is_dir():
+            continue
+        if entry.suffix.lower() in _DOCUMENT_EXTENSIONS:
+            files.append(entry)
+    return sorted(files)
+
+
+def read_pdf(path: Path) -> str:
+    """Extract text content from a PDF file using pypdf.
+
+    Returns the concatenated text of all pages, with page breaks as double
+    newlines. Raises ImportError if pypdf isn't installed, RuntimeError if
+    the PDF can't be read or yields no text.
+    """
+    if not _PYPDF_AVAILABLE:
+        raise ImportError(
+            "pypdf is not installed — run: pip install pypdf>=4.0.0"
+        )
+    try:
+        reader = pypdf.PdfReader(str(path))
+    except Exception as e:
+        raise RuntimeError(f"could not open PDF {path.name}: {e}") from e
+
+    pages = []
+    for i, page in enumerate(reader.pages):
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        if text.strip():
+            pages.append(text.strip())
+
+    if not pages:
+        raise RuntimeError(
+            f"no extractable text in {path.name} — "
+            f"may be a scanned/image-only PDF"
+        )
+    return "\n\n".join(pages)
+
+
+def read_program_reference() -> str:
+    """Read the current [PROGRAM REFERENCE].md, or '' if it doesn't exist yet."""
+    path = CONFIG.analyzed_path / _PROGRAM_REFERENCE_FILENAME
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def write_program_reference(content: str) -> None:
+    """Atomically overwrite [PROGRAM REFERENCE].md in Analyzed/."""
+    path = CONFIG.analyzed_path / _PROGRAM_REFERENCE_FILENAME
+    write_text(path, content)

@@ -14,6 +14,59 @@ from . import prompts
 from . import redactor
 from . import router
 
+_REFERENCE_UPDATE_SYSTEM = """\
+You are maintaining a program reference document for the SherpaX / Siemens
+Revenue Cloud program. You will receive:
+  1. The current contents of [PROGRAM REFERENCE].md (may be empty on first run).
+  2. A "Reference Updates" section extracted from a newly analyzed document.
+
+Your task: produce an updated [PROGRAM REFERENCE].md that incorporates the new
+facts. Rules:
+- Preserve existing content unless a new fact supersedes or corrects it.
+- Only include durable facts — things that will still be true in 30 days.
+- Do NOT include status updates, action items, or meeting-specific observations.
+- Write in clean markdown with logical section headings (e.g. ## Team Structure,
+  ## Milestones, ## Process & Ways of Working, ## Stakeholders). Add or create
+  sections as needed.
+- Be concise. One bullet per fact. No padding.
+- Output ONLY the updated markdown document — no preamble, no explanation.
+"""
+
+
+def _update_program_reference(reference_updates_section: str) -> None:
+    """Rewrite [PROGRAM REFERENCE].md by merging in new durable facts.
+
+    Best-effort: if this fails, only the reference file is stale — the document
+    analysis itself is already recorded and the source already moved.
+    """
+    current = fs.read_program_reference()
+    payload = (
+        f"=== CURRENT [PROGRAM REFERENCE].md ===\n\n{current}\n\n"
+        f"=== REFERENCE UPDATES FROM NEW DOCUMENT ===\n\n{reference_updates_section}"
+    )
+    data = claude_cli.run_claude_p(
+        payload,
+        model=cfg_mod.model_for("DOCUMENT"),
+        system=_REFERENCE_UPDATE_SYSTEM,
+    )
+    updated = claude_cli.result_text(data)
+    if updated.strip():
+        fs.write_program_reference(updated)
+
+
+def _extract_reference_updates(analysis_text: str) -> str:
+    """Pull the '## Reference Updates' section out of a document analysis.
+
+    Returns the section body (without the heading), or "" if absent.
+    """
+    import re
+    m = re.search(
+        r"^##\s+Reference Updates\s*\n(.*?)(?=^##|\Z)",
+        analysis_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    return m.group(1).strip() if m else ""
+
 
 def _resolve_prompt(prompt_library: dict, prompt_key: str, cfg) -> tuple[str, str]:
     """Return (prompt_body, resolved_key), falling back if `prompt_key` is absent.
@@ -145,7 +198,121 @@ def main(force: bool = False) -> int:
                 notes_filed += 1
             else:
                 notes_skipped += 1
-        # Refresh manifest in case downstream transcript dedup needs it.
+        existing_manifest = manifest.load()
+
+    # Document pipeline — PDFs/decks dropped in Call Transcripts/docs/.
+    # Analyzed with the DOCUMENT prompt, then a reference update pass rewrites
+    # [PROGRAM REFERENCE].md with the durable facts extracted from each doc.
+    doc_prompt_body = prompt_library.get("DOCUMENT") or prompts.default_document_prompt()
+    doc_model = cfg_mod.model_for("DOCUMENT")
+    pending_docs = fs.list_pending_documents()
+    pending_docs = [d for d in pending_docs if not manifest.is_recorded(d.name, existing_manifest)]
+    docs_succeeded = 0
+    docs_failed = 0
+
+    if pending_docs:
+        print(f"Found {len(pending_docs)} pending document(s) in {cfg.docs_path}.")
+        for i, doc in enumerate(pending_docs, 1):
+            try:
+                doc_text = fs.read_pdf(doc)
+
+                system = ac.system_prompt_text(
+                    context_brief,
+                    doc_prompt_body,
+                    prompts.frontmatter_instruction(),
+                    rolodex,
+                    vocabulary,
+                )
+                t0 = time.monotonic()
+                data = claude_cli.run_claude_p(
+                    f"Document to analyze:\n\n{doc_text}",
+                    model=doc_model,
+                    system=system,
+                )
+                duration = time.monotonic() - t0
+                analysis_text = claude_cli.result_text(data)
+                if not analysis_text.strip():
+                    raise RuntimeError("claude -p returned empty result for document")
+
+                output_filename, doc_date = filing.build_output_filename(
+                    doc.name, extension=".md"
+                )
+                output_path = cfg.analyzed_path / output_filename
+                fs.write_text(output_path, analysis_text)
+                print(
+                    f"  [doc {i}/{len(pending_docs)}] {doc.name} → {output_filename} "
+                    f"({duration:.1f}s)"
+                )
+
+                # Reference update pass — extract durable facts and rewrite
+                # [PROGRAM REFERENCE].md. Best-effort: failure here does NOT
+                # prevent recording the document analysis.
+                ref_updates = _extract_reference_updates(analysis_text)
+                if ref_updates and ref_updates.lower() != "none.":
+                    try:
+                        _update_program_reference(ref_updates)
+                        print(f"  [doc {i}/{len(pending_docs)}] program reference updated")
+                    except Exception as e:
+                        print(
+                            f"  [doc {i}/{len(pending_docs)}] reference update failed "
+                            f"({type(e).__name__}: {e}); analysis still recorded",
+                            file=sys.stderr,
+                        )
+                else:
+                    print(f"  [doc {i}/{len(pending_docs)}] no reference updates extracted")
+
+                # Shareable pass — same best-effort pattern as transcripts.
+                shareable_name = None
+                if cfg.shareable_enabled:
+                    try:
+                        shareable_text = redactor.redact(
+                            analysis_text,
+                            model=cfg.redaction_model,
+                            instruction=prompt_library.get("REDACT"),
+                        )
+                        shareable_name = filing.shareable_filename(output_filename)
+                        fs.write_text(cfg.analyzed_path / shareable_name, shareable_text)
+                    except Exception as e:
+                        print(
+                            f"  [doc {i}/{len(pending_docs)}] shareable pass failed "
+                            f"({type(e).__name__}: {e}); kept internal analysis only",
+                            file=sys.stderr,
+                        )
+
+                manifest.record(
+                    doc.name,
+                    output_filename=output_filename,
+                    prompt_key="DOCUMENT",
+                    model=doc_model,
+                    usage=claude_cli._usage_from_json(data),
+                    duration_seconds=duration,
+                    category="DOCUMENT",
+                    shareable_filename=shareable_name,
+                )
+
+                # Move processed doc to docs/_Processed/<YYYY-MM>/
+                target_dir = cfg.docs_processed_path / f"{doc_date.year:04d}-{doc_date.month:02d}"
+                target_dir.mkdir(parents=True, exist_ok=True)
+                target = target_dir / doc.name
+                if not target.exists():
+                    doc.rename(target)
+                else:
+                    print(
+                        f"  [doc {i}/{len(pending_docs)}] WARNING: {doc.name} already in "
+                        f"_Processed — source left in place",
+                        file=sys.stderr,
+                    )
+
+                docs_succeeded += 1
+                total_cost += manifest.load().get(doc.name, {}).get("cost_usd", 0.0)
+
+            except Exception as e:
+                print(
+                    f"  [doc {i}/{len(pending_docs)}] FAILED: {type(e).__name__}: {e}",
+                    file=sys.stderr,
+                )
+                docs_failed += 1
+
         existing_manifest = manifest.load()
 
     try:
@@ -259,17 +426,18 @@ def main(force: bool = False) -> int:
             print(f"  [{i}/{n}] FAILED: {type(e).__name__}: {e}", file=sys.stderr)
             failed += 1
 
-    total_succeeded = succeeded + notes_filed
-    total_failed = failed + notes_skipped
-    notes_detail = (
-        f" (transcripts: {succeeded}/{succeeded + failed}; "
-        f"notes: {notes_filed}/{notes_filed + notes_skipped})"
-        if notes_pending
-        else ""
-    )
+    total_succeeded = succeeded + notes_filed + docs_succeeded
+    total_failed = failed + notes_skipped + docs_failed
+    detail_parts = []
+    detail_parts.append(f"transcripts: {succeeded}/{succeeded + failed}")
+    if notes_pending:
+        detail_parts.append(f"notes: {notes_filed}/{notes_filed + notes_skipped}")
+    if pending_docs:
+        detail_parts.append(f"docs: {docs_succeeded}/{docs_succeeded + docs_failed}")
+    detail = f" ({'; '.join(detail_parts)})" if len(detail_parts) > 1 else ""
     print(
         f"All done. {total_succeeded} succeeded, {total_failed} failed. "
-        f"Total cost: ${total_cost:.2f}.{notes_detail}"
+        f"Total cost: ${total_cost:.2f}.{detail}"
     )
     return 0 if total_failed == 0 else 2
 

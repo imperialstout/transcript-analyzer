@@ -43,20 +43,25 @@ def build_output_filename(
     transcript_filename: str,
     run_time: datetime | None = None,
     meeting_date_override: date | None = None,
+    extension: str = ".txt",
 ) -> tuple[str, date]:
-    """`[ISO-timestamp] - [Title] - [Date] [ANALYZED].txt` per the doc convention.
+    """`[ISO-timestamp] - [Title] - [Date] [ANALYZED]<ext>` per the doc convention.
 
     Returns (output_filename, meeting_date). The meeting_date is also fed to
     `move_to_processed` so the source ends up under _Processed/<YYYY-MM>/.
 
     `meeting_date_override` lets callers (notes intake) supply the date from
     an authoritative source like YAML frontmatter, bypassing filename parsing.
+
+    `extension` defaults to `.txt` for transcripts; pass `.md` for documents
+    and synthesis outputs.
     """
     run_time = run_time or datetime.now()
     iso = run_time.strftime("%Y-%m-%dT%H-%M-%S")
     title = _original_title(transcript_filename)
     meeting_date = meeting_date_override or _extract_meeting_date(transcript_filename)
-    name = f"{iso} - {title} - {meeting_date.isoformat()} [ANALYZED].txt"
+    ext = extension if extension.startswith(".") else f".{extension}"
+    name = f"{iso} - {title} - {meeting_date.isoformat()} [ANALYZED]{ext}"
     # Final safety net: ensure no path components survived assembly.
     name = Path(name).name
     return name, meeting_date

@@ -86,13 +86,15 @@ There is no test suite, linter config, or build step — runtime behavior is the
 This repo runs on **two machines with two different Google Drives**, differentiated entirely by `.env` — **not** a fork. The engine is identical; reliability fixes land once and serve both. Two env knobs do the splitting:
 
 - **`DRIVE_BASE`** — the Drive root for all content paths. **Must not be hardcoded** (the default in `config.py` keeps the work layout so an unconfigured work checkout still works; the personal machine overrides it). Individual `*_PATH` vars still win if set.
-  - Work: `~/Library/CloudStorage/GoogleDrive-you@yourcompany.com/My Drive/Workcall`
-  - Personal: `~/Library/CloudStorage/GoogleDrive-you@yourpersonaldomain.com/My Drive/Workcall`
+  - Work: `~/Library/CloudStorage/GoogleDrive-brad.gross@salesforce.com/My Drive/Workcall`
+  - Personal: `~/Library/CloudStorage/GoogleDrive-brad@bradgross.org/My Drive/Workcall`
 - **`ROUTING_PROFILE`** (`router.PROFILES`) — which classifier taxonomy the `claude-cli` backend routes into:
   - `work` (default): operational meeting set — `DAILY` / `STANDUP` / `SOLUTION` / `EXEC`.
   - `personal`: the career+political lens — **`B4` (Political Read)** vs **`A3` (1:1/Career)**, with `SHAREABLE_PASS=false` (it keeps sensitive content rather than sharing it).
 
 Division of labor: **work** machine does per-meeting `analyze` + daily/weekly `synthesize`, shareable on (sharing with leads). **Personal** machine does the bigger-picture career read — primarily `synthesize --mode career` over summaries — shareable off, and is **UI-driven, not scheduled** (its launchd agent is disabled; runs are triggered on demand via `python -m analyzer ui`). The personal seat also has `claude-opus-4-8` available (the work seat does not — it's `opus-4-7` only).
+
+**Important for analysis quality:** The `_FRAMING` in `anthropic_client.py` is now generic (repo is public). The personal posture line ("The reader is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized.") has been moved to `Program_Context_Brief.md` in Drive — add it there if not present so the SherpaX/Siemens context and posture are preserved in analyses.
 
 ### Entry point dispatch (`__main__.py`)
 

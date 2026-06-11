@@ -77,6 +77,13 @@ def _save_env_key(key: str, value: str) -> None:
 
 _SYNTHESIS_TAGS = ("[DAILY PULSE]", "[SLACK DELTA]", "[WEEKLY SUMMARY]")
 
+_MODE_LABELS = {
+    "daily": "Daily Pulse synthesis",
+    "weekly": "Weekly Slack Delta synthesis",
+    "career": "Career Trajectory review",
+    "analysis": "transcript analysis",
+}
+
 
 def _analyzed_files() -> list[dict]:
     from .config import CONFIG
@@ -293,9 +300,17 @@ function startPoll(label) {
       clearInterval(_pollTimer); _pollTimer = null;
       if (indicator) indicator.style.display = 'none';
       document.getElementById('job-done').style.display = 'inline';
+      // Reload page so the new synthesis file appears in the table
+      setTimeout(() => location.reload(), 1500);
     }
   }, 1200);
 }
+// Auto-resume polling if server reports a job in-flight when page loads
+(function() {
+  {% if job_running %}
+  startPoll('{{ job_label }}…');
+  {% endif %}
+})();
 </script>
 </body>
 </html>
@@ -303,6 +318,12 @@ function startPoll(label) {
 
 _HOME_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if job_running %}
+<div class="flash" style="background:#1a2540;color:var(--accent);display:flex;align-items:center;gap:8px">
+  <span class="spinner"></span>
+  <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
+</div>
+{% endif %}
 
 <div class="stats">
   <div class="stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
@@ -333,12 +354,12 @@ _HOME_BODY = """\
   </form>
 </div>
 
-<div id="job-status">
+<div id="job-status" {% if not job_running and not job_output %}style="display:none"{% endif %}>
   <h3>
-    <span id="job-indicator"><span class="spinner"></span> Running synthesis…</span>
-    <span id="job-done" style="display:none">Done</span>
+    <span id="job-indicator" {% if not job_running %}style="display:none"{% endif %}><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-done" {% if not job_done or job_running %}style="display:none"{% endif %}>Done — refreshing…</span>
   </h3>
-  <div id="job-output"></div>
+  <div id="job-output">{{ job_output }}</div>
 </div>
 
 <div class="card">
@@ -461,6 +482,11 @@ def create_app():
         flash = request.args.get("flash", "")
         flash_type = request.args.get("ft", "ok")
         from .config import CONFIG
+        with _job_lock:
+            job_running = bool(_job and not _job["done"])
+            job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
+            job_output = _job["output"] if _job else ""
+            job_done = _job["done"] if _job else True
         return _render(
             _HOME_BODY,
             page="home",
@@ -470,6 +496,10 @@ def create_app():
             analyzed_path=str(CONFIG.analyzed_path),
             flash=flash,
             flash_type=flash_type,
+            job_running=job_running,
+            job_label=job_label,
+            job_output=job_output,
+            job_done=job_done,
         )
 
     @app.post("/synthesize")

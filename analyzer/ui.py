@@ -18,7 +18,10 @@ import threading
 from pathlib import Path
 
 _ENV_PATH = Path("~/.config/transcript-analyzer/.env").expanduser()
-_LOG_PATH = Path("~/Library/Logs/transcript-analyzer-launchd.log").expanduser()
+# The rolling log written by bin/analyze.sh — full run history.  (The older
+# *-launchd.log only ever captured launchd's own stdout and went stale once
+# analyze.sh started teeing into its own files.)
+_LOG_PATH = Path("~/Library/Logs/transcript-analyzer.log").expanduser()
 
 # Env vars the settings page exposes.  Tuple of (key, label, kind, description).
 # kind: "text" | "url" | "toggle"
@@ -354,10 +357,10 @@ _HOME_BODY = """\
   </form>
 </div>
 
-<div id="job-status" {% if not job_running and not job_output %}style="display:none"{% endif %}>
+<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
   <h3>
-    <span id="job-indicator" {% if not job_running %}style="display:none"{% endif %}><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
-    <span id="job-done" {% if not job_done or job_running %}style="display:none"{% endif %}>Done — refreshing…</span>
+    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-done" style="display:none">Done — refreshing…</span>
   </h3>
   <div id="job-output">{{ job_output }}</div>
 </div>
@@ -454,7 +457,7 @@ _SETTINGS_BODY = """\
 
 <div class="card">
   <h2>Diagnostics</h2>
-  <a class="quick-link" href="/open-log">📋 Open launchd log</a>
+  <a class="quick-link" href="/open-log">📋 Open run log</a>
   <span class="muted" style="font-size:11px;margin-left:8px">{{ log_path }}</span>
 </div>
 """
@@ -625,7 +628,7 @@ def create_app():
     @app.get("/open-log")
     def open_log():
         subprocess.run(["open", str(_LOG_PATH)], check=False)
-        return redirect(url_for("settings", flash="Opened log in Console.app", ft="ok"))
+        return redirect(url_for("settings", flash="Opened run log", ft="ok"))
 
     return app
 

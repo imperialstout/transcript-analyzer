@@ -49,6 +49,14 @@ def _seat_env() -> dict:
 # ceiling; a hung call should fail closed rather than wedge the whole batch.
 _TIMEOUT_SECONDS = 1800
 
+# Pre-flight guard against oversized input. The CLI rejects anything past the
+# model's context window by exiting 1 with NO stderr — indistinguishable from an
+# auth/transient failure in the log, and (because the pipeline fails closed) it
+# then retries the same doomed file on every scheduled run. We catch the obvious
+# case first so the log says *why*. ~3.5 chars/token, 200K window, ~75% headroom
+# for the system prefix + output → ~525K char ceiling on the prompt body.
+_MAX_PROMPT_CHARS = 525_000
+
 
 class ClaudeCliError(RuntimeError):
     """A `claude -p` invocation failed. Raised so callers fail closed."""
@@ -70,6 +78,17 @@ def run_claude_p(
     Raises ClaudeCliError / FileNotFoundError on any failure. Returns the raw
     JSON object on success; callers pull `result` etc. via `result_text()`.
     """
+    if len(prompt) > _MAX_PROMPT_CHARS:
+        # Fail closed with a legible reason rather than the opaque CLI exit-1.
+        raise ClaudeCliError(
+            f"prompt is {len(prompt):,} chars (~{len(prompt)//4:,} tokens), past "
+            f"the {_MAX_PROMPT_CHARS:,}-char ceiling for model={model} — the CLI "
+            f"would reject this with a bare exit 1. If this is a Gemini/Plaud "
+            f"export, it likely contains inline base64 images; filesystem."
+            f"read_text strips those, so a too-big prompt here means genuinely "
+            f"long content. Split the source or raise _MAX_PROMPT_CHARS."
+        )
+
     cmd = [CONFIG.claude_bin, "-p", "--model", model, "--output-format", "json"]
     cmd.extend(CONFIG.claude_extra_args)
     if system:

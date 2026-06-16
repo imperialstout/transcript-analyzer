@@ -30,6 +30,25 @@ _DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt"}
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
+# Gemini/Plaud markdown exports inline screen-share frames as base64 data URIs
+# (`![alt](data:image/png;base64,iVBOR…)`). A single meeting's images can balloon
+# the file to multiple MB — one ARM-kickoff export was 3.3MB (~826K tokens) of
+# which only ~15KB was actual notes — which blows past the model's context window
+# and makes `claude -p` exit 1 with no stderr. Since the pipeline fails closed,
+# that one file then retries on every scheduled run. Strip the blobs at read time;
+# the image bytes are never analyzable content anyway.
+_DATA_URI = re.compile(r"data:[^;,\s]+;base64,[A-Za-z0-9+/=\s]+")
+
+
+def strip_data_uris(text: str) -> str:
+    """Replace inline base64 data URIs with a short placeholder.
+
+    Targets the markdown-image form `![alt](data:image/...;base64,...)`. We
+    swap the whole `data:` payload for `[embedded image removed]` so the
+    surrounding markdown (and any alt text before it) stays intact.
+    """
+    return _DATA_URI.sub("[embedded image removed]", text)
+
 
 def list_unanalyzed_transcripts() -> tuple[list[Path], int]:
     """Return (.txt/.md files at root, count of .gdoc files seen).
@@ -132,6 +151,17 @@ def fuzzy_is_analyzed(transcript_path: Path) -> bool:
 
 
 def read_text(path: Path, drive_service=None) -> str:
+    """Read a transcript/notes file, then strip inline base64 image blobs.
+
+    Thin wrapper over `_read_text_raw()` (which owns the EDEADLK fallback
+    chain) so that every read path — local, /bin/cat, and the Drive API —
+    has its data URIs stripped before the text reaches the model. See
+    `strip_data_uris()` for why.
+    """
+    return strip_data_uris(_read_text_raw(path, drive_service=drive_service))
+
+
+def _read_text_raw(path: Path, drive_service=None) -> str:
     """Read a local file, with layered fallbacks for the Drive × launchd quirk.
 
     Drive's File Provider returns EDEADLK to launchd-spawned processes for

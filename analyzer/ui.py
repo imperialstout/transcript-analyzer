@@ -345,10 +345,12 @@ _HOME_BODY = """\
   </form>
   <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Daily Pulse synthesis…')">
     <input type="hidden" name="mode" value="daily">
+    <input type="date" name="date" title="Leave blank for today; pick a past date to back-date a missed run">
     <button type="submit">▶ Daily Pulse</button>
   </form>
   <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Weekly Slack Delta…')">
     <input type="hidden" name="mode" value="weekly">
+    <input type="date" name="date" title="Leave blank for this week; pick a date in the week to back-date">
     <button type="submit" class="secondary">▶ Weekly Slack Delta</button>
   </form>
   <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Career Trajectory review…')">
@@ -512,6 +514,17 @@ def create_app():
         if mode not in ("daily", "weekly", "career"):
             return redirect(url_for("home", flash="Invalid mode", ft="err"))
 
+        # Optional back-date for daily/weekly (recover a missed run). Ignored for career.
+        date_arg = request.form.get("date", "").strip()
+        if date_arg and mode in ("daily", "weekly"):
+            from datetime import datetime as _dt
+            try:
+                _dt.strptime(date_arg, "%Y-%m-%d")
+            except ValueError:
+                return redirect(url_for("home", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
+        else:
+            date_arg = ""
+
         with _job_lock:
             if _job and not _job["done"]:
                 return redirect(url_for("home", flash="A synthesis job is already running", ft="err"))
@@ -520,8 +533,11 @@ def create_app():
         def _run():
             global _job
             python = sys.executable
+            cmd = [python, "-m", "analyzer", "synthesize", "--mode", mode]
+            if date_arg:
+                cmd += ["--date", date_arg]
             proc = subprocess.Popen(
-                [python, "-m", "analyzer", "synthesize", "--mode", mode],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

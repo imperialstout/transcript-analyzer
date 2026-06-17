@@ -93,25 +93,28 @@ def _meeting_date_from_filename(name: str) -> date | None:
     return None
 
 
-def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current") -> list[Path]:
+def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current", target_date: date | None = None) -> list[Path]:
     """Return the [ANALYZED] files to bundle for this mode.
 
-    daily  → today's meetings; weekly → this ISO week's (Mon–today); career →
-    all current analyses (no date window — the trajectory is a bigger-picture
-    read over everything still in Analyzed/).
+    daily  → the anchor day's meetings; weekly → the anchor's ISO week (Mon–anchor);
+    career → all current analyses (no date window — the trajectory is a
+    bigger-picture read over everything still in Analyzed/).
+
+    ``target_date`` back-dates daily/weekly to recover a missed run; when None the
+    anchor is today (unchanged behavior).
     """
-    today = date.today()
+    anchor = target_date or date.today()
     if mode == "career":
         target_dates = None  # no window
     elif mode == "daily":
-        target_dates = {today}
+        target_dates = {anchor}
     else:
-        # Current ISO week: Monday through today; "last" shifts back 7 days
-        monday = today - timedelta(days=today.weekday())
+        # ISO week containing the anchor: Monday through anchor; "last" shifts back 7 days
+        monday = anchor - timedelta(days=anchor.weekday())
         if week == "last":
             monday = monday - timedelta(weeks=1)
         week_end = monday + timedelta(days=6)
-        target_dates = {monday + timedelta(days=i) for i in range(7) if monday + timedelta(days=i) <= min(week_end, today)}
+        target_dates = {monday + timedelta(days=i) for i in range(7) if monday + timedelta(days=i) <= min(week_end, anchor)}
 
     # Determine which archive month folders to also scan
     archive_root = analyzed_path / "_Archive"
@@ -189,21 +192,24 @@ def _build_bundle(files: list[Path], prior_synthesis: Path | None) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _output_filename(mode: str) -> str:
+def _output_filename(mode: str, target_date: date | None = None) -> str:
+    # iso prefix uses real wall-clock time (filename uniqueness + correct
+    # newest-first sort for continuity chaining), even when back-dating.
     now = datetime.now()
     iso = now.strftime("%Y-%m-%dT%H-%M-%S")
-    today = date.today().isoformat()
+    anchor = (target_date or date.today()).isoformat()
     suffix = _MODE_SUFFIX[mode]
     if mode == "daily":
-        return f"{iso} - Daily Pulse - {today} {suffix}.md"
+        return f"{iso} - Daily Pulse - {anchor} {suffix}.md"
     elif mode == "career":
-        return f"{iso} - Career Trajectory - {today} {suffix}.md"
+        return f"{iso} - Career Trajectory - {anchor} {suffix}.md"
     else:
-        monday = date.today() - timedelta(days=date.today().weekday())
+        anchor_date = target_date or date.today()
+        monday = anchor_date - timedelta(days=anchor_date.weekday())
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
 
 
-def run(mode: str, week: str = "current") -> int:
+def run(mode: str, week: str = "current", target_date: date | None = None) -> int:
     analyzed_path = CONFIG.analyzed_path
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
@@ -224,9 +230,12 @@ def run(mode: str, week: str = "current") -> int:
         )
         return 1
 
-    files = _files_for_mode(mode, analyzed_path, week=week)
+    files = _files_for_mode(mode, analyzed_path, week=week, target_date=target_date)
     if not files:
-        label = {"daily": "today", "weekly": "this week", "career": "in Analyzed/"}[mode]
+        if target_date and mode in ("daily", "weekly"):
+            label = f"{target_date.isoformat()}" + (" (its ISO week)" if mode == "weekly" else "")
+        else:
+            label = {"daily": "today", "weekly": "this week", "career": "in Analyzed/"}[mode]
         print(f"No [ANALYZED] files found for {label} — nothing to synthesize.")
         return 0
 
@@ -275,7 +284,7 @@ def run(mode: str, week: str = "current") -> int:
         print("ERROR: synthesis returned empty result", file=sys.stderr)
         return 1
 
-    out_name = _output_filename(mode)
+    out_name = _output_filename(mode, target_date=target_date)
     out_path = analyzed_path / out_name
     write_text(out_path, text)
     print(f"Synthesis written → {out_name}")
@@ -321,8 +330,25 @@ def main() -> int:
         default="current",
         help="weekly only: 'current' = Mon–today (default); 'last' = prior full Mon–Sun week",
     )
+    parser.add_argument(
+        "--date",
+        default=None,
+        help=(
+            "daily/weekly: anchor the window on this YYYY-MM-DD instead of today "
+            "(back-date a missed run); ignored for career"
+        ),
+    )
     args = parser.parse_args()
-    return run(args.mode, week=args.week)
+
+    target_date = None
+    if args.date:
+        try:
+            target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
+        except ValueError:
+            print(f"ERROR: --date must be YYYY-MM-DD, got {args.date!r}", file=sys.stderr)
+            return 1
+
+    return run(args.mode, week=args.week, target_date=target_date)
 
 
 if __name__ == "__main__":

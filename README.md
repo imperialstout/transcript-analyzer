@@ -193,7 +193,7 @@ From now on, just type `ta` in any Terminal window to launch the dashboard.
 
 - **Stats strip** at the top: total files processed, transcript count, notes count, cumulative cost.
 - **File table**: every analyzed file with its category badge (EXEC, SOLUTION, STANDUP, DAILY, B4, A3…), the model used, cost, and whether a shareable version exists.
-- **Synthesis buttons**: Daily Pulse, Weekly Slack Delta, and Career Trajectory — run synthesis right in the browser with live output.
+- **Synthesis buttons**: Daily Pulse, Weekly Slack Delta, and Career Trajectory — run synthesis right in the browser with live output. The Daily Pulse and Weekly buttons take an optional date to back-date a missed run.
 - **Settings tab**: configure the shared meeting files URL, rolodex/vocabulary paths, shareable toggle, backend, and model override — no `.env` editing required.
 - **Content file shortcuts**: one-click to open PromptLibrary, Context Brief, Rolodex, and Vocabulary in your default editor.
 - **Open launchd log**: shortcut to the scheduler's log file for troubleshooting.
@@ -240,7 +240,20 @@ python -m analyzer synthesize --mode weekly
 python -m analyzer synthesize --mode career
 ```
 
-Or use the buttons in the dashboard — same result.
+**Missed a day?** Back-date daily or weekly synthesis with `--date YYYY-MM-DD` to anchor the
+window on a past day instead of today (career ignores it). Re-running a day is safe — it finds the
+files whether they're still loose in `Analyzed/` or already archived, and won't overwrite anything:
+
+```bash
+# Recover yesterday's missed Daily Pulse
+python -m analyzer synthesize --mode daily --date 2026-06-16
+
+# Weekly delta for the ISO week containing that date (Mon → that date)
+python -m analyzer synthesize --mode weekly --date 2026-06-16
+```
+
+Or use the buttons in the dashboard — same result. The Daily Pulse and Weekly buttons each have an
+optional date field; leave it blank for today/this-week, or pick a past date to back-date.
 
 ---
 

@@ -268,7 +268,15 @@ def read_document(path: Path) -> str:
     if ext == ".docx":
         return _read_docx(path)
     if ext in (".md", ".txt"):
-        return read_text(path)
+        text = read_text(path)
+        # Same empty-stub guard as PDF/DOCX (which raise on no extractable text):
+        # an unsynced Drive placeholder reads back as "" and would otherwise be
+        # analyzed as a real (empty) document. Fail closed.
+        if not text.strip():
+            raise RuntimeError(
+                f"no content in {path.name} — likely an unsynced Drive placeholder"
+            )
+        return text
     raise ValueError(f"unsupported document extension: {ext!r}")
 
 

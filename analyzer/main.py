@@ -14,6 +14,13 @@ from . import prompts
 from . import redactor
 from . import router
 
+# Floor for a transcript body to be considered real content. A freshly
+# (re)downloaded Drive file can read back as "" or a tiny stub before its body
+# syncs; anything under this is treated as a failed read (fail closed) rather
+# than fed to the model. Real transcripts are KBs — even a one-line note clears
+# this comfortably.
+_MIN_TRANSCRIPT_CHARS = 50
+
 _REFERENCE_UPDATE_SYSTEM = """\
 You are maintaining a program reference document. You will receive:
   1. The current contents of [PROGRAM REFERENCE].md (may be empty on first run).
@@ -352,6 +359,19 @@ def main(force: bool = False) -> int:
     for i, src in enumerate(candidates, 1):
         try:
             transcript = fs.read_text(src, drive_service=drive_service)
+
+            # Fail closed on an empty/stub read. Drive's File Provider can serve a
+            # 0-byte placeholder for a freshly (re)downloaded file before the body
+            # finishes syncing — read_text succeeds with "" and, left unguarded,
+            # the model replies "no transcript provided", which passes the
+            # empty-OUTPUT guard and gets recorded as success, poisoning dedup.
+            # Raising here keeps the source in place to retry next run.
+            if len(transcript.strip()) < _MIN_TRANSCRIPT_CHARS:
+                raise ValueError(
+                    f"transcript body is {len(transcript.strip())} chars after read "
+                    f"(< {_MIN_TRANSCRIPT_CHARS} floor) — likely an unsynced Drive "
+                    f"placeholder; leaving in place to retry next run"
+                )
 
             if use_routing:
                 prompt_key = router.classify(transcript, model=cfg.classifier_model)

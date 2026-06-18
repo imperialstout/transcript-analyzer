@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 _ENV_PATH = Path("~/.config/transcript-analyzer/.env").expanduser()
@@ -43,6 +44,12 @@ _SETTINGS_FIELDS = [
 # Background job state (simple — only one synthesis can run at a time).
 _job_lock = threading.Lock()
 _job: dict | None = None  # {"mode": str, "output": str, "done": bool, "returncode": int|None}
+
+# argv for the /restart self-re-exec, set by main(). We can't trust the live
+# sys.argv: by the time a route fires, __main__.py has already stripped the "ui"
+# subcommand and sys.argv[0] points at __main__.py — re-execing that would launch
+# an analysis run, not the UI. main() reconstructs the real `-m analyzer ui` form.
+_REEXEC_ARGV: list[str] = []
 
 
 def _load_env_file() -> dict[str, str]:
@@ -461,6 +468,13 @@ _SETTINGS_BODY = """\
   <h2>Diagnostics</h2>
   <a class="quick-link" href="/open-log">📋 Open run log</a>
   <span class="muted" style="font-size:11px;margin-left:8px">{{ log_path }}</span>
+
+  <p class="section-title" style="margin-top:18px">Server</p>
+  <form method="post" action="/restart" style="display:inline"
+        onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
+    <button type="submit">↻ Restart server</button>
+  </form>
+  <div class="desc">Re-execs the server in place to pick up code or <code>.env</code> changes. The analysis itself already runs fresh each time — this only refreshes the long-lived UI process.</div>
 </div>
 """
 
@@ -646,6 +660,42 @@ def create_app():
         subprocess.run(["open", str(_LOG_PATH)], check=False)
         return redirect(url_for("settings", flash="Opened run log", ft="ok"))
 
+    @app.post("/restart")
+    def restart():
+        # Refuse while a job is running — re-exec would orphan the worker thread
+        # and the user would lose the in-flight analysis/synthesis output.
+        with _job_lock:
+            if _job and not _job["done"]:
+                return redirect(url_for(
+                    "settings",
+                    flash="A job is running — wait for it to finish before restarting.",
+                    ft="err",
+                ))
+
+        # Re-exec this process in place (same interpreter + argv), which reloads
+        # all module code and re-reads CONFIG/.env at import. os.execv replaces
+        # the process, so the worker job lock above is the only safety needed.
+        # Defer slightly so this HTTP response (the redirect + flash) is fully
+        # sent before the process is replaced; the browser then reconnects to
+        # the fresh server on its next request.
+        def _reexec():
+            # Spawn a fresh, detached replacement and exit this process. We do
+            # NOT os.execv: that inherits the live listening socket FD, so the
+            # new image fails to rebind the port ("Address already in use"). A
+            # separate process + this one exiting releases the socket cleanly;
+            # main() retries the bind to absorb the brief handoff overlap.
+            time.sleep(0.5)
+            subprocess.Popen(_REEXEC_ARGV, start_new_session=True,
+                             cwd=str(Path(__file__).parent.parent))
+            os._exit(0)
+
+        threading.Thread(target=_reexec, daemon=True).start()
+        return redirect(url_for(
+            "settings",
+            flash="Restarting server… reload the page in a moment.",
+            ft="ok",
+        ))
+
     return app
 
 
@@ -653,11 +703,36 @@ def main(port: int = 7070) -> int:
     import argparse
     parser = argparse.ArgumentParser(prog="python -m analyzer ui")
     parser.add_argument("--port", type=int, default=7070)
+    parser.add_argument(
+        "--no-open", action="store_true",
+        help="Don't open a browser tab (used by the /restart self-relaunch).",
+    )
     args = parser.parse_args()
+
+    # Capture the canonical relaunch command for /restart. Rebuild the
+    # `-m analyzer ui` form explicitly — sys.argv is unreliable here (see
+    # _REEXEC_ARGV). --no-open so a restart doesn't spawn a duplicate browser tab.
+    global _REEXEC_ARGV
+    _REEXEC_ARGV = [sys.executable, "-m", "analyzer", "ui",
+                    "--port", str(args.port), "--no-open"]
 
     app = create_app()
     url = f"http://localhost:{args.port}"
     print(f"Dashboard running at {url}")
-    subprocess.run(["open", url], check=False)
-    app.run(host="127.0.0.1", port=args.port, debug=False, use_reloader=False)
-    return 0
+    if not args.no_open:
+        subprocess.run(["open", url], check=False)
+
+    # Retry the bind briefly: on a /restart relaunch the old process may still
+    # be releasing the port for a fraction of a second. Without this the fresh
+    # server would die with "Address already in use" and the UI wouldn't return.
+    last_err: OSError | None = None
+    for attempt in range(10):
+        try:
+            app.run(host="127.0.0.1", port=args.port, debug=False, use_reloader=False)
+            return 0
+        except OSError as e:
+            last_err = e
+            time.sleep(0.5)
+    print(f"ERROR: could not bind port {args.port} after retries: {last_err}",
+          file=sys.stderr)
+    return 1

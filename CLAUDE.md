@@ -120,14 +120,17 @@ A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at 
 |---|---|---|---|---|
 | `daily` | `D1` Daily Pulse | today | Sonnet | yes |
 | `weekly` | `D2` Slack Delta | this ISO week (Mon–today) | Sonnet | yes |
-| `career` | `D3` Career & Position Trajectory | **all current `[ANALYZED]` files** | **B4 model (Opus on personal)** | **no** |
+| `career` | `D3` Career & Position Trajectory | **analyses filed since the last `[CAREER TRAJECTORY]`** (incremental; `--full` re-reads all) | **B4 model (Opus on personal)** | **no** |
 
 Common flow: collect the in-window `[ANALYZED]` files (skipping `[SHAREABLE]`/`[DAILY PULSE]`/`[WEEKLY SUMMARY]`/`[SLACK DELTA]`/`[CAREER TRAJECTORY]`/`[PROGRAM REFERENCE]`), prepend the most recent prior synthesis **of the same type** as continuity context, bundle into one `claude -p` call, write to `Analyzed/` with the mode's tag (`.md`). The **program reference** (`[PROGRAM REFERENCE].md`) is injected as system context, not bundled as an input file.
 
 - **daily/weekly** then **archive** the bundled inputs to `Analyzed/_Archive/YYYY-MM/` (keyed on the meeting date; refuses to overwrite; an archive failure after a successful write logs a warning but doesn't fail the synthesis — nothing is lost).
-- **career is deliberately different**: it bundles *all* current analyses (no date window), runs on the higher tier because it's strategic reasoning rather than a recap, and **does not archive** — the trajectory is cumulative, so inputs stay put and each review chains off the prior `[CAREER TRAJECTORY]`. This is the personal machine's primary tool.
+- **career is deliberately different**: it runs on the higher tier (strategic reasoning, not a recap) and **does not archive** — the trajectory is cumulative, so inputs stay put and each review chains off the prior `[CAREER TRAJECTORY]`. This is the personal machine's primary tool. Because it never archives, the full set grows without bound (~97 files / 1.2M chars after one month), so career is **incremental**: it feeds the prior trajectory as continuity + only the analyses *filed since* it (matched on the leading ISO run-stamp in the filename, so back-dated meetings still get caught). The first run (no prior) reads everything to bootstrap; **`--full`** (CLI flag, or the "full re-read" checkbox in the dashboard) forces a complete re-read to re-baseline.
+- **Bundle overflow → map-reduce**: when the bundled inputs would exceed a single `claude -p` call (`_SINGLE_PASS_BUDGET_CHARS`, 480K) — a busy weekly, or a career `--full`/bootstrap over a large history — `run()` digests the files in budget-sized batches (`_BUNDLE_BUDGET_CHARS`, 380K) with a detail-preserving extract pass, then synthesizes over the concatenated digests. This keeps the "read every file" value without blowing `claude_cli._MAX_PROMPT_CHARS` (525K). Single-pass is unchanged when it fits.
 
 Synthesis files themselves are **never** archived — they stay in `Analyzed/` as context for future runs.
+
+UI-triggered synthesis/analysis (the dashboard buttons) streams output to the live job panel **and** tees it into `~/Library/Logs/transcript-analyzer.log` in the same `----- <iso> ----- … exit=N` frame `bin/analyze.sh` writes, so UI runs are forensically visible alongside scheduled runs (`ui._run_job`). Children run under `python -u` so the panel streams line-by-line; a failed job (non-zero exit) stays on screen instead of reloading the error away.
 
 ### Content lives in Drive, not the repo
 

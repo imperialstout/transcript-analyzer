@@ -17,7 +17,13 @@ Design choices:
   embedded in the filename. Refuses to overwrite existing targets (fail closed).
 - career mode does NOT archive: its trajectory is cumulative, so it keeps its
   inputs and chains off the prior [CAREER TRAJECTORY] for continuity. daily/weekly
-  use a date window (today / this ISO week); career bundles all current analyses.
+  use a date window (today / this ISO week). career is INCREMENTAL: because it
+  never archives, the full set grows without bound, so each run feeds the prior
+  trajectory (continuity) + only analyses filed since it. The first run (no prior)
+  reads everything to bootstrap; `--full` forces a complete re-read to re-baseline.
+- When a bundle would overflow a single claude -p call (a busy weekly, or a
+  career --full / bootstrap over a large history), run() map-reduces: digest the
+  files in budget-sized batches, then synthesize over the digests.
 - The synthesis file itself is NOT archived — it stays in Analyzed/ as context
   for the next pulse/delta/review.
 - dailyAndWeeklyPrompts.md is parsed by the same `### KEY.` + fenced-block
@@ -114,6 +120,23 @@ def _meeting_date_from_filename(name: str) -> date | None:
     if m:
         try:
             return datetime.strptime(m.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return None
+
+
+# Leading ISO run-stamp every filed output carries: "YYYY-MM-DDTHH-MM-SS - ...".
+# Used to scope incremental career synthesis to "everything filed since the last
+# career review" — robust to back-dated meetings (their *filed* stamp is recent
+# even if their meeting date is old), unlike a meeting-date window.
+_LEADING_ISO = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})")
+
+
+def _filed_timestamp(name: str) -> datetime | None:
+    m = _LEADING_ISO.match(name)
+    if m:
+        try:
+            return datetime.strptime(m.group(1), "%Y-%m-%dT%H-%M-%S")
         except ValueError:
             pass
     return None
@@ -290,7 +313,7 @@ def _output_filename(mode: str, target_date: date | None = None) -> str:
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
 
 
-def run(mode: str, week: str = "current", target_date: date | None = None) -> int:
+def run(mode: str, week: str = "current", target_date: date | None = None, full: bool = False) -> int:
     analyzed_path = CONFIG.analyzed_path
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
@@ -320,13 +343,44 @@ def run(mode: str, week: str = "current", target_date: date | None = None) -> in
         print(f"No [ANALYZED] files found for {label} — nothing to synthesize.")
         return 0
 
-    print(f"Found {len(files)} file(s) for {mode} synthesis:")
-    for f in files:
-        print(f"  {f.name}")
-
     # Chain off the most recent synthesis of the same kind for continuity.
     prior_tag = _MODE_SUFFIX[mode]
     prior = _most_recent_synthesis(analyzed_path, prior_tag)
+
+    # Career is INCREMENTAL: it never archives, so the full set grows without
+    # bound (97 files / ~1.2M chars after one month). Re-reading everything each
+    # run would mean re-digesting the entire history forever. The prior
+    # [CAREER TRAJECTORY] is already an Opus-authored compression of the whole
+    # arc, so we feed that as continuity + only the analyses filed *since* it,
+    # bounding every run to near-constant size. `--full` forces a complete
+    # re-read (re-baseline); the first-ever run (no prior) also reads everything.
+    if mode == "career" and prior and not full:
+        cutoff = _filed_timestamp(prior.name)
+        if cutoff is not None:
+            newer = [f for f in files if (ts := _filed_timestamp(f.name)) and ts > cutoff]
+            skipped = len(files) - len(newer)
+            if not newer:
+                print(
+                    f"No analyses filed since the last career review "
+                    f"({prior.name}) — nothing new to synthesize. "
+                    f"Use --full to re-read all {len(files)} file(s)."
+                )
+                return 0
+            print(
+                f"Incremental career: {len(newer)} new file(s) since "
+                f"{prior.name} ({skipped} prior file(s) carried by the trajectory; "
+                f"--full re-reads all)."
+            )
+            files = newer
+        else:
+            print(
+                f"WARNING: could not parse a filed-timestamp from prior career "
+                f"file {prior.name!r}; reading all {len(files)} file(s)."
+            )
+
+    print(f"Found {len(files)} file(s) for {mode} synthesis:")
+    for f in files:
+        print(f"  {f.name}")
     if prior:
         print(f"Including prior {mode} for context: {prior.name}")
 
@@ -436,6 +490,15 @@ def main() -> int:
             "(back-date a missed run); ignored for career"
         ),
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "career only: re-read ALL analyses instead of just those filed since "
+            "the last [CAREER TRAJECTORY] (re-baseline the trajectory). Career is "
+            "incremental by default to keep each run bounded as Analyzed/ grows"
+        ),
+    )
     args = parser.parse_args()
 
     target_date = None
@@ -446,7 +509,7 @@ def main() -> int:
             print(f"ERROR: --date must be YYYY-MM-DD, got {args.date!r}", file=sys.stderr)
             return 1
 
-    return run(args.mode, week=args.week, target_date=target_date)
+    return run(args.mode, week=args.week, target_date=target_date, full=args.full)
 
 
 if __name__ == "__main__":

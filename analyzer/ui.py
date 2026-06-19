@@ -423,6 +423,10 @@ _HOME_BODY = """\
   </form>
   <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Career Trajectory review…')">
     <input type="hidden" name="mode" value="career">
+    <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:4px"
+           title="Re-read ALL analyses to re-baseline the trajectory. Off = incremental (only files filed since the last review).">
+      <input type="checkbox" name="full" value="1"> full re-read
+    </label>
     <button type="submit" class="secondary">▶ Career Trajectory</button>
   </form>
 </div>
@@ -600,6 +604,9 @@ def create_app():
         else:
             date_arg = ""
 
+        # career only: re-baseline by re-reading all analyses (default is incremental).
+        full = bool(request.form.get("full")) and mode == "career"
+
         with _job_lock:
             if _job and not _job["done"]:
                 return redirect(url_for("home", flash="A synthesis job is already running", ft="err"))
@@ -608,6 +615,8 @@ def create_app():
         cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
         if date_arg:
             cmd += ["--date", date_arg]
+        if full:
+            cmd.append("--full")
         threading.Thread(target=_run_job, args=(cmd, mode), daemon=True).start()
         return redirect(url_for("home"))
 

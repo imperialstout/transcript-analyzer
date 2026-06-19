@@ -327,11 +327,29 @@ def run(mode: str, week: str = "current", target_date: date | None = None, full:
 
     key = _MODE_KEY[mode]
     if key not in synthesis_prompts:
-        print(
-            f"ERROR: prompt key {key!r} not found in dailyAndWeeklyPrompts.md — "
-            f"add a ### {key}. block with a fenced body.",
-            file=sys.stderr,
-        )
+        found = ", ".join(sorted(synthesis_prompts)) or "none"
+        lines = [
+            f"ERROR: synthesis prompt {key!r} (--mode {mode}) is not defined for this machine.",
+            f"  Looked in: {_DAILY_PROMPTS_PATH}",
+            f"  Blocks present there: {found}",
+            f"  Active routing profile: {CONFIG.routing_profile}",
+        ]
+        # Career (D3) is the personal machine's tool. The work Drive deliberately
+        # never had a D3 block, so this error on a `work` profile almost always
+        # means "wrong machine," not "missing config to add."
+        if mode == "career" and CONFIG.routing_profile != "personal":
+            lines += [
+                "",
+                "  Career trajectory (D3) runs on the PERSONAL machine "
+                "(ROUTING_PROFILE=personal, personal Drive). This looks like the work seat —",
+                "  re-run there. If you genuinely want D3 on this seat, add a "
+                f"### {key}. block with a fenced body to the file above.",
+            ]
+        else:
+            lines.append(
+                f"  Fix: add a ### {key}. block with a fenced body to the file above."
+            )
+        print("\n".join(lines), file=sys.stderr)
         return 1
 
     files = _files_for_mode(mode, analyzed_path, week=week, target_date=target_date)
@@ -426,6 +444,19 @@ def run(mode: str, week: str = "current", target_date: date | None = None, full:
             )
             bundle = "\n\n---\n\n".join(reduce_parts)
             print(f"  reducing {len(digests):,}-char digest set into final {mode} synthesis...")
+            # The reduce task must be explicit: the batch digests below are SOURCE
+            # MATERIAL, not a prior conversation. Without this, the model reads the
+            # labeled "BATCH N DIGEST" blocks as earlier turns and replies ABOUT the
+            # work ("delivered inline above…") instead of producing the document.
+            task = (
+                f"{task} The material below is your complete source input: the prior "
+                f"summary (continuity) followed by detail-preserving digests of every "
+                f"analysis file this period. It is NOT a conversation and there is "
+                f"nothing 'above' — synthesize directly from it. Output ONLY the "
+                f"finished synthesis document per the instructions, following the "
+                f"section structure exactly. No preamble, no meta-commentary about "
+                f"the process, no notes about where the file will be written."
+            )
         data = claude_cli.run_claude_p(f"{task}\n\n{bundle}", model=model, system=system)
         text = claude_cli.result_text(data)
     except Exception as e:

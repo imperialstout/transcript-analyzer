@@ -61,6 +61,32 @@ _SKIP_TAGS = (
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
+# When the bundled inputs would overflow a single `claude -p` call, fall back to
+# map-reduce: split the files into batches that each fit, run a detail-preserving
+# digest pass per batch, then run the real synthesis prompt over the digests.
+# This keeps the "read all N files" value of the weekly (catching what the daily
+# compression dropped) without blowing claude_cli's char ceiling or the model
+# window. A busy week (~50 meetings) overflows; a normal day/career run does not,
+# so the single-pass path below is unchanged for those.
+#
+# Single-pass threshold sits under claude_cli._MAX_PROMPT_CHARS (525K) with
+# margin for the task prefix; the per-batch budget is smaller still so each
+# digest call has ample headroom for the system prefix + its own output.
+_SINGLE_PASS_BUDGET_CHARS = 480_000
+_BUNDLE_BUDGET_CHARS = 380_000
+
+_DIGEST_TASK = (
+    "You are PRE-DIGESTING a batch of filed meeting analyses as one stage of a "
+    "larger synthesis — do NOT write the final synthesis. Extract and preserve, "
+    "with attribution and specifics, everything a strategic review would need "
+    "from THIS batch: decisions made/reversed and who drove them; risks, "
+    "blockers, and slippage; commitments and owners; political signals "
+    "(alignment, friction, territory, who is gaining or losing ground); missed "
+    "opportunities and unaddressed threads; and notable attributed quotes. Keep "
+    "names. Prefer completeness over brevity — this digest is the ONLY thing the "
+    "final synthesis will see from these files. Output structured notes, not prose."
+)
+
 # Heading pattern for D1/D2 keys in dailyAndWeeklyPrompts.md
 _HEADING = re.compile(r"^### (D\d)\.", re.MULTILINE)
 _FENCED = re.compile(r"^```\s*\n(.*?)\n```", re.DOTALL | re.MULTILINE)
@@ -176,6 +202,11 @@ def _archive(files: list[Path], analyzed_path: Path) -> None:
         print(f"  archived → _Archive/{folder}/{f.name}")
 
 
+def _file_block(f: Path) -> str:
+    """One file rendered as a bundle section (header + body)."""
+    return f"=== ANALYSIS FILE: {f.name} ===\n\n{f.read_text(encoding='utf-8')}"
+
+
 def _build_bundle(files: list[Path], prior_synthesis: Path | None) -> str:
     parts = []
     if prior_synthesis and prior_synthesis.exists():
@@ -185,11 +216,61 @@ def _build_bundle(files: list[Path], prior_synthesis: Path | None) -> str:
             f"{prior_synthesis.read_text(encoding='utf-8')}"
         )
     for f in files:
-        parts.append(
-            f"=== ANALYSIS FILE: {f.name} ===\n\n"
-            f"{f.read_text(encoding='utf-8')}"
-        )
+        parts.append(_file_block(f))
     return "\n\n---\n\n".join(parts)
+
+
+def _batch_by_budget(files: list[Path], budget_chars: int) -> list[list[Path]]:
+    """Greedily pack files into batches whose rendered size stays under budget.
+
+    A single file larger than the budget gets its own batch (it still overflows,
+    but the digest call will raise a legible error rather than silently dropping
+    it — fail closed). Preserves file order so date grouping stays intact.
+    """
+    batches: list[list[Path]] = []
+    current: list[Path] = []
+    current_chars = 0
+    for f in files:
+        size = len(_file_block(f)) + len("\n\n---\n\n")
+        if current and current_chars + size > budget_chars:
+            batches.append(current)
+            current = []
+            current_chars = 0
+        current.append(f)
+        current_chars += size
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _digest_batches(files: list[Path], system: str, model: str) -> str:
+    """Map step: digest files in budget-sized batches, return concatenated digests.
+
+    Each batch runs through the digest task (detail-preserving extraction, not
+    final synthesis) so the reduce step sees a compact-but-complete stand-in for
+    every file. Raises on any batch failure — fail closed, consistent with run().
+    """
+    batches = _batch_by_budget(files, _BUNDLE_BUDGET_CHARS)
+    print(
+        f"  bundle exceeds single-pass budget — map-reduce over "
+        f"{len(batches)} batch(es) of {len(files)} file(s)"
+    )
+    digests = []
+    for i, batch in enumerate(batches, 1):
+        batch_bundle = "\n\n---\n\n".join(_file_block(f) for f in batch)
+        print(f"  digesting batch {i}/{len(batches)} ({len(batch)} file(s))...")
+        data = claude_cli.run_claude_p(
+            f"{_DIGEST_TASK}\n\nBatch {i} of {len(batches)}:\n\n{batch_bundle}",
+            model=model,
+            system=system,
+        )
+        digest = claude_cli.result_text(data)
+        if not digest.strip():
+            raise claude_cli.ClaudeCliError(
+                f"digest batch {i}/{len(batches)} returned empty result"
+            )
+        digests.append(f"=== BATCH {i} DIGEST ({len(batch)} file(s)) ===\n\n{digest}")
+    return "\n\n---\n\n".join(digests)
 
 
 def _output_filename(mode: str, target_date: date | None = None) -> str:
@@ -249,7 +330,6 @@ def run(mode: str, week: str = "current", target_date: date | None = None) -> in
     if prior:
         print(f"Including prior {mode} for context: {prior.name}")
 
-    bundle = _build_bundle(files, prior)
     prompt_body = synthesis_prompts[key]
 
     context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8") if CONFIG.context_brief_path.exists() else ""
@@ -274,6 +354,24 @@ def run(mode: str, week: str = "current", target_date: date | None = None) -> in
 
     try:
         task = {"daily": "Generate the Daily Pulse.", "weekly": "Generate the Weekly Slack Delta.", "career": "Generate the Career Trajectory synthesis."}[mode]
+        # Map-reduce when the full bundle would overflow a single call: digest the
+        # files in budget-sized batches first, then synthesize over the digests.
+        # The prior synthesis (continuity) is kept whole in the reduce step.
+        bundle = _build_bundle(files, prior)
+        if len(bundle) > _SINGLE_PASS_BUDGET_CHARS:
+            digests = _digest_batches(files, system, model)
+            reduce_parts = []
+            if prior and prior.exists():
+                reduce_parts.append(
+                    f"=== MOST RECENT PRIOR SUMMARY ===\n"
+                    f"(File: {prior.name})\n\n{prior.read_text(encoding='utf-8')}"
+                )
+            reduce_parts.append(
+                "=== BATCH DIGESTS (detail-preserving extracts of every analysis "
+                "file this period) ===\n\n" + digests
+            )
+            bundle = "\n\n---\n\n".join(reduce_parts)
+            print(f"  reducing {len(digests):,}-char digest set into final {mode} synthesis...")
         data = claude_cli.run_claude_p(f"{task}\n\n{bundle}", model=model, system=system)
         text = claude_cli.result_text(data)
     except Exception as e:

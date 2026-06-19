@@ -85,6 +85,57 @@ def _save_env_key(key: str, value: str) -> None:
     _ENV_PATH.write_text("".join(lines), encoding="utf-8")
 
 
+def _run_job(cmd: list[str], mode: str) -> None:
+    """Run a subprocess for a UI-triggered job, streaming output two ways.
+
+    Updates the in-memory ``_job["output"]`` line-by-line so the dashboard's
+    poller shows live progress, and tees the same lines into the rolling log
+    (``transcript-analyzer.log``) in the same ``----- <iso> ----- … exit=N``
+    frame ``bin/analyze.sh`` writes, so UI runs are forensically visible
+    alongside scheduled runs. ``python -u`` keeps the child's stdout unbuffered
+    so progress arrives as it happens rather than all at once on exit.
+    """
+    global _job
+    from datetime import datetime as _dt
+    label = _MODE_LABELS.get(mode, mode)
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=str(Path(__file__).parent.parent),
+    )
+    buf: list[str] = []
+    log = None
+    try:
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log = _LOG_PATH.open("a", encoding="utf-8")
+        log.write(f"----- {_dt.now().isoformat(timespec='seconds')} ----- (UI: {label})\n")
+        log.flush()
+    except Exception:
+        log = None  # logging is best-effort; never block the job on it
+    for line in proc.stdout:
+        buf.append(line)
+        with _job_lock:
+            _job["output"] = "".join(buf)
+        if log is not None:
+            try:
+                log.write(line)
+                log.flush()
+            except Exception:
+                log = None
+    proc.wait()
+    if log is not None:
+        try:
+            log.write(f"exit={proc.returncode}\n")
+            log.close()
+        except Exception:
+            pass
+    with _job_lock:
+        _job["done"] = True
+        _job["returncode"] = proc.returncode
+
+
 _SYNTHESIS_TAGS = ("[DAILY PULSE]", "[SLACK DELTA]", "[WEEKLY SUMMARY]")
 
 _MODE_LABELS = {
@@ -309,9 +360,19 @@ function startPoll(label) {
     if (d.done) {
       clearInterval(_pollTimer); _pollTimer = null;
       if (indicator) indicator.style.display = 'none';
-      document.getElementById('job-done').style.display = 'inline';
-      // Reload page so the new synthesis file appears in the table
-      setTimeout(() => location.reload(), 1500);
+      if (d.returncode && d.returncode !== 0) {
+        // Job failed (non-zero exit). Keep the panel up with the captured output
+        // so the error is visible — do NOT reload it away. (returncode 2 is a
+        // soft warning: synthesis written but archive skipped — still surface it.)
+        const done = document.getElementById('job-done');
+        done.style.display = 'inline';
+        done.style.color = 'var(--red)';
+        done.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.';
+      } else {
+        document.getElementById('job-done').style.display = 'inline';
+        // Reload page so the new synthesis file appears in the table
+        setTimeout(() => location.reload(), 1500);
+      }
     }
   }, 1200);
 }
@@ -544,30 +605,10 @@ def create_app():
                 return redirect(url_for("home", flash="A synthesis job is already running", ft="err"))
             _job = {"mode": mode, "output": "", "done": False, "returncode": None}
 
-        def _run():
-            global _job
-            python = sys.executable
-            cmd = [python, "-m", "analyzer", "synthesize", "--mode", mode]
-            if date_arg:
-                cmd += ["--date", date_arg]
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=str(Path(__file__).parent.parent),
-            )
-            buf = []
-            for line in proc.stdout:
-                buf.append(line)
-                with _job_lock:
-                    _job["output"] = "".join(buf)
-            proc.wait()
-            with _job_lock:
-                _job["done"] = True
-                _job["returncode"] = proc.returncode
-
-        threading.Thread(target=_run, daemon=True).start()
+        cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
+        if date_arg:
+            cmd += ["--date", date_arg]
+        threading.Thread(target=_run_job, args=(cmd, mode), daemon=True).start()
         return redirect(url_for("home"))
 
     @app.post("/run-analysis")
@@ -578,27 +619,8 @@ def create_app():
                 return redirect(url_for("home", flash="A job is already running", ft="err"))
             _job = {"mode": "analysis", "output": "", "done": False, "returncode": None}
 
-        def _run():
-            global _job
-            python = sys.executable
-            proc = subprocess.Popen(
-                [python, "-m", "analyzer"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=str(Path(__file__).parent.parent),
-            )
-            buf = []
-            for line in proc.stdout:
-                buf.append(line)
-                with _job_lock:
-                    _job["output"] = "".join(buf)
-            proc.wait()
-            with _job_lock:
-                _job["done"] = True
-                _job["returncode"] = proc.returncode
-
-        threading.Thread(target=_run, daemon=True).start()
+        cmd = [sys.executable, "-u", "-m", "analyzer"]
+        threading.Thread(target=_run_job, args=(cmd, "analysis"), daemon=True).start()
         return redirect(url_for("home"))
 
     @app.get("/job-status")

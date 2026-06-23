@@ -115,14 +115,56 @@ def _load_synthesis_prompts() -> dict[str, str]:
     return out
 
 
-def _meeting_date_from_filename(name: str) -> date | None:
-    m = _DATE_TOKEN.search(name)
+# Authoritative meeting date for an analysis file. Selection and archiving must
+# key on when the MEETING happened, not when the file was processed — otherwise a
+# late/bulk download (a vacation catch-up) collapses every backlog day into one
+# bucket, because each file's leading run-stamp gets the download day. The LLM
+# emits `meeting_date:` in the YAML frontmatter and that is the source of truth;
+# it stays correct even when both filename date tokens are wrong (a late download
+# wrongly stamps the leading run-stamp, and the trailing token can itself be off
+# when filing couldn't parse an underscore date). Fallback chain:
+#   1. frontmatter `meeting_date:`            (authoritative)
+#   2. trailing filename token `… - DATE [TAG]` (what build_output_filename writes)
+#   3. first date token anywhere               (last resort)
+_FRONTMATTER_DATE = re.compile(r"^meeting_date:\s*(\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
+_TRAILING_MEETING_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})\s*\[[A-Z][A-Z ]*\]")
+
+
+def _date_from_frontmatter(path: Path) -> date | None:
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            head = fh.read(2048)  # frontmatter is at the very top; don't read the body
+    except OSError:
+        return None
+    m = _FRONTMATTER_DATE.search(head)
     if m:
         try:
-            return datetime.strptime(m.group(0), "%Y-%m-%d").date()
+            return datetime.strptime(m.group(1), "%Y-%m-%d").date()
         except ValueError:
             pass
     return None
+
+
+def _date_from_filename(name: str) -> date | None:
+    # Prefer the trailing meeting-date token (before the [TAG]); fall back to the
+    # first date token only if there's no trailing one. The leading run-stamp
+    # (YYYY-MM-DDTHH-MM-SS) records processing time, never the meeting day.
+    m = _TRAILING_MEETING_DATE.search(name)
+    token = m.group(1) if m else None
+    if token is None:
+        m = _DATE_TOKEN.search(name)
+        token = m.group(0) if m else None
+    if token:
+        try:
+            return datetime.strptime(token, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return None
+
+
+def _meeting_date(path: Path) -> date | None:
+    """The meeting date for an analysis file — frontmatter first, then filename."""
+    return _date_from_frontmatter(path) or _date_from_filename(path.name)
 
 
 # Leading ISO run-stamp every filed output carries: "YYYY-MM-DDTHH-MM-SS - ...".
@@ -191,7 +233,7 @@ def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current", targe
             if target_dates is None:
                 found.append(f)
                 continue
-            d = _meeting_date_from_filename(name)
+            d = _meeting_date(f)
             if d and d in target_dates:
                 found.append(f)
     return found
@@ -212,7 +254,7 @@ def _archive(files: list[Path], analyzed_path: Path) -> None:
         # Already in the archive — was included for bundling but needs no move.
         if archive_root in f.parents:
             continue
-        d = _meeting_date_from_filename(f.name)
+        d = _meeting_date(f)
         folder = f"{d.year:04d}-{d.month:02d}" if d else "unknown"
         target_dir = archive_root / folder
         target_dir.mkdir(parents=True, exist_ok=True)

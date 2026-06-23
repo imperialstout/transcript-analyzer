@@ -19,11 +19,25 @@ LEADING_PREFIX = re.compile(
 _TRAILING_DATE = re.compile(r"\s*-?\s*\d{4}-\d{2}-\d{2}\s*$")
 
 
+_UNDERSCORE_DATE = re.compile(r"\d{4}_\d{2}_\d{2}")
+
+
 def _extract_meeting_date(transcript_filename: str) -> date:
     m = _DATE.search(transcript_filename)
     if m:
         try:
             return datetime.strptime(m.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    # Gemini/Teams source names carry the date with underscores
+    # (`… - 2026_06_22 09_30 CDT - Notes by Gemini.md`) and no hyphenated token,
+    # so the hyphen search above misses it and we'd otherwise fall back to today()
+    # — which is exactly the late-download bug. Try the underscore form before
+    # giving up.
+    m = _UNDERSCORE_DATE.search(transcript_filename)
+    if m:
+        try:
+            return datetime.strptime(m.group(0), "%Y_%m_%d").date()
         except ValueError:
             pass
     return date.today()

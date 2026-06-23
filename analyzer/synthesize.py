@@ -184,7 +184,13 @@ def _filed_timestamp(name: str) -> datetime | None:
     return None
 
 
-def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current", target_date: date | None = None) -> list[Path]:
+def _files_for_mode(
+    mode: str,
+    analyzed_path: Path,
+    week: str = "current",
+    target_date: date | None = None,
+    root_only: bool = False,
+) -> list[Path]:
     """Return the [ANALYZED] files to bundle for this mode.
 
     daily  → the anchor day's meetings; weekly → the anchor's ISO week (Mon–anchor);
@@ -193,6 +199,11 @@ def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current", targe
 
     ``target_date`` back-dates daily/weekly to recover a missed run; when None the
     anchor is today (unchanged behavior).
+
+    ``root_only`` restricts the scan to the Analyzed/ root and skips the _Archive
+    folders. daily/weekly archive their inputs, so the root holds exactly the
+    *un-synthesized* backlog — this is what catch-up iterates so a re-run doesn't
+    re-pull already-archived same-date files.
     """
     anchor = target_date or date.today()
     if mode == "career":
@@ -209,7 +220,10 @@ def _files_for_mode(mode: str, analyzed_path: Path, week: str = "current", targe
 
     # Determine which archive month folders to also scan
     archive_root = analyzed_path / "_Archive"
-    if target_dates is None:
+    if root_only:
+        # catch-up: the un-archived backlog lives only in the Analyzed/ root.
+        scan_dirs = [analyzed_path]
+    elif target_dates is None:
         # career mode: scan all archive subdirs
         extra_dirs = sorted(archive_root.iterdir()) if archive_root.is_dir() else []
         scan_dirs = [analyzed_path] + [d for d in extra_dirs if d.is_dir()]
@@ -355,7 +369,13 @@ def _output_filename(mode: str, target_date: date | None = None) -> str:
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
 
 
-def run(mode: str, week: str = "current", target_date: date | None = None, full: bool = False) -> int:
+def run(
+    mode: str,
+    week: str = "current",
+    target_date: date | None = None,
+    full: bool = False,
+    root_only: bool = False,
+) -> int:
     analyzed_path = CONFIG.analyzed_path
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
@@ -394,7 +414,7 @@ def run(mode: str, week: str = "current", target_date: date | None = None, full:
         print("\n".join(lines), file=sys.stderr)
         return 1
 
-    files = _files_for_mode(mode, analyzed_path, week=week, target_date=target_date)
+    files = _files_for_mode(mode, analyzed_path, week=week, target_date=target_date, root_only=root_only)
     if not files:
         if target_date and mode in ("daily", "weekly"):
             label = f"{target_date.isoformat()}" + (" (its ISO week)" if mode == "weekly" else "")
@@ -535,6 +555,54 @@ def run(mode: str, week: str = "current", target_date: date | None = None, full:
     return 0
 
 
+def run_catch_up(since: date | None = None) -> int:
+    """Emit one Daily Pulse per backlog day — the vacation catch-up workflow.
+
+    Scans the un-synthesized backlog (un-archived [ANALYZED] files in the
+    Analyzed/ root), groups them by *meeting date* (frontmatter-authoritative,
+    so late/bulk downloads bucket correctly), and runs a daily pulse for each
+    day in chronological order. Because daily synthesis archives its inputs and
+    chains off the most recent prior pulse, each day is consumed before the next
+    begins — the pulses come out dated and in order, just like running them live
+    across the week. ``since`` (inclusive) skips older backlog days.
+    """
+    analyzed_path = CONFIG.analyzed_path
+    if not analyzed_path.exists():
+        print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
+        return 1
+
+    # Backlog = un-archived analyses in the root, bucketed by meeting date.
+    backlog = _files_for_mode("career", analyzed_path, root_only=True)
+    by_day: dict[date, int] = {}
+    for f in backlog:
+        d = _meeting_date(f)
+        if d is None or (since and d < since):
+            continue
+        by_day[d] = by_day.get(d, 0) + 1
+
+    if not by_day:
+        scope = f" since {since.isoformat()}" if since else ""
+        print(f"No un-synthesized backlog{scope} — nothing to catch up on.")
+        return 0
+
+    days = sorted(by_day)
+    print(
+        f"Catch-up: {sum(by_day.values())} backlog file(s) across {len(days)} day(s): "
+        + ", ".join(f"{d.isoformat()} ({by_day[d]})" for d in days)
+    )
+
+    failures = 0
+    for d in days:
+        print(f"\n===== Daily Pulse for {d.isoformat()} =====")
+        rc = run("daily", target_date=d, root_only=True)
+        if rc != 0:
+            failures += 1
+            print(f"  (day {d.isoformat()} returned exit {rc})", file=sys.stderr)
+
+    print(f"\nCatch-up complete. {len(days) - failures}/{len(days)} day(s) synthesized.")
+    return 1 if failures else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="python -m analyzer synthesize",
@@ -542,11 +610,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=["daily", "weekly", "career"],
+        choices=["daily", "weekly", "career", "catch-up"],
         required=True,
         help=(
             "daily = D1 pulse over today's analyses; weekly = D2 delta over this "
-            "week's; career = D3 position-trajectory review over all current analyses"
+            "week's; career = D3 position-trajectory review over all current "
+            "analyses; catch-up = one daily pulse per backlog day (vacation recovery)"
         ),
     )
     parser.add_argument(
@@ -561,6 +630,14 @@ def main() -> int:
         help=(
             "daily/weekly: anchor the window on this YYYY-MM-DD instead of today "
             "(back-date a missed run); ignored for career"
+        ),
+    )
+    parser.add_argument(
+        "--since",
+        default=None,
+        help=(
+            "catch-up only: only synthesize backlog days on/after this YYYY-MM-DD "
+            "(skip older un-synthesized analyses); default = the whole backlog"
         ),
     )
     parser.add_argument(
@@ -581,6 +658,16 @@ def main() -> int:
         except ValueError:
             print(f"ERROR: --date must be YYYY-MM-DD, got {args.date!r}", file=sys.stderr)
             return 1
+
+    if args.mode == "catch-up":
+        since = None
+        if args.since:
+            try:
+                since = datetime.strptime(args.since, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"ERROR: --since must be YYYY-MM-DD, got {args.since!r}", file=sys.stderr)
+                return 1
+        return run_catch_up(since=since)
 
     return run(args.mode, week=args.week, target_date=target_date, full=args.full)
 

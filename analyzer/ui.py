@@ -142,6 +142,7 @@ _MODE_LABELS = {
     "daily": "Daily Pulse synthesis",
     "weekly": "Weekly Slack Delta synthesis",
     "career": "Career Trajectory review",
+    "catch-up": "catch-up (one pulse per backlog day)",
     "analysis": "transcript analysis",
 }
 
@@ -421,6 +422,11 @@ _HOME_BODY = """\
     <input type="date" name="date" title="Leave blank for this week; pick a date in the week to back-date">
     <button type="submit" class="secondary">▶ Weekly Slack Delta</button>
   </form>
+  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')">
+    <input type="hidden" name="mode" value="catch-up">
+    <input type="date" name="since" title="Vacation recovery: emits one Daily Pulse per backlog day. Pick the date you want to start from (e.g. your first day away); leave blank for the whole backlog.">
+    <button type="submit" class="secondary" title="One Daily Pulse per backlog day, in order. For catching up after time away.">▶ Catch Up</button>
+  </form>
   <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Career Trajectory review…')">
     <input type="hidden" name="mode" value="career">
     <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:4px"
@@ -589,20 +595,30 @@ def create_app():
     @app.post("/synthesize")
     def synthesize():
         global _job
+        from datetime import datetime as _dt
         mode = request.form.get("mode", "daily")
-        if mode not in ("daily", "weekly", "career"):
+        if mode not in ("daily", "weekly", "career", "catch-up"):
             return redirect(url_for("home", flash="Invalid mode", ft="err"))
 
         # Optional back-date for daily/weekly (recover a missed run). Ignored for career.
         date_arg = request.form.get("date", "").strip()
         if date_arg and mode in ("daily", "weekly"):
-            from datetime import datetime as _dt
             try:
                 _dt.strptime(date_arg, "%Y-%m-%d")
             except ValueError:
                 return redirect(url_for("home", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
         else:
             date_arg = ""
+
+        # catch-up only: optional lower bound on which backlog days to synthesize.
+        since_arg = request.form.get("since", "").strip()
+        if since_arg and mode == "catch-up":
+            try:
+                _dt.strptime(since_arg, "%Y-%m-%d")
+            except ValueError:
+                return redirect(url_for("home", flash=f"Invalid since-date {since_arg!r} (need YYYY-MM-DD)", ft="err"))
+        else:
+            since_arg = ""
 
         # career only: re-baseline by re-reading all analyses (default is incremental).
         full = bool(request.form.get("full")) and mode == "career"
@@ -615,6 +631,8 @@ def create_app():
         cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
         if date_arg:
             cmd += ["--date", date_arg]
+        if since_arg:
+            cmd += ["--since", since_arg]
         if full:
             cmd.append("--full")
         threading.Thread(target=_run_job, args=(cmd, mode), daemon=True).start()

@@ -39,7 +39,7 @@ python -m analyzer ui --port 7071  # custom port
 Shell alias shortcut (add to `~/.zshrc`):
 
 ```bash
-alias ta="source ~/.venvs/transcript-analyzer/bin/activate && python -m analyzer ui"
+alias ta="cd /Users/brad.gross/code/transcript-analyzer && source ~/.venvs/transcript-analyzer/bin/activate && python -m analyzer ui"
 ```
 
 One-off model override (wins over per-prompt defaults):
@@ -94,7 +94,7 @@ This repo runs on **two machines with two different Google Drives**, differentia
   - `work` (default): operational meeting set — `DAILY` / `STANDUP` / `SOLUTION` / `EXEC`.
   - `personal`: the career+political lens — **`B4` (Political Read)** vs **`A3` (1:1/Career)**, with `SHAREABLE_PASS=false` (it keeps sensitive content rather than sharing it).
 
-Division of labor: **work** machine does per-meeting `analyze` + daily/weekly `synthesize`, shareable on (sharing with leads). **Personal** machine does the bigger-picture career read — primarily `synthesize --mode career` over summaries — shareable off, and is **UI-driven, not scheduled** (its launchd agent is disabled; runs are triggered on demand via `python -m analyzer ui`). The personal seat also has `claude-opus-4-8` available (the work seat does not — it's `opus-4-7` only).
+Division of labor: **work** machine does per-meeting `analyze` + daily/weekly `synthesize`, shareable on (sharing with leads). **Personal** machine does the bigger-picture career read — primarily `synthesize --mode career` over summaries — shareable off, and is **UI-driven, not scheduled** (its launchd agent is disabled; runs are triggered on demand via `python -m analyzer ui`). Both seats now expose `claude-opus-4-8` and `claude-sonnet-5` (verified 2026-07-01 via the gateway `/v1/models` catalog + a live invoke — the work seat is **no longer** opus-4-7-only). **Caveat:** `claude-sonnet-5` rejects the CLI's legacy `thinking.type.enabled` param (400) unless `MAX_THINKING_TOKENS=0` is set, which disables extended thinking — so Sonnet 5 is not wired into the pipeline. A CLI newer than 2.1.191 (which emits `thinking.type.adaptive`) would fix it, but the date-pinned npm mirror caps at 2.1.191. `claude-opus-4-8` works cleanly on `claude -p` as of CLI 2.1.191 (it 400'd on 2.1.150).
 
 **Important for analysis quality:** The `_FRAMING` in `anthropic_client.py` is now generic (repo is public). The personal posture line ("The reader is Brad Gross, Revenue Cloud CTO. Posture: attributed, specific, non-neutralized.") has been moved to `Program_Context_Brief.md` in Drive — add it there if not present so the SherpaX/Siemens context and posture are preserved in analyses.
 
@@ -169,9 +169,9 @@ Both compose the **identical** system prefix via `anthropic_client.system_prompt
 `router.CATEGORIES` / `router.FALLBACK` and the classifier system prompt all derive from the active profile (an unknown `ROUTING_PROFILE` warns and falls back to `work`). Classification **never raises** — any error/ambiguity collapses to `FALLBACK`. If a routed prompt is missing from the Drive library, `main._resolve_prompt()` falls back to `FALLBACK` then `DEFAULT_PROMPT_KEY`.
 
 Model tiering (`config.models`, each overridable via `MODEL_<KEY>`):
-- `EXEC` → `claude-opus-4-7`; `SOLUTION` / `STANDUP` / `DAILY` → `claude-sonnet-4-6`
-- `DOCUMENT` → `claude-opus-4-7` (dense strategic content; override with `MODEL_DOCUMENT`)
-- `B4` → `claude-opus-4-7` by default; **the personal `.env` sets `MODEL_B4=claude-opus-4-8`** (the latest Opus, available on the personal seat but not the work seat). `A3` → `claude-sonnet-4-6`.
+- `EXEC` → `claude-opus-4-7` default; **the work `.env` now sets `MODEL_EXEC=claude-opus-4-8`**. `SOLUTION` / `STANDUP` / `DAILY` → `claude-sonnet-4-6`
+- `DOCUMENT` → `claude-opus-4-7` default; **the work `.env` now sets `MODEL_DOCUMENT=claude-opus-4-8`** (dense strategic content). Override with `MODEL_DOCUMENT`.
+- `B4` → `claude-opus-4-7` by default; **both the personal and work `.env` set `MODEL_B4=claude-opus-4-8`** (the latest Opus, now on both seats). `A3` → `claude-sonnet-4-6`.
 - Classifier → `claude-haiku-4-5-20251001` (bare alias rejected by the seat — use dated id); Redaction → `claude-sonnet-4-6`; Synthesis → Sonnet for D1/D2, the **B4 model** for D3.
 - `supports_thinking()` (api backend only) recognizes `opus-4-8` / `opus-4-7` / `opus-4-6` / `sonnet-4-6`.
 

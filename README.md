@@ -176,7 +176,7 @@ open -e ~/.zshrc
 Add this line at the end of the file:
 
 ```bash
-alias ta="source ~/.venvs/transcript-analyzer/bin/activate && python -m analyzer ui"
+alias ta="cd /Users/brad.gross/code/transcript-analyzer && source ~/.venvs/transcript-analyzer/bin/activate && python -m analyzer ui"
 ```
 
 Save and close TextEdit. Then run:

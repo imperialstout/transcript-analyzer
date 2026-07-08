@@ -38,6 +38,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import claude_cli
+from . import manifest as manifest_mod
 from . import prompts as prompts_mod
 from .config import CONFIG, model_for
 from .filesystem import write_text
@@ -262,6 +263,114 @@ def _most_recent_synthesis(analyzed_path: Path, tag: str) -> Path | None:
     return max(candidates, key=lambda f: f.name, default=None)
 
 
+def _n_most_recent_syntheses(analyzed_path: Path, tag: str, n: int) -> list[Path]:
+    """Return the N most recent synthesis files with the given tag, oldest-first."""
+    candidates = [
+        f for f in analyzed_path.iterdir()
+        if not f.is_dir() and tag in f.name
+    ]
+    return sorted(candidates, key=lambda f: f.name)[-n:]
+
+
+def _build_prior_context(
+    mode: str, analyzed_path: Path, anchor_date: date
+) -> tuple[list[Path], int]:
+    """Return (priors, gap_days) for the synthesis run.
+
+    priors — list of prior synthesis files to prepend as continuity context,
+              in chronological order (oldest first so the model reads forward).
+    gap_days — calendar days since the most recent prior daily pulse (0 if
+               same day, -1 if no prior exists). Only meaningful for daily/catch-up.
+
+    Escalation rules:
+    - career: single most recent [CAREER TRAJECTORY], no gap concept.
+    - weekly: last 2 [SLACK DELTA] files — always (gives a 2-week trend arc).
+    - daily/catch-up:
+        - Always include the most recent [DAILY PULSE].
+        - If gap_days > 1 (multi-day gap, holiday, weekend-plus) OR no prior
+          daily exists, also include the most recent [SLACK DELTA]. The weekly
+          summary bridges the gap so the model has program thread continuity
+          even when it has no intermediate daily pulses to chain from.
+    """
+    if mode == "career":
+        prior = _most_recent_synthesis(analyzed_path, _MODE_SUFFIX["career"])
+        return ([prior] if prior else [], -1)
+
+    if mode == "weekly":
+        priors = _n_most_recent_syntheses(analyzed_path, _MODE_SUFFIX["weekly"], 2)
+        return (priors, -1)
+
+    # daily / catch-up
+    prior_daily = _most_recent_synthesis(analyzed_path, _MODE_SUFFIX["daily"])
+    prior_weekly = _most_recent_synthesis(analyzed_path, _MODE_SUFFIX["weekly"])
+
+    gap_days = -1
+    if prior_daily:
+        prior_date = _date_from_filename(prior_daily.name)
+        if prior_date:
+            gap_days = (anchor_date - prior_date).days
+
+    priors: list[Path] = []
+    if prior_daily:
+        priors.append(prior_daily)
+
+    # Inject the weekly summary on any multi-day gap (or when there's no prior
+    # daily at all) so the model has broader program-arc context to chain from.
+    if (gap_days > 1 or gap_days == -1) and prior_weekly:
+        priors.append(prior_weekly)
+
+    return (priors, gap_days)
+
+
+_GAP_SOFT_THRESHOLD = 5   # days: soft advisory (suggest catch-up + Slack)
+_GAP_HARD_THRESHOLD = 14  # days: strong advisory (full re-entry checklist)
+
+
+def _print_gap_advisory(gap_days: int, anchor_date: date, prior_daily: Path | None) -> None:
+    """Print a gap advisory when enough time has passed since the last daily pulse."""
+    if gap_days < _GAP_SOFT_THRESHOLD:
+        return
+
+    prior_date_str = ""
+    if prior_daily:
+        d = _date_from_filename(prior_daily.name)
+        prior_date_str = d.isoformat() if d else prior_daily.name
+
+    gap_start = (anchor_date - timedelta(days=gap_days)).isoformat()
+    gap_end = anchor_date.isoformat()
+    catchup_since = (anchor_date - timedelta(days=gap_days - 1)).isoformat()
+
+    if gap_days >= _GAP_HARD_THRESHOLD:
+        lines = [
+            f"",
+            f"ADVISORY: Last daily pulse was {gap_days} days ago ({prior_date_str}) — significant gap.",
+            f"The model's thread continuity will be limited. Recommended re-entry sequence:",
+            f"  1. Obtain and drop any missed meeting transcripts into Call Transcripts/,",
+            f"     then run:  python -m analyzer",
+            f"  2. Run catch-up to emit one daily pulse per missed day:",
+            f"       python -m analyzer synthesize --mode catch-up --since {catchup_since}",
+            f"  3. Request a Slack summary for {gap_start} through {gap_end} to capture",
+            f"     asynchronous decisions and updates made during your absence.",
+            f"  4. Then re-run this synthesis.",
+            f"Continuing anyway — ctrl-C to abort.",
+            f"",
+        ]
+    else:
+        lines = [
+            f"",
+            f"ADVISORY: Last daily pulse was {gap_days} days ago ({prior_date_str}).",
+            f"The prior weekly summary has been added as context, but threads from missed days",
+            f"may still be incomplete. Consider running:",
+            f"  1. catch-up mode to generate pulses for the missed days:",
+            f"       python -m analyzer synthesize --mode catch-up --since {catchup_since}",
+            f"  2. Then re-run today's daily.",
+            f"  3. For Slack coverage of the gap, request a summary for {gap_start} through {gap_end}.",
+            f"Continuing with current context...",
+            f"",
+        ]
+    print("\n".join(lines))
+
+
 def _archive(files: list[Path], analyzed_path: Path) -> None:
     archive_root = analyzed_path / "_Archive"
     for f in files:
@@ -286,14 +395,30 @@ def _file_block(f: Path) -> str:
     return f"=== ANALYSIS FILE: {f.name} ===\n\n{f.read_text(encoding='utf-8')}"
 
 
-def _build_bundle(files: list[Path], prior_synthesis: Path | None) -> str:
+def _prior_label(p: Path) -> str:
+    """Human-readable label for a prior synthesis file used in bundle headers."""
+    name = p.name
+    if "[DAILY PULSE]" in name:
+        d = _date_from_filename(name)
+        return f"PRIOR DAILY PULSE ({d.isoformat() if d else name})"
+    if "[SLACK DELTA]" in name or "[WEEKLY SUMMARY]" in name:
+        d = _date_from_filename(name)
+        return f"PRIOR WEEKLY SUMMARY (week of {d.isoformat() if d else name})"
+    if "[CAREER TRAJECTORY]" in name:
+        return "PRIOR CAREER TRAJECTORY"
+    return "PRIOR SUMMARY"
+
+
+def _build_bundle(files: list[Path], priors: list[Path]) -> str:
     parts = []
-    if prior_synthesis and prior_synthesis.exists():
-        parts.append(
-            f"=== MOST RECENT PRIOR SUMMARY ===\n"
-            f"(File: {prior_synthesis.name})\n\n"
-            f"{prior_synthesis.read_text(encoding='utf-8')}"
-        )
+    for p in priors:
+        if p.exists():
+            label = _prior_label(p)
+            parts.append(
+                f"=== {label} ===\n"
+                f"(File: {p.name})\n\n"
+                f"{p.read_text(encoding='utf-8')}"
+            )
     for f in files:
         parts.append(_file_block(f))
     return "\n\n---\n\n".join(parts)
@@ -423,9 +548,8 @@ def run(
         print(f"No [ANALYZED] files found for {label} — nothing to synthesize.")
         return 0
 
-    # Chain off the most recent synthesis of the same kind for continuity.
-    prior_tag = _MODE_SUFFIX[mode]
-    prior = _most_recent_synthesis(analyzed_path, prior_tag)
+    anchor_date = target_date or date.today()
+    priors, gap_days = _build_prior_context(mode, analyzed_path, anchor_date)
 
     # Career is INCREMENTAL: it never archives, so the full set grows without
     # bound (97 files / ~1.2M chars after one month). Re-reading everything each
@@ -434,39 +558,58 @@ def run(
     # arc, so we feed that as continuity + only the analyses filed *since* it,
     # bounding every run to near-constant size. `--full` forces a complete
     # re-read (re-baseline); the first-ever run (no prior) also reads everything.
-    if mode == "career" and prior and not full:
-        cutoff = _filed_timestamp(prior.name)
-        if cutoff is not None:
-            newer = [f for f in files if (ts := _filed_timestamp(f.name)) and ts > cutoff]
-            skipped = len(files) - len(newer)
-            if not newer:
+    if mode == "career":
+        prior = priors[0] if priors else None
+        if prior and not full:
+            cutoff = _filed_timestamp(prior.name)
+            if cutoff is not None:
+                newer = [f for f in files if (ts := _filed_timestamp(f.name)) and ts > cutoff]
+                skipped = len(files) - len(newer)
+                if not newer:
+                    print(
+                        f"No analyses filed since the last career review "
+                        f"({prior.name}) — nothing new to synthesize. "
+                        f"Use --full to re-read all {len(files)} file(s)."
+                    )
+                    return 0
                 print(
-                    f"No analyses filed since the last career review "
-                    f"({prior.name}) — nothing new to synthesize. "
-                    f"Use --full to re-read all {len(files)} file(s)."
+                    f"Incremental career: {len(newer)} new file(s) since "
+                    f"{prior.name} ({skipped} prior file(s) carried by the trajectory; "
+                    f"--full re-reads all)."
                 )
-                return 0
-            print(
-                f"Incremental career: {len(newer)} new file(s) since "
-                f"{prior.name} ({skipped} prior file(s) carried by the trajectory; "
-                f"--full re-reads all)."
-            )
-            files = newer
-        else:
-            print(
-                f"WARNING: could not parse a filed-timestamp from prior career "
-                f"file {prior.name!r}; reading all {len(files)} file(s)."
-            )
+                files = newer
+            else:
+                print(
+                    f"WARNING: could not parse a filed-timestamp from prior career "
+                    f"file {prior.name!r}; reading all {len(files)} file(s)."
+                )
+
+    # Gap advisory: remind the user to catch up on missed days / pull Slack
+    # context before accepting a synthesis with a large continuity hole.
+    if mode in ("daily", "catch-up"):
+        prior_daily = next((p for p in priors if "[DAILY PULSE]" in p.name), None)
+        _print_gap_advisory(gap_days, anchor_date, prior_daily)
 
     print(f"Found {len(files)} file(s) for {mode} synthesis:")
     for f in files:
         print(f"  {f.name}")
-    if prior:
-        print(f"Including prior {mode} for context: {prior.name}")
+    for p in priors:
+        print(f"Including prior context: {p.name}")
 
     prompt_body = synthesis_prompts[key]
 
-    context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8") if CONFIG.context_brief_path.exists() else ""
+    context_brief = ""
+    if CONFIG.context_brief_path.exists():
+        context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8")
+        brief_age_days = (date.today() - date.fromtimestamp(CONFIG.context_brief_path.stat().st_mtime)).days
+        if brief_age_days > 60:
+            modified_str = date.fromtimestamp(CONFIG.context_brief_path.stat().st_mtime).isoformat()
+            print(
+                f"WARNING: Program Context Brief is {brief_age_days} days old "
+                f"(last modified {modified_str}). "
+                f"Factual inaccuracies may result. Update the brief in Drive to restore accuracy."
+            )
+
     rolodex = prompts_mod.load_rolodex()
     program_reference = prompts_mod.load_program_reference()
 
@@ -485,21 +628,24 @@ def run(
     # Opus on the personal machine. model_for honors MODEL_OVERRIDE.
     model = model_for("B4") if mode == "career" else CONFIG.models.get("STANDUP", "claude-sonnet-4-6")
     print(f"Running {mode} synthesis with {model}...")
+    _t0 = datetime.now()
 
     try:
         task = {"daily": "Generate the Daily Pulse.", "weekly": "Generate the Weekly Slack Delta.", "career": "Generate the Career Trajectory synthesis."}[mode]
         # Map-reduce when the full bundle would overflow a single call: digest the
         # files in budget-sized batches first, then synthesize over the digests.
-        # The prior synthesis (continuity) is kept whole in the reduce step.
-        bundle = _build_bundle(files, prior)
+        # Prior synthesis files (continuity) are kept whole in the reduce step.
+        bundle = _build_bundle(files, priors)
         if len(bundle) > _SINGLE_PASS_BUDGET_CHARS:
             digests = _digest_batches(files, system, model)
             reduce_parts = []
-            if prior and prior.exists():
-                reduce_parts.append(
-                    f"=== MOST RECENT PRIOR SUMMARY ===\n"
-                    f"(File: {prior.name})\n\n{prior.read_text(encoding='utf-8')}"
-                )
+            for p in priors:
+                if p.exists():
+                    label = _prior_label(p)
+                    reduce_parts.append(
+                        f"=== {label} ===\n"
+                        f"(File: {p.name})\n\n{p.read_text(encoding='utf-8')}"
+                    )
             reduce_parts.append(
                 "=== BATCH DIGESTS (detail-preserving extracts of every analysis "
                 "file this period) ===\n\n" + digests
@@ -533,6 +679,12 @@ def run(
     out_path = analyzed_path / out_name
     write_text(out_path, text)
     print(f"Synthesis written → {out_name}")
+
+    duration = (datetime.now() - _t0).total_seconds()
+    usage = claude_cli._usage_from_json(data)
+    cost = manifest_mod.estimate_cost(model, usage)
+    manifest_mod.record_synthesis(out_name, mode=mode, model=model, usage=usage, duration_seconds=duration)
+    print(f"  ({model}, {usage.input_tokens} in / {usage.output_tokens} out, ${cost:.4f})")
 
     # career keeps its inputs: the trajectory is cumulative and chains off the
     # prior review, so we don't archive (or pay to re-derive) the analyses.

@@ -7,6 +7,7 @@ from .config import CONFIG
 
 # (input $/M, output $/M) per current Anthropic pricing.
 _RATES: dict[str, tuple[float, float]] = {
+    "claude-opus-4-8": (5.00, 25.00),
     "claude-opus-4-7": (5.00, 25.00),
     "claude-opus-4-6": (5.00, 25.00),
     "claude-sonnet-4-6": (3.00, 15.00),
@@ -82,6 +83,34 @@ def record(
         "duration_seconds": round(duration_seconds, 2),
     }
     manifest[source_filename] = entry
+    _write(manifest)
+    return entry
+
+
+def record_synthesis(
+    output_filename: str,
+    *,
+    mode: str,
+    model: str,
+    usage: Usage,
+    duration_seconds: float,
+) -> dict:
+    """Manifest entry for a synthesis run (daily/weekly/career)."""
+    manifest = load()
+    entry = {
+        "analyzed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "mode": "synthesis",
+        "output_filename": output_filename,
+        "category": mode,
+        "model": model,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_creation_tokens": usage.cache_creation_input_tokens,
+        "cache_read_tokens": usage.cache_read_input_tokens,
+        "cost_usd": estimate_cost(model, usage),
+        "duration_seconds": round(duration_seconds, 2),
+    }
+    manifest[output_filename] = entry
     _write(manifest)
     return entry
 

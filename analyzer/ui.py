@@ -165,8 +165,9 @@ def _analyzed_files() -> list[dict]:
             "mode": entry.get("mode", "transcript"),
         })
 
-    # Synthesis outputs ([DAILY PULSE], [SLACK DELTA]) are never in the manifest —
-    # scan Analyzed/ directly and append them.
+    # Synthesis outputs are now recorded in the manifest (new runs). Fall back to
+    # scanning Analyzed/ for older files not yet in the manifest.
+    manifest_keys = set(manifest.keys())
     try:
         import os
         from datetime import datetime as _dt
@@ -174,6 +175,8 @@ def _analyzed_files() -> list[dict]:
         for fname in sorted(os.listdir(analyzed_path), reverse=True):
             if not any(tag in fname for tag in _SYNTHESIS_TAGS):
                 continue
+            if fname in manifest_keys:
+                continue  # already covered by the manifest loop above
             fpath = analyzed_path / fname
             if fpath.is_dir():
                 continue

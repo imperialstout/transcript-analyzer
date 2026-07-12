@@ -66,6 +66,10 @@ def list_unanalyzed_transcripts() -> tuple[list[Path], int]:
         if entry.is_dir():
             continue
         if entry.suffix in (".txt", ".md"):
+            # [SHAREABLE] and [ANALYZED] files are output artifacts that can
+            # land back in the inbox via Drive sync. Never re-analyze them.
+            if "[SHAREABLE]" in entry.name or "[ANALYZED]" in entry.name:
+                continue
             txts.append(entry)
         elif entry.suffix == ".gdoc":
             gdocs += 1
@@ -82,10 +86,15 @@ def move_to_processed(
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / transcript_path.name
     if target.exists():
-        # POSIX rename silently overwrites — refuse rather than destroy data.
-        raise FileExistsError(
-            f"refusing to move {transcript_path.name}: target already exists at {target}"
+        # Drive sync lag can leave a stale copy in the inbox after a successful
+        # move. The target is authoritative — just remove the stale source.
+        print(
+            f"  move_to_processed: {transcript_path.name} already in _Processed "
+            f"— removing stale inbox copy",
+            file=sys.stderr,
         )
+        transcript_path.unlink()
+        return target
     transcript_path.rename(target)
     return target
 

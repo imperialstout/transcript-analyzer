@@ -10,11 +10,16 @@ _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # We strip BOTH leading blocks so the title doesn't end up with a redundant
 # date+time stuck on the front. The second block is optional because some
 # sources only have one prefix.
+#
+# Time separators vary by source: Plaud uses colons (T10:04:27Z), but some
+# Zap-renamed files use hyphens (T10-04-27) because colons are illegal on
+# Windows/NTFS and get substituted in transit. Both forms must be stripped.
+_TIME_SEP = r"[\d]{2}[:\-]\d{2}[:\-]\d{2}Z?"
 LEADING_PREFIX = re.compile(
     r"^"
-    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?"
+    r"\d{4}-\d{2}-\d{2}(?:T" + _TIME_SEP + r")?"
     r"\s*-\s*"
-    r"(?:\d{4}-\d{2}-\d{2}(?:[\sT]\d{2}:\d{2}:\d{2}Z?)?\s*-\s*)?"
+    r"(?:\d{4}-\d{2}-\d{2}(?:[\sT]" + _TIME_SEP + r")?\s*-\s*)?"
 )
 _TRAILING_DATE = re.compile(r"\s*-?\s*\d{4}-\d{2}-\d{2}\s*$")
 
@@ -75,6 +80,13 @@ def build_output_filename(
     title = _original_title(transcript_filename)
     meeting_date = meeting_date_override or _extract_meeting_date(transcript_filename)
     ext = extension if extension.startswith(".") else f".{extension}"
+    # Reserve chars for the fixed frame: iso (19) + " -  - " (6) +
+    # date (10) + " [ANALYZED]" (11) + ext (up to 4) = ~50 chars of overhead.
+    # macOS limit is 255; leave a 10-char buffer for the .tmp suffix used by
+    # write_text()'s atomic rename.
+    _MAX_TITLE = 255 - 50 - 10
+    if len(title) > _MAX_TITLE:
+        title = title[:_MAX_TITLE].rstrip(" -")
     name = f"{iso} - {title} - {meeting_date.isoformat()} [ANALYZED]{ext}"
     # Final safety net: ensure no path components survived assembly.
     name = Path(name).name

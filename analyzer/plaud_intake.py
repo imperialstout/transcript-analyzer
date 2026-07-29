@@ -71,43 +71,30 @@ def _normalize_json_recording(r: dict) -> dict:
     return {"id": rec_id, "title": title, "recording_date": recording_date}
 
 
-_ID_RE = re.compile(r"(?:ID|id)\s*:\s*([A-Za-z0-9_-]+)", re.IGNORECASE)
-_DATE_RE = re.compile(r"(?:Date|date)\s*:\s*(\d{4}-\d{2}-\d{2})")
-_TITLE_RE = re.compile(r"^\s*\d+\.\s+(.+?)(?:\s+\(\d+:\d+\))?\s*$")
+# Table row format (actual `plaud recent` output):
+#   ece0d8da...  07-29 Some Title  2026-07-29  24m37s
+# Fields are separated by 2+ spaces. ID is a 32-char hex string.
+_TABLE_ROW_RE = re.compile(
+    r"^\s*([0-9a-f]{32})\s{2,}(.+?)\s{2,}(\d{4}-\d{2}-\d{2})\s"
+)
 
 
 def _parse_text_output(output: str) -> list[dict]:
-    """Parse the human-readable table/list output of `plaud recent`."""
+    """Parse the human-readable table output of `plaud recent`.
+
+    Actual format (space-separated columns, 2+ spaces between fields):
+        <32-char-hex-id>  <title>  <YYYY-MM-DD>  <duration>
+    """
     recordings = []
-    current: dict = {}
-
     for line in output.splitlines():
-        # New recording block starts with a numbered list item: "1. Title (45:23)"
-        title_m = _TITLE_RE.match(line)
-        if title_m:
-            if current.get("id"):
-                recordings.append(current)
-            current = {"title": title_m.group(1).strip(), "id": "", "recording_date": date.today()}
+        m = _TABLE_ROW_RE.match(line)
+        if not m:
             continue
-
-        id_m = _ID_RE.search(line)
-        if id_m and current:
-            current["id"] = id_m.group(1)
-            continue
-
-        date_m = _DATE_RE.search(line)
-        if date_m and current:
-            parsed = _parse_date(date_m.group(1))
-            if parsed:
-                current["recording_date"] = parsed
-            continue
-
-    if current.get("id"):
-        recordings.append(current)
+        rec_id, title, raw_date = m.group(1), m.group(2).strip(), m.group(3)
+        recording_date = _parse_date(raw_date) or date.today()
+        recordings.append({"id": rec_id, "title": title, "recording_date": recording_date})
 
     if not recordings:
-        # Fallback: maybe it's a flat table with columns. Log raw output so the
-        # user can report the format and we can improve the parser.
         print(
             "[plaud] WARNING: could not parse `plaud recent` output — "
             "no recordings extracted. Raw output:\n" + output[:800],

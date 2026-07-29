@@ -8,10 +8,11 @@ An automated tool that reads your meeting transcripts and notes, runs them throu
 
 Every time it runs, it looks at your `Call Transcripts/` folder in a local drive that is also connected to Google Drive and:
 
-1. **Analyzes transcripts** — classifies each meeting (standup? executive? solution design?), runs the matching AI prompt, and writes a structured `[ANALYZED]` file.
-2. **Processes documents** — PDFs, DOCX, and Markdown files you drop in `docs/` get analyzed and their key facts merged into a living `[PROGRAM REFERENCE]` knowledge base.
-3. **Handles Gemini notes** — meeting summaries from Google Meet / Gemini get filed without re-analyzing (they're already summarized).
-4. **Synthesizes across meetings** — a separate command bundles the day's or week's analyses into a Daily Pulse or Slack Delta, or bundles everything into a Career Trajectory review.
+1. **Pulls recordings from Plaud** *(optional)* — if you use a Plaud device, the tool can automatically download your latest recordings into the inbox so nothing requires manual file management.
+2. **Analyzes transcripts** — classifies each meeting (standup? executive? solution design?), runs the matching AI prompt, and writes a structured `[ANALYZED]` file.
+3. **Processes documents** — PDFs, DOCX, and Markdown files you drop in `docs/` get analyzed and their key facts merged into a living `[PROGRAM REFERENCE]` knowledge base.
+4. **Handles Gemini notes and Slack digests** — meeting summaries from Google Meet / Gemini, and daily Slack AI digests, get filed without re-analyzing (they're already summarized).
+5. **Synthesizes across meetings** — a separate command bundles the day's or week's analyses into a Daily Pulse or Slack Delta, or bundles everything into a Career Trajectory review.
 
 Outputs land in `Analyzed/` alongside the originals. Nothing is deleted — sources move to `_Processed/` after handling.
 
@@ -341,11 +342,13 @@ transcript-analyzer/
 │   ├── prompts.py         # Parses PromptLibrary.md, builds the system prompt prefix
 │   ├── filing.py          # Generates output filenames from meeting metadata
 │   ├── notes_intake.py    # Handles Gemini-summary notes → Analyzed/
+│   ├── plaud_intake.py    # Pulls new Plaud recordings into the inbox via the plaud CLI
 │   ├── drive_client.py    # Google Drive OAuth + API for .gdoc body fetching
 │   ├── claude_cli.py      # Backend: shells out to `claude -p` (Claude Code seat)
 │   └── anthropic_client.py  # Backend: direct Anthropic API (legacy fallback)
 ├── bin/
-│   └── analyze.sh         # Shell script launchd calls — runs analyzer, fires macOS notification
+│   ├── analyze.sh         # Shell script launchd calls — runs analyzer, fires macOS notification
+│   └── slack_to_notes.sh  # Prepend headers to clipboard Slack digest → drops .md in notes inbox
 ├── workcall-templates/    # ← Starting-point files to copy into your Drive Workcall/ folder
 │   ├── PromptLibrary.md           # Analysis prompts: DAILY/STANDUP/SOLUTION/EXEC + B4/A3 + REDACT
 │   ├── dailyAndWeeklyPrompts.md   # Synthesis prompts: D1 Daily Pulse, D2 Slack Delta, D3 Career
@@ -529,6 +532,84 @@ source: gemini-summary
 
 ---
 
+## Part 5b: Plaud integration (automatic transcript download)
+
+If you use a Plaud recording device, the analyzer can pull your latest recordings directly into the inbox — no manual file download required.
+
+### Setup (one time)
+
+```bash
+# Install the Plaud CLI
+npm install -g @plaud-ai/cli
+
+# Authorize once — opens a browser OAuth flow, token saved to ~/.plaud/
+plaud login
+```
+
+### Enable in the dashboard
+
+Open **Settings** and toggle **Enable Plaud sync** on. The pull window defaults to 1 day — increase it in the **Plaud pull window** field after time away (e.g. set to 7 for a week's vacation backlog).
+
+### What happens on Run Analysis
+
+Before the transcript pipeline runs, the analyzer:
+1. Calls `plaud recent --days N` to list recent recordings
+2. Skips any already in the manifest (keyed by `plaud:<id>` — stable across re-runs)
+3. Downloads new ones as `.txt` files into `Call Transcripts/`
+4. The transcript pipeline then picks them up and analyzes them as normal
+
+Non-work recordings (personal calls, appointments) are handled gracefully — the router classifies them, the model recognizes they don't fit the work analysis template, and produces a polite advisory instead of forcing YAML frontmatter onto unrelated content.
+
+### `.env` settings
+
+```bash
+PLAUD_ENABLED=true           # enable/disable sync (default: false)
+PLAUD_DAYS=1                 # how many days back to look (default: 1)
+PLAUD_BIN=/usr/local/bin/plaud  # path to plaud binary if not on PATH
+```
+
+---
+
+## Part 5c: Daily Slack digest → notes inbox
+
+If you run a Slack AI skill to generate a daily digest of program activity, `bin/slack_to_notes.sh` eliminates the manual Google Doc detour.
+
+### What it replaces
+
+**Before:** invoke Slack skill → copy Canvas → paste into Google Doc → download → drop in notes folder
+
+**After:** invoke Slack skill → copy Canvas → run script → done
+
+### Setup
+
+The script is already in the repo. Make it executable if not already:
+
+```bash
+chmod +x ~/code/transcript-analyzer/bin/slack_to_notes.sh
+```
+
+### Usage
+
+1. Invoke your Slack AI skill as normal and copy the Canvas content
+2. Run the script:
+
+```bash
+~/code/transcript-analyzer/bin/slack_to_notes.sh
+```
+
+The script prepends the required date, workstream (`Siemens All Projects`), and meeting type headers, then writes a `.md` file directly into your Drive notes folder. The notes intake pipeline picks it up on the next Run Analysis — no Google Doc, no download, no manual move.
+
+### macOS Shortcut (one-tap version)
+
+Create a Shortcut in Shortcuts.app with two actions:
+
+1. **Run Shell Script** → `/bin/bash /Users/brad.gross/code/transcript-analyzer/bin/slack_to_notes.sh`
+2. **Show Notification** → "Slack digest saved to notes"
+
+Add it to your menu bar. The daily flow becomes: copy Canvas → click menu bar icon → Run Analysis.
+
+---
+
 ## Part 6: Reference
 
 ### Model tiers
@@ -574,6 +655,11 @@ CLAUDE_BIN=/usr/local/bin/claude
 
 # true = generate [SHAREABLE] redacted siblings; false = skip (personal machine)
 SHAREABLE_PASS=true
+
+# Plaud integration — pull new recordings on each Run Analysis
+PLAUD_ENABLED=true           # default: false
+PLAUD_DAYS=1                 # days back to look (default: 1)
+PLAUD_BIN=/usr/local/bin/plaud  # only needed if plaud isn't on PATH
 
 # Per-category model overrides
 MODEL_EXEC=claude-opus-4-7

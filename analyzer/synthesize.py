@@ -55,17 +55,6 @@ _MODE_SUFFIX = {
     "career": "[CAREER TRAJECTORY]",
 }
 
-# Only bundle internal analyses — skip shareable siblings, prior synthesis
-# outputs, and the program reference file (it's injected as context, not bundled).
-_SKIP_TAGS = (
-    "[SHAREABLE]",
-    "[DAILY PULSE]",
-    "[WEEKLY SUMMARY]",
-    "[SLACK DELTA]",
-    "[CAREER TRAJECTORY]",
-    "[PROGRAM REFERENCE]",
-)
-
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 # When the bundled inputs would overflow a single `claude -p` call, fall back to
@@ -241,8 +230,6 @@ def _files_for_mode(
             if f.is_dir():
                 continue
             name = f.name
-            if any(tag in name for tag in _SKIP_TAGS):
-                continue
             if "[ANALYZED]" not in name:
                 continue
             if target_dates is None:

@@ -1,6 +1,8 @@
+import fcntl
 import shutil
 import sys
 import time
+from pathlib import Path
 
 from . import anthropic_client as ac
 from . import claude_cli
@@ -99,6 +101,25 @@ def _resolve_prompt(prompt_library: dict, prompt_key: str, cfg) -> tuple[str, st
 def main(force: bool = False) -> int:
     cfg = cfg_mod.CONFIG
 
+    # Prevent concurrent runs (UI-triggered vs launchd) from racing on the
+    # same inbox files. flock is non-blocking: a second invocation prints a
+    # message and exits 0 so launchd doesn't count it as a failure.
+    lock_path = Path("/tmp/transcript-analyzer.lock")
+    lock_fh = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("Another run is already in progress — skipping this invocation.")
+        lock_fh.close()
+        return 0
+
+    try:
+        return _main_locked(cfg, force)
+    finally:
+        lock_fh.close()
+
+
+def _main_locked(cfg, force: bool) -> int:
     # Credential gate is backend-specific. The claude-cli backend uses the work
     # Claude Code seat (no personal key) — so it must NOT require ANTHROPIC_API_KEY;
     # it requires the `claude` binary instead. This is what makes "zero personal-key

@@ -12,6 +12,7 @@ from . import filesystem as fs
 from . import filing
 from . import manifest
 from . import notes_intake
+from . import plaud_intake
 from . import prompts
 from . import redactor
 from . import router
@@ -212,6 +213,11 @@ def _main_locked(cfg, force: bool) -> int:
         drive_service = drive_client.get_drive_service()
     except Exception as e:
         print(f"Drive service unavailable — {e}", file=sys.stderr)
+
+    # Plaud sync — download new recordings into the inbox before the transcript
+    # pipeline runs so they're processed in the same invocation.
+    if cfg.plaud_enabled:
+        plaud_intake.sync(days=cfg.plaud_days, plaud_bin=cfg.plaud_bin)
 
     notes = notes_intake.list_pending_notes()
     notes_pending = [n for n in notes if not manifest.is_recorded(n.name, existing_manifest)]

@@ -96,6 +96,11 @@ class Config:
     classifier_model: str
     redaction_model: str
     shareable_enabled: bool
+    # Plaud CLI integration — pull recent recordings into the inbox automatically.
+    # Disabled by default; enable with PLAUD_ENABLED=true in .env.
+    plaud_enabled: bool
+    plaud_days: int
+    plaud_bin: str
     # Extra args appended to every `claude -p` call — primarily to disable tool
     # use so the run is pure single-turn text generation. Flag names vary by CLI
     # version; override via CLAUDE_EXTRA_ARGS (shell-quoted) without a code edit.
@@ -149,6 +154,9 @@ CONFIG = Config(
     classifier_model=os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5-20251001"),
     redaction_model=os.environ.get("REDACTION_MODEL", "claude-sonnet-4-6"),
     shareable_enabled=_bool("SHAREABLE_PASS", True),
+    plaud_enabled=_bool("PLAUD_ENABLED", False),
+    plaud_days=int(os.environ.get("PLAUD_DAYS", "1")),
+    plaud_bin=os.environ.get("PLAUD_BIN", "plaud"),
     claude_extra_args=shlex.split(
         os.environ.get("CLAUDE_EXTRA_ARGS", '--allowed-tools ""')
     ),

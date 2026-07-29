@@ -115,6 +115,24 @@ def record_synthesis(
     return entry
 
 
+def record_plaud_sync(manifest_key: str, *, source_filename: str) -> dict:
+    """Manifest entry for a Plaud recording downloaded to the inbox.
+
+    Keyed by `plaud:<id>` so re-runs skip the recording even after the
+    transcript file has moved to _Processed/. The transcript pipeline adds
+    its own entry keyed by filename once analysis completes.
+    """
+    m = load()
+    entry = {
+        "analyzed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "mode": "plaud-sync",
+        "source_filename": source_filename,
+    }
+    m[manifest_key] = entry
+    _write(m)
+    return entry
+
+
 def record_note(source_filename: str, *, output_filename: str) -> dict:
     """Manifest entry for a Gemini-summary note filed without an LLM call."""
     manifest = load()

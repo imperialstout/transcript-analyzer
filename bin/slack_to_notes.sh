@@ -9,17 +9,17 @@ set -euo pipefail
 
 ENV_FILE="$HOME/.config/transcript-analyzer/.env"
 
-# Read a key from the .env file
+# Read a key from the .env file (returns empty string if key absent)
 _env_val() {
     local key="$1"
-    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'
+    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true
 }
 
 # Resolve notes folder: NOTES_PATH wins, else DRIVE_BASE + default subpath,
 # else fall back to the work Drive location.
 if [ -f "$ENV_FILE" ]; then
-    NOTES_PATH=$(_env_val "NOTES_PATH")
-    DRIVE_BASE=$(_env_val "DRIVE_BASE")
+    NOTES_PATH=$(_env_val "NOTES_PATH" || true)
+    DRIVE_BASE=$(_env_val "DRIVE_BASE" || true)
 fi
 
 if [ -n "${NOTES_PATH:-}" ]; then

@@ -75,8 +75,20 @@ def _normalize_json_recording(r: dict) -> dict:
 #   ece0d8da...  07-29 Some Title  2026-07-29  24m37s
 # Fields are separated by 2+ spaces. ID is a 32-char hex string.
 _TABLE_ROW_RE = re.compile(
-    r"^\s*([0-9a-f]{32})\s{2,}(.+?)\s{2,}(\d{4}-\d{2}-\d{2})\s"
+    r"^\s*([0-9a-f]{32})\s{2,}(.+?)\s{2,}(\d{4}-\d{2}-\d{2})\s{2,}(\S+)"
 )
+
+# Minimum recording length to attempt transcript download (accidental taps, etc.)
+_MIN_DURATION_SECONDS = 30
+
+
+def _parse_duration_seconds(dur: str) -> int:
+    """Parse a duration string like '1h23m', '24m37s', '5s' into total seconds."""
+    total = 0
+    for m in re.finditer(r"(\d+)([hms])", dur):
+        val, unit = int(m.group(1)), m.group(2)
+        total += val * {"h": 3600, "m": 60, "s": 1}[unit]
+    return total
 
 
 def _parse_text_output(output: str) -> list[dict]:
@@ -90,9 +102,10 @@ def _parse_text_output(output: str) -> list[dict]:
         m = _TABLE_ROW_RE.match(line)
         if not m:
             continue
-        rec_id, title, raw_date = m.group(1), m.group(2).strip(), m.group(3)
+        rec_id, title, raw_date, duration_str = m.group(1), m.group(2).strip(), m.group(3), m.group(4)
         recording_date = _parse_date(raw_date) or date.today()
-        recordings.append({"id": rec_id, "title": title, "recording_date": recording_date})
+        duration_secs = _parse_duration_seconds(duration_str)
+        recordings.append({"id": rec_id, "title": title, "recording_date": recording_date, "duration_secs": duration_secs})
 
     if not recordings:
         print(
@@ -201,6 +214,16 @@ def sync(days: int = 1, plaud_bin: str = "plaud") -> int:
         if manifest_mod.is_recorded(manifest_key, existing):
             continue
 
+        duration_secs = rec.get("duration_secs", 0)
+        if duration_secs < _MIN_DURATION_SECONDS:
+            print(
+                f"[plaud] Skipping {rec_id} ({rec['title']!r}) — "
+                f"too short ({duration_secs}s < {_MIN_DURATION_SECONDS}s)."
+            )
+            manifest_mod.record_plaud_sync(manifest_key, source_filename="")
+            existing = manifest_mod.load()
+            continue
+
         filename = _inbox_filename(rec)
         dest = inbox / filename
 
@@ -234,10 +257,13 @@ def sync(days: int = 1, plaud_bin: str = "plaud") -> int:
 
         if not dest.exists() or dest.stat().st_size == 0:
             print(
-                f"[plaud] WARNING: transcript file missing or empty after download: {filename}",
-                file=sys.stderr,
+                f"[plaud] Skipping {rec_id} ({rec['title']!r}) — "
+                f"no transcript available (exit 0, empty output)."
             )
             dest.unlink(missing_ok=True)
+            # Mark processed so we don't retry on every run.
+            manifest_mod.record_plaud_sync(manifest_key, source_filename="")
+            existing = manifest_mod.load()
             continue
 
         # Record in manifest so re-runs skip this recording even after the

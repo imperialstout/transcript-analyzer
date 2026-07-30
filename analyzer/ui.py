@@ -159,6 +159,8 @@ def _analyzed_files() -> list[dict]:
     manifest = load_manifest()
     rows = []
     for src, entry in sorted(manifest.items(), key=lambda x: x[1].get("analyzed_at", ""), reverse=True):
+        if src.startswith("plaud:"):
+            continue
         rows.append({
             "source": src,
             "output": entry.get("output_filename", ""),

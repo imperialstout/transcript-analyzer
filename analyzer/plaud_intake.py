@@ -256,14 +256,15 @@ def sync(days: int = 1, plaud_bin: str = "plaud") -> int:
             continue
 
         if not dest.exists() or dest.stat().st_size == 0:
-            print(
-                f"[plaud] Skipping {rec_id} ({rec['title']!r}) — "
-                f"no transcript available (exit 0, empty output)."
-            )
             dest.unlink(missing_ok=True)
-            # Mark processed so we don't retry on every run.
-            manifest_mod.record_plaud_sync(manifest_key, source_filename="")
-            existing = manifest_mod.load()
+            if duration_secs < _MIN_DURATION_SECONDS:
+                # Too short to ever have a real transcript — mark done permanently.
+                print(f"[plaud] Skipping {rec_id} ({rec['title']!r}) — too short, no transcript.")
+                manifest_mod.record_plaud_sync(manifest_key, source_filename="")
+                existing = manifest_mod.load()
+            else:
+                # Transcript not ready yet (Plaud still processing) — leave unrecorded so next run retries.
+                print(f"[plaud] Transcript not ready yet for {rec_id} ({rec['title']!r}) — will retry next run.")
             continue
 
         # Record in manifest so re-runs skip this recording even after the

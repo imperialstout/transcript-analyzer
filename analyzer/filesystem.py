@@ -189,7 +189,10 @@ def _read_text_raw(path: Path, drive_service=None) -> str:
     open_err: OSError | None = None
     for attempt in range(3):
         try:
-            return path.read_text(encoding="utf-8")
+            try:
+                return path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                return path.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             if e.errno != errno.EDEADLK:
                 raise
@@ -205,7 +208,7 @@ def _read_text_raw(path: Path, drive_service=None) -> str:
             timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout.decode("utf-8")
+            return result.stdout.decode("utf-8", errors="replace")
         cat_stderr = result.stderr.decode("utf-8", errors="replace").strip() or "<no stderr>"
         if attempt < 2:
             time.sleep(0.5 * (attempt + 1))

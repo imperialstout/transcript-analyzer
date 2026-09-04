@@ -149,6 +149,7 @@ _MODE_LABELS = {
     "weekly": "Weekly Slack Delta synthesis",
     "career": "Career Trajectory review",
     "catch-up": "catch-up (one pulse per backlog day)",
+    "timecard": "Weekly Timecard compilation",
     "analysis": "transcript analysis",
 }
 
@@ -446,6 +447,11 @@ _HOME_BODY = """\
     </label>
     <button type="submit" class="secondary">▶ Career Trajectory</button>
   </form>
+  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Compiling Weekly Timecard…')">
+    <input type="hidden" name="mode" value="timecard">
+    <input type="date" name="date" title="Leave blank for current week; pick any date in the target week to back-date">
+    <button type="submit" class="secondary">▶ Timecard</button>
+  </form>
 </div>
 
 <div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
@@ -608,12 +614,12 @@ def create_app():
         global _job
         from datetime import datetime as _dt
         mode = request.form.get("mode", "daily")
-        if mode not in ("daily", "weekly", "career", "catch-up"):
+        if mode not in ("daily", "weekly", "career", "catch-up", "timecard"):
             return redirect(url_for("home", flash="Invalid mode", ft="err"))
 
-        # Optional back-date for daily/weekly (recover a missed run). Ignored for career.
+        # Optional back-date for daily/weekly/timecard (recover a missed run). Ignored for career.
         date_arg = request.form.get("date", "").strip()
-        if date_arg and mode in ("daily", "weekly"):
+        if date_arg and mode in ("daily", "weekly", "timecard"):
             try:
                 _dt.strptime(date_arg, "%Y-%m-%d")
             except ValueError:

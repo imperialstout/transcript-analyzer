@@ -749,12 +749,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=["daily", "weekly", "career", "catch-up"],
+        choices=["daily", "weekly", "career", "catch-up", "timecard"],
         required=True,
         help=(
             "daily = D1 pulse over today's analyses; weekly = D2 delta over this "
             "week's; career = D3 position-trajectory review over all current "
-            "analyses; catch-up = one daily pulse per backlog day (vacation recovery)"
+            "analyses; catch-up = one daily pulse per backlog day (vacation recovery); "
+            "timecard = weekly timecard compiler (Mon–Fri, 4 rows)"
         ),
     )
     parser.add_argument(
@@ -807,6 +808,10 @@ def main() -> int:
                 print(f"ERROR: --since must be YYYY-MM-DD, got {args.since!r}", file=sys.stderr)
                 return 1
         return run_catch_up(since=since)
+
+    if args.mode == "timecard":
+        from .timecard import run_timecard
+        return run_timecard(target_date=target_date)
 
     return run(args.mode, week=args.week, target_date=target_date, full=args.full)
 

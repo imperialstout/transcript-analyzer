@@ -238,6 +238,18 @@ def _main_locked(cfg, force: bool) -> int:
     # [PROGRAM REFERENCE].md with the durable facts extracted from each doc.
     doc_prompt_body = prompt_library.get("DOCUMENT") or prompts.default_document_prompt()
     doc_model = cfg_mod.model_for("DOCUMENT")
+    # Move unprocessable file types to docs/_Unsupported/ so they don't sit
+    # silently in the inbox giving the impression they were never seen.
+    unsupported_docs = fs.list_unsupported_documents()
+    if unsupported_docs:
+        print(f"Moving {len(unsupported_docs)} unsupported file(s) to docs/_Unsupported/.")
+        for u in unsupported_docs:
+            try:
+                fs.move_to_unsupported(u)
+                print(f"  [unsupported] {u.name} (extension not supported)")
+            except Exception as e:
+                print(f"  [unsupported] WARNING: could not move {u.name}: {e}", file=sys.stderr)
+
     pending_docs = fs.list_pending_documents()
     pending_docs = [d for d in pending_docs if not manifest.is_recorded(d.name, existing_manifest)]
     docs_succeeded = 0

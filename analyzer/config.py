@@ -66,6 +66,7 @@ class Config:
     # move to docs/_Processed/<YYYY-MM>/ (date derived from filename or today).
     docs_path: Path
     docs_processed_path: Path
+    docs_unsupported_path: Path
     prompt_library_path: Path
     context_brief_path: Path
     # Optional people rolodex, appended to the system prefix after the brief.
@@ -115,6 +116,7 @@ CONFIG = Config(
     notes_processed_path=_path("NOTES_PROCESSED_PATH", f"{_DRIVE_BASE}/Call Transcripts/notes/_Processed"),
     docs_path=_path("DOCS_PATH", f"{_DRIVE_BASE}/Call Transcripts/docs"),
     docs_processed_path=_path("DOCS_PROCESSED_PATH", f"{_DRIVE_BASE}/Call Transcripts/docs/_Processed"),
+    docs_unsupported_path=_path("DOCS_UNSUPPORTED_PATH", f"{_DRIVE_BASE}/Call Transcripts/docs/_Unsupported"),
     prompt_library_path=_path("PROMPT_LIBRARY_PATH", f"{_DRIVE_BASE}/PromptLibrary.md"),
     context_brief_path=_path("CONTEXT_BRIEF_PATH", f"{_DRIVE_BASE}/Program_Context_Brief.md"),
     rolodex_path=_path("ROLODEX_PATH", f"{_DRIVE_BASE}/04_people_rolodex.md"),

@@ -25,8 +25,15 @@ try:
 except ImportError:
     _DOCX_AVAILABLE = False
 
+try:
+    import pptx as _pptx
+    _PPTX_AVAILABLE = True
+except ImportError:
+    _PPTX_AVAILABLE = False
+
 _PROGRAM_REFERENCE_FILENAME = "[PROGRAM REFERENCE].md"
-_DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt"}
+_DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".pptx", ".html", ".htm"}
+_UNSUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".zip", ".csv"}
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -244,10 +251,10 @@ def write_text(path: Path, content: str) -> None:
 
 
 def list_pending_documents() -> list[Path]:
-    """Return PDF/document files in the docs/ subfolder, sorted by name.
+    """Return processable document files in the docs/ subfolder, sorted by name.
 
     Only files with supported extensions are returned. Subfolders (including
-    _Processed/) are skipped — only the root of docs/ is scanned.
+    _Processed/ and _Unsupported/) are skipped — only the root of docs/ is scanned.
     Returns [] if the docs/ folder doesn't exist yet (not an error — the
     folder is optional and created on first drop).
     """
@@ -263,13 +270,44 @@ def list_pending_documents() -> list[Path]:
     return sorted(files)
 
 
+def list_unsupported_documents() -> list[Path]:
+    """Return files in docs/ whose extension the pipeline cannot process.
+
+    Hidden files and subfolders are skipped. Returns [] if docs/ doesn't exist.
+    """
+    docs_root = CONFIG.docs_path
+    if not docs_root.exists():
+        return []
+    files = []
+    for entry in docs_root.iterdir():
+        if entry.is_dir() or entry.name.startswith("."):
+            continue
+        ext = entry.suffix.lower()
+        if ext not in _DOCUMENT_EXTENSIONS:
+            files.append(entry)
+    return sorted(files)
+
+
+def move_to_unsupported(path: Path) -> None:
+    """Move a file from docs/ to docs/_Unsupported/, creating the folder if needed."""
+    target_dir = CONFIG.docs_unsupported_path
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / path.name
+    if target.exists():
+        print(f"  WARNING: {path.name} already in _Unsupported/ — skipping move", file=sys.stderr)
+        return
+    path.rename(target)
+
+
 def read_document(path: Path) -> str:
     """Extract text from a document file in docs/.
 
     Dispatches by extension:
-      .pdf   — pypdf text layer extraction
-      .docx  — python-docx paragraph extraction
-      .md / .txt — plain read_text() (same EDEADLK-safe path as transcripts)
+      .pdf        — pypdf text layer extraction
+      .docx       — python-docx paragraph extraction
+      .pptx       — python-pptx slide text extraction
+      .html/.htm  — tag-stripped plain text
+      .md / .txt  — plain read_text() (same EDEADLK-safe path as transcripts)
 
     Raises ImportError if a required package is missing, RuntimeError if the
     file can't be read or yields no text.
@@ -279,6 +317,10 @@ def read_document(path: Path) -> str:
         return _read_pdf(path)
     if ext == ".docx":
         return _read_docx(path)
+    if ext == ".pptx":
+        return _read_pptx(path)
+    if ext in (".html", ".htm"):
+        return _read_html(path)
     if ext in (".md", ".txt"):
         text = read_text(path)
         # Same empty-stub guard as PDF/DOCX (which raise on no extractable text):
@@ -328,6 +370,51 @@ def _read_docx(path: Path) -> str:
     if not paragraphs:
         raise RuntimeError(f"no extractable text in {path.name}")
     return "\n\n".join(paragraphs)
+
+
+def _read_pptx(path: Path) -> str:
+    if not _PPTX_AVAILABLE:
+        raise ImportError("python-pptx is not installed — run: pip install python-pptx>=1.0.0")
+    try:
+        prs = _pptx.Presentation(str(path))
+    except Exception as e:
+        raise RuntimeError(f"could not open PPTX {path.name}: {e}") from e
+    slides = []
+    for i, slide in enumerate(prs.slides, 1):
+        parts = []
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            for para in shape.text_frame.paragraphs:
+                text = "".join(run.text for run in para.runs).strip()
+                if text:
+                    parts.append(text)
+        if parts:
+            slides.append(f"[Slide {i}]\n" + "\n".join(parts))
+    if not slides:
+        raise RuntimeError(f"no extractable text in {path.name}")
+    return "\n\n".join(slides)
+
+
+def _read_html(path: Path) -> str:
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    # Strip tags with a simple regex — good enough for typical HTML docs;
+    # avoids a BeautifulSoup dependency for this narrow use case.
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", raw, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&quot;", '"', text)
+    text = re.sub(r"&#?\w+;", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+    if not text:
+        raise RuntimeError(f"no extractable text in {path.name}")
+    return text
 
 
 def read_program_reference() -> str:

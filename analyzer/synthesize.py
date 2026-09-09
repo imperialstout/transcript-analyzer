@@ -623,7 +623,7 @@ def run(
         # files in budget-sized batches first, then synthesize over the digests.
         # Prior synthesis files (continuity) are kept whole in the reduce step.
         bundle = _build_bundle(files, priors)
-        if len(bundle) > _SINGLE_PASS_BUDGET_CHARS:
+        if len(bundle) + len(system) > _SINGLE_PASS_BUDGET_CHARS:
             digests = _digest_batches(files, system, model)
             reduce_parts = []
             for p in priors:

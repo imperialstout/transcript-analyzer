@@ -78,10 +78,13 @@ def run_claude_p(
     Raises ClaudeCliError / FileNotFoundError on any failure. Returns the raw
     JSON object on success; callers pull `result` etc. via `result_text()`.
     """
-    if len(prompt) > _MAX_PROMPT_CHARS:
+    _total_chars = len(prompt) + len(system or "")
+    if _total_chars > _MAX_PROMPT_CHARS:
         # Fail closed with a legible reason rather than the opaque CLI exit-1.
+        # The model's context window applies to prompt+system combined; both are
+        # counted here so a large system prefix doesn't silently steal headroom.
         raise ClaudeCliError(
-            f"prompt is {len(prompt):,} chars (~{len(prompt)//4:,} tokens), past "
+            f"prompt+system is {_total_chars:,} chars (~{_total_chars//4:,} tokens), past "
             f"the {_MAX_PROMPT_CHARS:,}-char ceiling for model={model} — the CLI "
             f"would reject this with a bare exit 1. If this is a Gemini/Plaud "
             f"export, it likely contains inline base64 images; filesystem."

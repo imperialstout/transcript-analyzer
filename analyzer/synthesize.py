@@ -65,10 +65,10 @@ _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 # window. A busy week (~50 meetings) overflows; a normal day/career run does not,
 # so the single-pass path below is unchanged for those.
 #
-# Single-pass threshold sits under claude_cli._MAX_PROMPT_CHARS (525K) with
-# margin for the task prefix; the per-batch budget is smaller still so each
-# digest call has ample headroom for the system prefix + its own output.
-_SINGLE_PASS_BUDGET_CHARS = 480_000
+# Single-pass threshold sits under claude_cli._MAX_PROMPT_CHARS (650K) with
+# margin for the task prefix + system prefix; the per-batch budget is smaller
+# still so each digest call has ample headroom for the system prefix + output.
+_SINGLE_PASS_BUDGET_CHARS = 580_000
 _BUNDLE_BUDGET_CHARS = 380_000
 
 _DIGEST_TASK = (

@@ -53,9 +53,10 @@ _TIMEOUT_SECONDS = 1800
 # model's context window by exiting 1 with NO stderr — indistinguishable from an
 # auth/transient failure in the log, and (because the pipeline fails closed) it
 # then retries the same doomed file on every scheduled run. We catch the obvious
-# case first so the log says *why*. ~3.5 chars/token, 200K window, ~75% headroom
-# for the system prefix + output → ~525K char ceiling on the prompt body.
-_MAX_PROMPT_CHARS = 525_000
+# case first so the log says *why*. ~3.5 chars/token, 200K window; this guard
+# counts prompt+system combined, so ceiling is total_chars < ~185K tokens,
+# leaving ~15K tokens for output — well clear of the model's hard limit.
+_MAX_PROMPT_CHARS = 650_000
 
 
 class ClaudeCliError(RuntimeError):

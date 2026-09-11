@@ -440,12 +440,18 @@ def _digest_batches(files: list[Path], system: str, model: str) -> str:
     Each batch runs through the digest task (detail-preserving extraction, not
     final synthesis) so the reduce step sees a compact-but-complete stand-in for
     every file. Raises on any batch failure — fail closed, consistent with run().
+
+    The digest call uses a minimal system prompt — the full system (context brief
+    + rolodex + program reference + synthesis instructions) can be 150K+ chars,
+    which combined with the batch content would overflow the ceiling. The digest
+    only needs to extract facts; the reduce step has the full system for synthesis.
     """
     batches = _batch_by_budget(files, _BUNDLE_BUDGET_CHARS)
     print(
         f"  bundle exceeds single-pass budget — map-reduce over "
         f"{len(batches)} batch(es) of {len(files)} file(s)"
     )
+    digest_system = "You are extracting structured notes from meeting analyses. Preserve all names, decisions, risks, commitments, and political signals with full attribution."
     digests = []
     for i, batch in enumerate(batches, 1):
         batch_bundle = "\n\n---\n\n".join(_file_block(f) for f in batch)
@@ -453,7 +459,7 @@ def _digest_batches(files: list[Path], system: str, model: str) -> str:
         data = claude_cli.run_claude_p(
             f"{_DIGEST_TASK}\n\nBatch {i} of {len(batches)}:\n\n{batch_bundle}",
             model=model,
-            system=system,
+            system=digest_system,
         )
         digest = claude_cli.result_text(data)
         if not digest.strip():

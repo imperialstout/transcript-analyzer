@@ -75,7 +75,7 @@ def _normalize_json_recording(r: dict) -> dict:
 #   ece0d8da...  07-29 Some Title  2026-07-29  24m37s
 # Fields are separated by 2+ spaces. ID is a 32-char hex string.
 _TABLE_ROW_RE = re.compile(
-    r"^\s*([0-9a-f]{32})\s{2,}(.+?)\s{2,}(\d{4}-\d{2}-\d{2})\s{2,}(\S+)"
+    r"^\s*((?:of_)?[0-9a-f]{32})\s{2,}(.+?)\s{2,}(\d{4}-\d{2}-\d{2})\s{2,}(\S+)"
 )
 
 # Minimum recording length to attempt transcript download (accidental taps, etc.)

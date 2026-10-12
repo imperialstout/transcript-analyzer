@@ -264,6 +264,11 @@ _HTML = """\
   nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px;
           border-radius: 6px; }
   nav a:hover, nav a.active { color: var(--text); background: var(--border); }
+  /* Slack paste */
+  textarea.paste-area { width: 100%; height: 360px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font: 13px/1.5 "SF Mono", "Menlo", monospace;
+    padding: 10px; resize: vertical; }
+  textarea.paste-area:focus { outline: none; border-color: var(--accent); }
   nav { display: flex; gap: 4px; }
   .content { padding: 24px; max-width: 1100px; }
   .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
@@ -343,6 +348,7 @@ _HTML = """\
   <h1>Transcript Analyzer</h1>
   <nav>
     <a href="/" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
+    <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
   {% if shared_url %}
@@ -567,6 +573,39 @@ _SETTINGS_BODY = """\
 """
 
 
+_SLACK_PASTE_BODY = """\
+{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+
+<div class="card">
+  <h2>Paste Slack canvas</h2>
+  <p class="muted" style="margin-bottom:16px;font-size:12px">
+    Paste your Slack canvas (markdown) below. It will be saved as a <code>.md</code>
+    file directly into the <strong>Call Transcripts</strong> inbox so the next
+    <em>Run Analysis</em> picks it up.
+  </p>
+
+  <form method="post" action="/slack-paste">
+    <div class="field" style="margin-bottom:12px">
+      <label>Filename (no extension)</label>
+      <input type="text" name="filename" value="{{ default_filename }}"
+             placeholder="e.g. 2026-10-12 Slack Canvas"
+             style="max-width:420px">
+      <div class="desc">Saved as <code>{{ inbox_path }}/&lt;filename&gt;.md</code></div>
+    </div>
+
+    <div class="field">
+      <label>Canvas content</label>
+      <textarea class="paste-area" name="content" placeholder="Paste your Slack canvas markdown here…"></textarea>
+    </div>
+
+    <div style="margin-top:14px">
+      <button type="submit" name="action" value="save">Save to inbox</button>
+    </div>
+  </form>
+</div>
+"""
+
+
 def _render(template: str, **ctx) -> str:
     from jinja2 import Environment
     env = Environment(autoescape=False)
@@ -725,6 +764,57 @@ def create_app():
     def open_log():
         subprocess.run(["open", str(_LOG_PATH)], check=False)
         return redirect(url_for("settings", flash="Opened run log", ft="ok"))
+
+    @app.route("/slack-paste", methods=["GET", "POST"])
+    def slack_paste():
+        global _job
+        from datetime import date as _date
+
+        if request.method == "GET":
+            default_filename = _date.today().isoformat() + " Slack Canvas"
+            return _render(
+                _SLACK_PASTE_BODY,
+                page="slack-paste",
+                default_filename=default_filename,
+                inbox_path=str(CONFIG.call_transcripts_path),
+                flash=request.args.get("flash", ""),
+                flash_type=request.args.get("ft", "ok"),
+            )
+
+        # POST — save the pasted content
+        raw_filename = request.form.get("filename", "").strip()
+        content = request.form.get("content", "")
+
+        if not raw_filename:
+            raw_filename = _date.today().isoformat() + " Slack Canvas"
+
+        # Sanitize: strip path separators, ensure .md extension
+        safe_name = raw_filename.replace("/", "-").replace("\\", "-")
+        if not safe_name.endswith(".md"):
+            safe_name += ".md"
+
+        dest = CONFIG.call_transcripts_path / safe_name
+        if not content.strip():
+            return redirect(url_for(
+                "slack_paste",
+                flash="Content was empty — nothing saved.",
+                ft="err",
+            ))
+
+        try:
+            dest.write_text(content, encoding="utf-8")
+        except Exception as exc:
+            return redirect(url_for(
+                "slack_paste",
+                flash=f"Write failed: {exc}",
+                ft="err",
+            ))
+
+        return redirect(url_for(
+            "slack_paste",
+            flash=f"Saved to inbox: {safe_name}",
+            ft="ok",
+        ))
 
     @app.post("/restart")
     def restart():

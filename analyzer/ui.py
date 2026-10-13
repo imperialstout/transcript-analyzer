@@ -360,6 +360,40 @@ _HTML = """\
   .btn-dismiss-all { background: transparent; color: var(--muted); border: 1px solid var(--border);
                      border-radius: 4px; padding: 4px 12px; font-size: 11px; cursor: pointer; }
   .btn-dismiss-all:hover { color: var(--text); border-color: var(--muted); }
+  /* Brief state panel */
+  .bs-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                      letter-spacing: .07em; color: var(--muted); margin: 20px 0 10px; }
+  .bs-section-title:first-child { margin-top: 0; }
+  .bs-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
+             border-top: 1px solid var(--border); }
+  .bs-item:first-of-type { border-top: none; }
+  .bs-body { flex: 1; min-width: 0; }
+  .bs-text { font-size: 13px; line-height: 1.5; }
+  .bs-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
+  .bs-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+  .badge-act     { background: #3a2020; color: var(--red); }
+  .badge-watch   { background: #2a2c1e; color: var(--orange); }
+  .badge-delegate { background: #1e2c3a; color: var(--accent); }
+  .badge-they-owe { background: #2a1e3a; color: #b08ef7; }
+  .badge-insight  { background: #1e2c2c; color: #3ecfcf; }
+  .badge-pending  { background: #1e3a2c; color: var(--green); }
+  .badge-complete { background: #1e3a1e; color: #6ecf6e; }
+  .badge-deferred { background: #2a2010; color: #cfaf3e; }
+  .badge-expired  { background: #2a1010; color: #cf6e6e; }
+  .badge-dropped  { background: #1e1e1e; color: var(--muted); }
+  .badge-overdue  { background: #4a1010; color: var(--red); font-weight: 700; }
+  .bs-btn { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+            border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600;
+            cursor: pointer; white-space: nowrap; }
+  .bs-btn:hover { background: var(--border); }
+  .bs-btn.danger { background: #3a1f1f; color: var(--red); border-color: #5a2e2e; }
+  .bs-btn.danger:hover { background: #4a2828; }
+  .bs-defer-form { display: flex; gap: 4px; align-items: center; }
+  .bs-defer-form input[type=date] { background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text); font-size: 11px; padding: 3px 6px; }
+  .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
 </style>
 </head>
 <body>
@@ -367,6 +401,7 @@ _HTML = """\
   <h1>Transcript Analyzer</h1>
   <nav>
     <a href="/" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
+    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %} <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;font-weight:700">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
@@ -614,6 +649,149 @@ _SETTINGS_BODY = """\
 """
 
 
+_BRIEF_STATE_BODY = """\
+{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+
+<div class="card">
+  <h2>Act items — Brad owns</h2>
+  {% if act_items %}
+  {% for item in act_items %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">
+        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
+        {{ item.text }}
+      </div>
+      <div class="bs-meta">
+        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
+        From {{ item.source_brief[:10] if item.source_brief else '—' }}
+      </div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="bs-btn">Done</button>
+      </form>
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="dropped">
+        <button type="submit" class="bs-btn danger">Drop</button>
+      </form>
+      <form method="post" action="/brief-state/defer/{{ item.id }}" class="bs-defer-form">
+        <input type="date" name="target" required title="Defer to date">
+        <button type="submit" class="bs-btn">Defer</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="bs-empty">No pending act items.</div>
+  {% endif %}
+</div>
+
+{% if watch_items %}
+<div class="card">
+  <h2>Watch</h2>
+  {% for item in watch_items %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">{{ item.text }}</div>
+      <div class="bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="bs-btn">Done</button>
+      </form>
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="dropped">
+        <button type="submit" class="bs-btn danger">Drop</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if delegate_items %}
+<div class="card">
+  <h2>Delegated</h2>
+  {% for item in delegate_items %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">{{ item.text }}</div>
+      <div class="bs-meta">
+        Owner: <strong>{{ item.owner }}</strong>
+        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
+        {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
+      </div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="bs-btn">Confirmed done</button>
+      </form>
+      <form method="post" action="/brief-state/re-own/{{ item.id }}">
+        <button type="submit" class="bs-btn danger">Re-own</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if they_owe_items %}
+<div class="card">
+  <h2>They owe you</h2>
+  {% for item in they_owe_items %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">{{ item.text }}</div>
+      <div class="bs-meta">
+        <strong>{{ item.owner }}</strong>
+        {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
+      </div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="bs-btn">Received</button>
+      </form>
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="dropped">
+        <button type="submit" class="bs-btn danger">Drop</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if recent_closed %}
+<div class="card">
+  <h2>Closed (last 7 days)</h2>
+  <table>
+    <thead>
+      <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th></tr>
+    </thead>
+    <tbody>
+    {% for item in recent_closed %}
+    <tr>
+      <td>{{ item.text }}</td>
+      <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
+      <td><span class="badge badge-{{ item.status }}">{{ item.status }}</span></td>
+      <td class="muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+"""
+
 _SLACK_PASTE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
@@ -647,12 +825,21 @@ _SLACK_PASTE_BODY = """\
 """
 
 
+def _pending_act_count() -> int:
+    try:
+        from . import brief_state as _bs
+        return len(_bs.pending_acts())
+    except Exception:
+        return 0
+
+
 def _render(template: str, **ctx) -> str:
     from jinja2 import Environment
     env = Environment(autoescape=False)
     wrapper = env.from_string(_HTML)
     body_tmpl = env.from_string(template)
     body = body_tmpl.render(**ctx)
+    ctx.setdefault("pending_act_count", _pending_act_count())
     return wrapper.render(body=body, shared_url=_shared_folder_url(), **ctx)
 
 
@@ -870,6 +1057,105 @@ def create_app():
             flash=f"Saved to inbox: {safe_name}",
             ft="ok",
         ))
+
+    @app.get("/brief-state")
+    def brief_state_page():
+        from . import brief_state as _bs
+        from datetime import date as _date
+        today = _date.today()
+
+        def _enrich_act(item):
+            item = dict(item)
+            dl = item.get("deadline")
+            if dl:
+                d = _date.fromisoformat(dl)
+                item["overdue"] = d < today
+                item["days_overdue"] = (today - d).days if d < today else 0
+            else:
+                item["overdue"] = False
+                item["days_overdue"] = 0
+            return item
+
+        def _enrich_they_owe(item):
+            item = dict(item)
+            dl = item.get("deadline")
+            if dl:
+                d = _date.fromisoformat(dl)
+                item["they_overdue"] = d < today
+                item["days_overdue"] = (today - d).days if d < today else 0
+            else:
+                item["they_overdue"] = False
+                item["days_overdue"] = 0
+            return item
+
+        all_items = _bs.all_items()
+        cutoff = (today.isoformat()[:8] + "01")  # rough 7-day filter via string sort
+        from datetime import timedelta
+        week_ago = (today - timedelta(days=7)).isoformat()
+        recent_closed = [
+            i for i in all_items
+            if i.get("status") in ("complete", "dropped", "expired")
+            and (i.get("closed_at") or "") >= week_ago
+        ]
+        recent_closed.sort(key=lambda i: i.get("closed_at", ""), reverse=True)
+
+        return _render(
+            _BRIEF_STATE_BODY,
+            page="brief-state",
+            act_items=[_enrich_act(i) for i in _bs.pending_acts()],
+            watch_items=_bs.pending_watches(),
+            delegate_items=[i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"],
+            they_owe_items=[_enrich_they_owe(i) for i in _bs.pending_they_owe()],
+            recent_closed=recent_closed,
+            flash=request.args.get("flash", ""),
+            flash_type=request.args.get("ft", "ok"),
+        )
+
+    @app.post("/brief-state/close/<item_id>")
+    def brief_state_close(item_id):
+        from . import brief_state as _bs
+        status = request.form.get("status", "complete")
+        if status not in ("complete", "dropped", "expired"):
+            return redirect(url_for("brief_state_page", flash="Invalid status", ft="err"))
+        found = _bs.close(item_id, status)
+        msg = "Marked " + status if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/defer/<item_id>")
+    def brief_state_defer(item_id):
+        from . import brief_state as _bs
+        from datetime import datetime as _dt
+        target = request.form.get("target", "").strip()
+        try:
+            _dt.strptime(target, "%Y-%m-%d")
+        except ValueError:
+            return redirect(url_for("brief_state_page", flash="Invalid defer date", ft="err"))
+        found = _bs.defer(item_id, target)
+        msg = f"Deferred to {target}" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/re-own/<item_id>")
+    def brief_state_re_own(item_id):
+        from . import brief_state as _bs
+        items = _bs.all_items()
+        # Flip type back to act, owner back to Brad
+        state_path = Path("~/.cache/transcript-analyzer/brief-state.json").expanduser()
+        raw = __import__("json").loads(state_path.read_text())
+        found = False
+        for item in raw:
+            if item["id"] == item_id:
+                item["type"] = "act"
+                item["owner"] = "Brad"
+                item["notes"] = (item.get("notes") or "") + "; re-owned via UI"
+                found = True
+                break
+        if found:
+            state_path.write_text(__import__("json").dumps(raw, indent=2))
+        msg = "Re-owned" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
 
     @app.post("/restart")
     def restart():

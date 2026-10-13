@@ -37,6 +37,7 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import brief_state
 from . import claude_cli
 from . import manifest as manifest_mod
 from . import prompts as prompts_mod
@@ -498,6 +499,21 @@ def run(
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
         return 1
+
+    # Expire stale and resurface deferred brief-state items before synthesis.
+    # Best-effort: failure here does not affect synthesis.
+    try:
+        expired = brief_state.expire_stale()
+        resurfaced = brief_state.resurface_deferred()
+        msgs = []
+        if expired:
+            msgs.append(f"{len(expired)} expired/promoted")
+        if resurfaced:
+            msgs.append(f"{len(resurfaced)} deferred item(s) resurfaced")
+        if msgs:
+            print(f"Brief state: {', '.join(msgs)}.")
+    except Exception as _e:
+        print(f"WARNING: brief_state stale/defer pass failed: {_e}", file=sys.stderr)
 
     try:
         synthesis_prompts = _load_synthesis_prompts()

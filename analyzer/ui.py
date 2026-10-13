@@ -341,6 +341,25 @@ _HTML = """\
   hr.sep { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
   .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
                    letter-spacing: .07em; color: var(--muted); margin-bottom: 14px; }
+  /* Triage alerts */
+  .alert-banner { background: #2a1a1a; border: 1px solid #6b2f2f; border-radius: 8px;
+                  padding: 16px 20px; margin-bottom: 20px; }
+  .alert-banner-header { display: flex; align-items: center; justify-content: space-between;
+                         margin-bottom: 12px; }
+  .alert-banner-title { font-size: 13px; font-weight: 700; color: var(--red);
+                        text-transform: uppercase; letter-spacing: .05em; }
+  .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
+                border-top: 1px solid #3a2020; }
+  .alert-item:first-of-type { border-top: none; }
+  .alert-text { flex: 1; font-size: 13px; line-height: 1.5; }
+  .alert-source { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .alert-dismiss { background: #3a2020; color: var(--red); border: 1px solid #5a2e2e;
+                   border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600;
+                   cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .alert-dismiss:hover { background: #4a2828; }
+  .btn-dismiss-all { background: transparent; color: var(--muted); border: 1px solid var(--border);
+                     border-radius: 4px; padding: 4px 12px; font-size: 11px; cursor: pointer; }
+  .btn-dismiss-all:hover { color: var(--text); border-color: var(--muted); }
 </style>
 </head>
 <body>
@@ -412,6 +431,28 @@ _HOME_BODY = """\
 <div class="flash" style="background:#1a2540;color:var(--accent);display:flex;align-items:center;gap:8px">
   <span class="spinner"></span>
   <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
+</div>
+{% endif %}
+
+{% if triage_alerts %}
+<div class="alert-banner">
+  <div class="alert-banner-header">
+    <span class="alert-banner-title">⚠ {{ triage_alerts|length }} Triage Alert{{ 's' if triage_alerts|length != 1 else '' }} — Action Required</span>
+    <form method="post" action="/alerts/dismiss-all" style="display:inline">
+      <button type="submit" class="btn-dismiss-all">Dismiss all</button>
+    </form>
+  </div>
+  {% for a in triage_alerts %}
+  <div class="alert-item">
+    <div style="flex:1">
+      <div class="alert-text">{{ a.text }}</div>
+      <div class="alert-source">{{ a.source }}{% if a.source_date %} · {{ a.source_date }}{% endif %}</div>
+    </div>
+    <form method="post" action="/alerts/dismiss/{{ a.id }}" style="display:inline">
+      <button type="submit" class="alert-dismiss">Dismiss</button>
+    </form>
+  </div>
+  {% endfor %}
 </div>
 {% endif %}
 
@@ -624,6 +665,7 @@ def create_app():
 
     @app.get("/")
     def home():
+        from . import alerts as _alerts
         rows = _analyzed_files()
         flash = request.args.get("flash", "")
         flash_type = request.args.get("ft", "ok")
@@ -646,7 +688,20 @@ def create_app():
             job_label=job_label,
             job_output=job_output,
             job_done=job_done,
+            triage_alerts=_alerts.undismissed(),
         )
+
+    @app.post("/alerts/dismiss/<alert_id>")
+    def dismiss_alert(alert_id):
+        from . import alerts as _alerts
+        _alerts.dismiss(alert_id)
+        return redirect(url_for("home"))
+
+    @app.post("/alerts/dismiss-all")
+    def dismiss_all_alerts():
+        from . import alerts as _alerts
+        _alerts.dismiss_all()
+        return redirect(url_for("home", flash="All alerts dismissed", ft="ok"))
 
     @app.post("/synthesize")
     def synthesize():

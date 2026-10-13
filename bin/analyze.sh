@@ -73,6 +73,17 @@ if [[ -n "$SUMMARY" ]]; then
         # don't make that a fatal error.
         osascript -e "display notification \"$BODY_ESC\" with title \"$TITLE_ESC\"" || true
     fi
+
+    # Triage alert notification — separate, more urgent banner when this run
+    # produced new pending alerts. Distinct title so it stands out.
+    ALERT_COUNT=$(echo "$SUMMARY" | grep -oE '[0-9]+ triage alert' | grep -oE '[0-9]+' || true)
+    ALERT_COUNT="${ALERT_COUNT//[^0-9]/}"
+    ALERT_COUNT="${ALERT_COUNT:-0}"
+    if [[ "$ALERT_COUNT" -gt 0 ]]; then
+        ALERT_BODY="$ALERT_COUNT item$([ "$ALERT_COUNT" -gt 1 ] && echo 's require' || echo ' requires') your attention. Open the dashboard or run /morning-brief."
+        ALERT_BODY_ESC=$(printf '%s' "$ALERT_BODY" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+        osascript -e "display notification \"$ALERT_BODY_ESC\" with title \"⚠ Triage Alert\" sound name \"Basso\"" || true
+    fi
 else
     # No summary line means the script crashed before completion. Always notify.
     osascript -e "display notification \"Run did not complete cleanly. Check ~/Library/Logs/transcript-analyzer.log\" with title \"Transcript Analyzer — error\"" || true

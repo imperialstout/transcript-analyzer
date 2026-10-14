@@ -57,6 +57,15 @@ _DISW_CPQ_TITLE_KW = re.compile(
     r"\b(disw|digital\s+industries|neeraj|tequila|kortney)\b", re.IGNORECASE
 )
 
+_SX_PRD_KW = re.compile(
+    r"\bsx-prd\b|sx\s+prd|subm(?:gmt)?|subscription\s+management|sherpa.x\s+product|\bmadalina\b|\bcalm\b",
+    re.IGNORECASE,
+)
+_SX_PRD_TITLE_KW = re.compile(
+    r"sx\s*bt\s*p|sx.prd|subscription\s+manag|subm(gmt)?|sherpa.x\s+product",
+    re.IGNORECASE,
+)
+
 _SIEMENS_GENERAL_WS = {"siemens all", "cross-stream", "cross-division", "executive"}
 _SIEMENS_GENERAL_KW = re.compile(r"\b(hana|eike|tara|gunnar)\b", re.IGNORECASE)
 
@@ -71,6 +80,7 @@ PROGRAMS = [
     "presales-energy",
     "presales-healthineers",
     "presales-financial-services",
+    "presales-sx-prd",
     "DISW-RCA",
     "DISW-CPQ",
     "siemens-general",
@@ -127,6 +137,9 @@ def classify_program(path: Path) -> str:
 
     # Presales signals (check before DISW/SI so Energy/Healthineers/FS meetings
     # don't fall into the broader DISW or SI-RCA buckets)
+    # SX-PRD must come before Healthineers — StarQuote/SubMgmt meetings overlap
+    if _SX_PRD_KW.search(ws) or _SX_PRD_TITLE_KW.search(title):
+        return "presales-sx-prd"
     if _PRESALES_ENERGY_KW.search(ws) or _PRESALES_ENERGY_KW.search(title):
         return "presales-energy"
     if _PRESALES_HEALTHINEERS_KW.search(ws) or _PRESALES_HEALTHINEERS_KW.search(title):
@@ -395,6 +408,7 @@ def _status_paths(gov_repo: Path) -> dict[str, Path]:
         "presales-energy": gov_repo / "presales" / "Energy" / "STATUS.md",
         "presales-healthineers": gov_repo / "presales" / "Healthineers" / "STATUS.md",
         "presales-financial-services": gov_repo / "presales" / "Financial-Services" / "STATUS.md",
+        "presales-sx-prd": gov_repo / "presales" / "SX-PRD" / "STATUS.md",
     }
 
 

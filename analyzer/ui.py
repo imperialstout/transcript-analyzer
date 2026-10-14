@@ -652,6 +652,37 @@ _SETTINGS_BODY = """\
 _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
+{% if candidate_items %}
+<div class="card" style="border-color:#3a3010">
+  <h2 style="color:#cfaf3e">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
+  {% for item in candidate_items %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">
+        <span class="badge badge-{{ item.type }}">{{ item.type }}</span>
+        {% if item.owner and item.owner != "Brad" %}<span class="muted" style="font-size:11px"> {{ item.owner }} owes</span>{% endif %}
+        {{ item.text }}
+      </div>
+      <div class="bs-meta">
+        From {{ item.source_analyzed or '—' }}
+        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
+        {% if item.program %} · {{ item.program }}{% endif %}
+      </div>
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/accept/{{ item.id }}">
+        <input type="hidden" name="type" value="{{ item.type }}">
+        <button type="submit" class="bs-btn" style="border-color:#cfaf3e;color:#cfaf3e">Accept</button>
+      </form>
+      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}">
+        <button type="submit" class="bs-btn danger">Dismiss</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Act items — Brad owns</h2>
   {% if act_items %}
@@ -828,7 +859,7 @@ _SLACK_PASTE_BODY = """\
 def _pending_act_count() -> int:
     try:
         from . import brief_state as _bs
-        return len(_bs.pending_acts())
+        return len(_bs.pending_acts()) + len(_bs.pending_candidates())
     except Exception:
         return 0
 
@@ -1102,6 +1133,7 @@ def create_app():
         return _render(
             _BRIEF_STATE_BODY,
             page="brief-state",
+            candidate_items=_bs.pending_candidates(),
             act_items=[_enrich_act(i) for i in _bs.pending_acts()],
             watch_items=_bs.pending_watches(),
             delegate_items=[i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"],
@@ -1110,6 +1142,26 @@ def create_app():
             flash=request.args.get("flash", ""),
             flash_type=request.args.get("ft", "ok"),
         )
+
+    @app.post("/brief-state/accept/<item_id>")
+    def brief_state_accept(item_id):
+        from . import brief_state as _bs
+        item_type = request.form.get("type", "act")
+        try:
+            found = _bs.accept_candidate(item_id, item_type)
+        except ValueError as e:
+            return redirect(url_for("brief_state_page", flash=str(e), ft="err"))
+        msg = f"Accepted as {item_type}" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/dismiss-candidate/<item_id>")
+    def brief_state_dismiss_candidate(item_id):
+        from . import brief_state as _bs
+        found = _bs.dismiss_candidate(item_id)
+        msg = "Dismissed" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
 
     @app.post("/brief-state/close/<item_id>")
     def brief_state_close(item_id):

@@ -33,7 +33,7 @@ from pathlib import Path
 _STATE_PATH = Path("~/.cache/transcript-analyzer/brief-state.json").expanduser()
 
 _VALID_TYPES = {"act", "watch", "delegate", "they-owe", "insight"}
-_VALID_STATUSES = {"pending", "complete", "deferred", "expired", "dropped"}
+_VALID_STATUSES = {"pending", "complete", "deferred", "expired", "dropped", "dismissed"}
 
 # Business-day expiry thresholds by type (calendar days used as approximation)
 _EXPIRY_BUSINESS_DAYS = {
@@ -308,6 +308,41 @@ def expire_stale(business_days: int | None = None) -> list[dict]:
         _save(items)
 
     return changed
+
+
+def pending_candidates() -> list[dict]:
+    """Return candidate items (status=pending, source_analyzed set), newest first.
+
+    Candidates are AI-extracted signals from individual analyzed files that
+    haven't been triaged yet. They live in the INBOX section of the UI.
+    """
+    items = _load()
+    result = [i for i in items if i.get("status") == "pending" and i.get("source_analyzed")]
+    result.sort(key=lambda i: i.get("created_at", ""), reverse=True)
+    return result
+
+
+def accept_candidate(item_id: str, item_type: str) -> bool:
+    """Promote a candidate to a real act/watch/they-owe item.
+
+    Clears source_analyzed so it moves out of the inbox and into the
+    appropriate section. Returns True if found.
+    """
+    if item_type not in _VALID_TYPES:
+        raise ValueError(f"Invalid type: {item_type!r}")
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["type"] = item_type
+            item["source_analyzed"] = None  # promoted — no longer a candidate
+            _save(items)
+            return True
+    return False
+
+
+def dismiss_candidate(item_id: str) -> bool:
+    """Dismiss a candidate without promoting it. Returns True if found."""
+    return close(item_id, "dismissed")
 
 
 def all_items() -> list[dict]:

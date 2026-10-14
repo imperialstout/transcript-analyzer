@@ -480,6 +480,17 @@ def _main_locked(cfg, force: bool) -> int:
             if alert_count:
                 print(f"  [{i}/{n}] {alert_count} triage alert(s) extracted")
 
+            # Signal extraction — BEST-EFFORT. Extracts 1–5 Brad-relevant
+            # candidates into brief-state inbox for triage in the UI.
+            try:
+                from .signal_extract import extract_signals_from_file
+                from .program_pulse import classify_program
+                prog_key = classify_program(output_path)
+                if prog_key != "_admin":
+                    extract_signals_from_file(output_path, program_key=prog_key, model=model)
+            except Exception as _sig_err:
+                print(f"  [{i}/{n}] signal extraction failed (non-fatal): {_sig_err}", file=sys.stderr)
+
             fs.move_to_processed(src, meeting_date)
             shareable_note = ", +shareable" if shareable_name else ""
             alerts_note = f", {alert_count} alert(s)" if alert_count else ""

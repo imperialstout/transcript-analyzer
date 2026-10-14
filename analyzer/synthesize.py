@@ -488,6 +488,36 @@ def _output_filename(mode: str, target_date: date | None = None) -> str:
         return f"{iso} - Slack Delta - Week of {monday.isoformat()} {suffix}.md"
 
 
+def _pending_intake_warning() -> None:
+    """Warn if unprocessed transcripts or docs are waiting in Call Transcripts/."""
+    try:
+        ct = CONFIG.call_transcripts_path
+        docs = CONFIG.docs_path
+        pending = []
+
+        # Root-level .txt/.md files are transcript candidates (subfolders are intentionally ignored).
+        if ct.is_dir():
+            for f in ct.iterdir():
+                if f.is_file() and f.suffix.lower() in (".txt", ".md"):
+                    pending.append(f"  {f.name}")
+
+        # docs/ holds documents pending the document pipeline.
+        if docs.is_dir():
+            for f in docs.iterdir():
+                if f.is_file() and not f.name.startswith(".") and f.suffix.lower() in (".pdf", ".docx", ".md", ".txt"):
+                    pending.append(f"  docs/{f.name}")
+
+        if pending:
+            print(
+                f"\nWARNING: {len(pending)} unprocessed file(s) in Call Transcripts/ — "
+                f"run `python -m analyzer` first to include them in this synthesis:\n"
+                + "\n".join(pending)
+                + "\nContinuing synthesis without them...\n"
+            )
+    except Exception as e:
+        print(f"WARNING: intake pre-flight check failed: {e}", file=sys.stderr)
+
+
 def run(
     mode: str,
     week: str = "current",
@@ -499,6 +529,8 @@ def run(
     if not analyzed_path.exists():
         print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
         return 1
+
+    _pending_intake_warning()
 
     # Expire stale and resurface deferred brief-state items before synthesis.
     # Best-effort: failure here does not affect synthesis.

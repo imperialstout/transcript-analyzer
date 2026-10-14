@@ -208,10 +208,11 @@ def _write_status(path: Path, fm: dict, body: str) -> None:
     path.write_text(f"---\n{fm_block}\n---\n{body}", encoding="utf-8")
 
 
-def _append_open_signals(body: str, iso_date: str, n_files: int, bullets: str) -> str:
+def _append_open_signals(body: str, iso_date: str, n_files: int, bullets: str, prepend: bool = True) -> str:
     """Insert a dated block under '## Open signals' in the body.
 
-    The block is prepended (newest-first) right after the section header line.
+    prepend=True (default): newest-first, inserted right after the section header.
+    prepend=False: appended at the bottom of the section (for backfill, oldest→newest).
     """
     header = "## Open signals"
     if header not in body:
@@ -220,13 +221,61 @@ def _append_open_signals(body: str, iso_date: str, n_files: int, bullets: str) -
     # Remove placeholder if present
     body = body.replace("*(none yet — sweep will populate)*\n", "")
 
-    block = f"\n### {iso_date} — {n_files} new file(s)\n{bullets.strip()}\n"
+    block = f"\n### {iso_date} — {n_files} file(s)\n{bullets.strip()}\n"
 
-    # Insert immediately after the ## Open signals line
-    idx = body.find(header)
-    insert_at = body.find("\n", idx) + 1  # position after the header line's newline
-    body = body[:insert_at] + block + body[insert_at:]
+    if prepend:
+        idx = body.find(header)
+        insert_at = body.find("\n", idx) + 1
+        body = body[:insert_at] + block + body[insert_at:]
+    else:
+        body = body.rstrip("\n") + "\n" + block
+
     return body
+
+
+def _batch_by_two_weeks(files: list[Path]) -> list[tuple[str, list[Path]]]:
+    """Group files into 2-week windows (Mon of week 1 → Sun of week 2).
+
+    Returns list of (window_label, files) sorted oldest-first.
+    window_label example: '2026-06-01 – 2026-06-14'
+    """
+    from datetime import timedelta
+
+    if not files:
+        return []
+
+    # Parse leading ISO timestamp to date
+    def file_date(p: Path) -> date:
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})", p.name)
+        if m:
+            return date.fromisoformat(m.group(1))
+        return date.today()
+
+    dated = sorted(files, key=lambda p: _leading_iso(p.name))
+
+    # Align to 2-week boundaries anchored on Monday of each fortnight
+    # (ISO week number: even weeks → second half of fortnight)
+    def fortnight_start(d: date) -> date:
+        # Find Monday of d's ISO week
+        monday = d - timedelta(days=d.weekday())
+        # If ISO week number is odd, this is the first week of the fortnight;
+        # if even, step back one week to align to the start of the pair
+        if monday.isocalendar()[1] % 2 == 0:
+            monday -= timedelta(weeks=1)
+        return monday
+
+    buckets: dict[date, list[Path]] = {}
+    for p in dated:
+        d = file_date(p)
+        key = fortnight_start(d)
+        buckets.setdefault(key, []).append(p)
+
+    result = []
+    for start in sorted(buckets):
+        end = start + timedelta(days=13)
+        label = f"{start.isoformat()} – {end.isoformat()}"
+        result.append((label, buckets[start]))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -282,17 +331,39 @@ _PULSE_SYSTEM_TEMPLATE = (
     "- Risks or blockers surfaced\n"
     "- Commitments given (who owes what by when)\n"
     "- Open questions requiring Brad's attention\n"
-    "Be specific: name people, decisions, and dates. Avoid vague phrases.\n"
+    "Be specific: name people, decisions, and dates. Avoid vague phrases.\n\n"
+    "SOURCE RELIABILITY CAVEAT: These files are AI-generated meeting transcriptions "
+    "or Gemini/Fireflies note summaries — already one layer of interpretation. "
+    "Apply these rules:\n"
+    "- Speaker attribution may be wrong; don't cite a quote unless the file is "
+    "unambiguous about who said it.\n"
+    "- Treat a passing remark as a remark, not a decision. Only elevate to a "
+    "decision if the file explicitly frames it as one.\n"
+    "- Numbers (headcounts, dates, dollar figures) are frequently off-the-cuff "
+    "estimates; flag them as approximate (e.g. '~$1.2M', 'est. 40 users').\n"
+    "- If two files for the same period conflict on a key fact, report the conflict "
+    "rather than picking a winner.\n"
+    "- Use qualifiers where appropriate: 'per meeting notes', 'reportedly', "
+    "'discussed but not confirmed'.\n\n"
     "Output ONLY the bullet list. No preamble, no labels."
 )
 
 _MAX_CHARS_PER_FILE = 4000
+_MAX_FILES_PER_CALL = 40       # cap files sent; take most-recent when exceeded
+_MAX_CONTEXT_BRIEF_CHARS = 15000  # truncate large context briefs
 
 
 def _call_claude(label: str, context_brief: str, files: list[Path], model: str) -> str:
     system = _PULSE_SYSTEM_TEMPLATE.format(label=label)
     if context_brief:
-        system = f"{system}\n\n=== PROGRAM CONTEXT ===\n{context_brief}"
+        brief_snippet = context_brief[:_MAX_CONTEXT_BRIEF_CHARS]
+        system = f"{system}\n\n=== PROGRAM CONTEXT ===\n{brief_snippet}"
+
+    # Take only the most-recent files to stay under the token ceiling
+    if len(files) > _MAX_FILES_PER_CALL:
+        skipped = len(files) - _MAX_FILES_PER_CALL
+        print(f"  NOTE: {skipped} older file(s) skipped (cap={_MAX_FILES_PER_CALL}); using most recent {_MAX_FILES_PER_CALL}")
+        files = files[-_MAX_FILES_PER_CALL:]
 
     parts = []
     for f in files:
@@ -331,16 +402,134 @@ def _status_paths(gov_repo: Path) -> dict[str, Path]:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+def run_program_backfill(
+    gov_repo_path: Optional[Path] = None,
+    dry_run: bool = False,
+    programs: Optional[list[str]] = None,
+) -> int:
+    """Backfill historical signal for programs that have a large un-watermarked backlog.
+
+    Unlike the normal pulse (which only processes files newer than the watermark
+    and caps at _MAX_FILES_PER_CALL), backfill:
+    - Ignores the existing watermark entirely for targeted programs
+    - Slices all matching files into 2-week windows
+    - Calls Claude once per window (still capped at _MAX_FILES_PER_CALL)
+    - Appends blocks oldest-first under ## Open signals (so the most-recent
+      pulse block stays at the top and history grows below it)
+    - Does NOT update the watermark (the normal pulse already set it correctly)
+
+    programs: restrict to these program keys; default = all programs with >0 files.
+    """
+    gov_repo = (gov_repo_path or Path("~/code/SiemensRCAGov")).expanduser()
+    if not gov_repo.is_dir():
+        print(f"ERROR: governance repo not found: {gov_repo}", file=sys.stderr)
+        return 1
+
+    analyzed_path = CONFIG.analyzed_path
+    if not analyzed_path.exists():
+        print(f"ERROR: Analyzed/ path does not exist: {analyzed_path}", file=sys.stderr)
+        return 1
+
+    model = CONFIG.models.get("STANDUP", "claude-sonnet-4-6")
+    if CONFIG.model_override:
+        model = CONFIG.model_override
+
+    context_brief = ""
+    if CONFIG.context_brief_path.exists():
+        context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8")
+
+    status_map = _status_paths(gov_repo)
+    labels: dict[str, str] = {}
+    for prog, sp in status_map.items():
+        if sp.exists():
+            fm, _ = _read_status(sp)
+            labels[prog] = fm.get("label", prog)
+        else:
+            labels[prog] = prog
+
+    # Scan all ANALYZED files with no watermark filter
+    all_files = _files_newer_than(analyzed_path, watermark=None)
+    print(f"Total [ANALYZED] files in Analyzed/ (including _Archive): {len(all_files)}")
+
+    # Bucket all files by program
+    buckets: dict[str, list[Path]] = {prog: [] for prog in PROGRAMS}
+    for f in all_files:
+        prog = classify_program(f)
+        if prog != _ADMIN_PROGRAM and prog in buckets:
+            buckets[prog].append(f)
+
+    target_programs = programs if programs else PROGRAMS
+    errors = 0
+    today_iso = date.today().isoformat()
+
+    for prog in target_programs:
+        sp = status_map.get(prog)
+        if sp is None or not sp.exists():
+            continue
+
+        all_prog_files = sorted(buckets.get(prog, []), key=lambda p: _leading_iso(p.name))
+        if not all_prog_files:
+            print(f"[{prog}] no files — skipping")
+            continue
+
+        batches = _batch_by_two_weeks(all_prog_files)
+        label = labels.get(prog, prog)
+        print(f"[{prog}] {len(all_prog_files)} total file(s) → {len(batches)} 2-week batch(es)")
+
+        if dry_run:
+            for window_label, batch_files in batches:
+                print(f"  [DRY RUN] {window_label}: {len(batch_files)} file(s)")
+            continue
+
+        for window_label, batch_files in batches:
+            # Cap per window to stay under token ceiling
+            if len(batch_files) > _MAX_FILES_PER_CALL:
+                print(f"  NOTE: {window_label}: {len(batch_files)} files, capping at {_MAX_FILES_PER_CALL}")
+                batch_files = batch_files[-_MAX_FILES_PER_CALL:]
+
+            print(f"  Processing {window_label}: {len(batch_files)} file(s)…", end=" ", flush=True)
+            try:
+                bullets = _call_claude(label, context_brief, batch_files, model)
+            except Exception as e:
+                print(f"FAILED: {e}", file=sys.stderr)
+                errors += 1
+                continue
+
+            if not bullets.strip():
+                print("empty response — skipping")
+                continue
+
+            fm, body = _read_status(sp)
+            body = _append_open_signals(body, f"{today_iso} [backfill {window_label}]", len(batch_files), bullets, prepend=False)
+            fm["last_updated"] = today_iso
+            _write_status(sp, fm, body)
+            print("done")
+
+    if dry_run:
+        print("\n[DRY RUN] no STATUS.md files were modified.")
+    return 1 if errors else 0
+
+
 def run_program_pulse(
     gov_repo_path: Optional[Path] = None,
     dry_run: bool = False,
+    backfill: bool = False,
+    backfill_programs: Optional[list[str]] = None,
 ) -> int:
     """Sweep Analyzed/ files into governance STATUS.md files.
 
     gov_repo_path defaults to ~/code/SiemensRCAGov.
     dry_run=True prints what would be written without touching any STATUS.md.
+    backfill=True delegates to run_program_backfill (2-week batching of full history).
     Returns 0 on success, 1 on error.
     """
+    if backfill:
+        return run_program_backfill(
+            gov_repo_path=gov_repo_path,
+            dry_run=dry_run,
+            programs=backfill_programs,
+        )
+
     gov_repo = (gov_repo_path or Path("~/code/SiemensRCAGov")).expanduser()
     if not gov_repo.is_dir():
         print(f"ERROR: governance repo not found: {gov_repo}", file=sys.stderr)

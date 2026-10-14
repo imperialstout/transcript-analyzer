@@ -820,6 +820,22 @@ def main() -> int:
             "without writing anything"
         ),
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help=(
+            "program-pulse only: rebuild full history by batching all files "
+            "into 2-week windows and appending oldest-first below the current signal block"
+        ),
+    )
+    parser.add_argument(
+        "--programs",
+        default=None,
+        help=(
+            "program-pulse --backfill only: comma-separated list of program keys to "
+            "restrict backfill to (e.g. 'SI-RCA,siemens-general')"
+        ),
+    )
     args = parser.parse_args()
 
     target_date = None
@@ -846,7 +862,14 @@ def main() -> int:
 
     if args.mode == "program-pulse":
         from .program_pulse import run_program_pulse
-        return run_program_pulse(dry_run=args.dry_run)
+        backfill_programs = None
+        if args.programs:
+            backfill_programs = [p.strip() for p in args.programs.split(",") if p.strip()]
+        return run_program_pulse(
+            dry_run=args.dry_run,
+            backfill=args.backfill,
+            backfill_programs=backfill_programs,
+        )
 
     return run(args.mode, week=args.week, target_date=target_date, full=args.full)
 

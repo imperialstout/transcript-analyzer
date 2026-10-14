@@ -1,7 +1,7 @@
 """Weekly Timecard Compiler.
 
 Reads filed [ANALYZED] outputs for a target week (Mon–Fri), classifies each
-meeting into one of four timecard rows using workstream frontmatter + title
+meeting into one of five timecard rows using workstream frontmatter + title
 keyword rules, then calls Claude to compress the per-row, per-day work into a
 ≤255-character summary. Writes a [TIMECARD].md file to Analyzed/.
 
@@ -12,6 +12,7 @@ Usage (via synthesize dispatch):
 Rows (matching the Slack Weekly Timecard Compiler skill):
     DISW         — Digital Industries Software: PoC, CPQ legacy, DI-SW work
     DISW POC     — RCA proof-of-concept within DI-SW (Chandan, Sanjay, RCA PoC)
+    Presales     — Energy, Healthineers, Financial Services opportunity calls
     SI RCA       — SI/RCA governance, design board, architecture, cross-stream
     Z-Admin      — Internal Salesforce, practice, admin, non-project 1:1s
 
@@ -21,10 +22,12 @@ Bucketing priority order (first match wins):
     2. DISW      — workstream starts with "DI-SW" or contains "DISW" or
                    title keywords: DISW, Digital Industries, BT SW, Neeraj,
                    Tequila, Kortney, landscape, billing
-    3. Z-Admin   — workstream in ("internal", "internal-salesforce") OR title
+    3. Presales  — workstream or title contains Energy, Healthineers, SHS,
+                   Financial Services, SFS, Siemens Energy, SE (presales signals)
+    4. Z-Admin   — workstream in ("internal", "internal-salesforce") OR title
                    keywords: Tune-In, Practice Team, RevCloud Community,
                    introduction to, survey, Jodi
-    4. SI RCA    — everything else Siemens (cross-stream, SI*, Siemens All*)
+    5. SI RCA    — everything else Siemens (cross-stream, SI*, Siemens All*)
     (Unclassifiable files get a warning and are assigned to SI RCA as fallback)
 
 Duration heuristic:
@@ -56,10 +59,11 @@ from .synthesize import (
 # ---------------------------------------------------------------------------
 ROW_DISW = "Siemens Digital Industries Software (DISW)"
 ROW_DISW_POC = "DISW POC — RCA Proof of Concept"
+ROW_PRESALES = "Presales"
 ROW_SI_RCA = "Competency Center / SI RCA"
 ROW_ADMIN = "Z-Administrative Tasks"
 
-_ALL_ROWS = [ROW_DISW, ROW_DISW_POC, ROW_SI_RCA, ROW_ADMIN]
+_ALL_ROWS = [ROW_DISW, ROW_DISW_POC, ROW_PRESALES, ROW_SI_RCA, ROW_ADMIN]
 
 # ---------------------------------------------------------------------------
 # Keyword sets for title-based classification
@@ -73,6 +77,15 @@ _DISW_TITLE_KW = re.compile(
     re.IGNORECASE,
 )
 _DISW_WORKSTREAM_PREFIX = re.compile(r"^di-sw|^disw", re.IGNORECASE)
+
+_PRESALES_WORKSTREAM_KW = re.compile(
+    r"\benergy\b|siemens\s+energy|\bse\b|healthineers|\bshs\b|financial\s+services|\bsfs\b|siemens\s+financial",
+    re.IGNORECASE,
+)
+_PRESALES_TITLE_KW = re.compile(
+    r"\benergy\b|siemens\s+energy|\bshs\b|healthineers|financial\s+services|\bsfs\b|siemens\s+financial",
+    re.IGNORECASE,
+)
 
 _ADMIN_TITLE_KW = re.compile(
     r"tune-in|practice\s+team|revcloud\s+community|introduction\s+to|survey\b|jodi\b",
@@ -163,13 +176,19 @@ def _classify(meta: _FileMeta) -> str:
     if _DISW_TITLE_KW.search(meta.title):
         return ROW_DISW
 
-    # 3. Admin — workstream or title keyword
+    # 3. Presales — workstream or title keyword signals Energy / Healthineers / FS
+    if _PRESALES_WORKSTREAM_KW.search(meta.workstream):
+        return ROW_PRESALES
+    if _PRESALES_TITLE_KW.search(meta.title):
+        return ROW_PRESALES
+
+    # 4. Admin — workstream or title keyword
     if ws_lower in _ADMIN_WORKSTREAMS:
         return ROW_ADMIN
     if _ADMIN_TITLE_KW.search(meta.title):
         return ROW_ADMIN
 
-    # 4. SI RCA — everything else Siemens (cross-stream, SI*, Siemens All*, etc.)
+    # 5. SI RCA — everything else Siemens (cross-stream, SI*, Siemens All*, etc.)
     #    Also catches unclassified / unknown — fail toward SI RCA
     return ROW_SI_RCA
 
@@ -344,7 +363,7 @@ def run_timecard(target_date: Optional[date] = None) -> int:
 
     # Key accomplishments: pull from non-admin, non-empty cells
     accomplishments = []
-    for row in [ROW_DISW, ROW_DISW_POC, ROW_SI_RCA]:
+    for row in [ROW_DISW, ROW_DISW_POC, ROW_PRESALES, ROW_SI_RCA]:
         for d in week_days:
             cell = output_rows[row][d]
             if cell and cell != "—":

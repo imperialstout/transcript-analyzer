@@ -21,6 +21,8 @@ Schema per item:
   deferred_to    str|null  ISO date
   notes          str
   resurfaced_count  int
+  program        str|null  program key matching STATUS.md frontmatter (e.g. "SI-RCA",
+                            "presales-energy", "siemens-general"); None = unassigned
 """
 
 import hashlib
@@ -106,6 +108,7 @@ def upsert(item: dict) -> None:
             "deferred_to": None,
             "notes": "",
             "resurfaced_count": 0,
+            "program": None,
         }
         defaults.update(item)
         items.append(defaults)
@@ -133,6 +136,19 @@ def pending_watches() -> list[dict]:
     """Return watch items with status=pending."""
     items = _load()
     return [i for i in items if i.get("type") == "watch" and i.get("status") == "pending"]
+
+
+def pending_by_program() -> dict[str, list[dict]]:
+    """Return pending act items grouped by program key.
+    Items with program=None go under key "_unassigned"."""
+    items = _load()
+    result: dict[str, list[dict]] = {}
+    for item in items:
+        if item.get("type") != "act" or item.get("status") != "pending":
+            continue
+        key = item.get("program") or "_unassigned"
+        result.setdefault(key, []).append(item)
+    return result
 
 
 def close(item_id: str, status: str, notes: str = "") -> bool:

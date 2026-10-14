@@ -771,13 +771,14 @@ def main() -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=["daily", "weekly", "career", "catch-up", "timecard"],
+        choices=["daily", "weekly", "career", "catch-up", "timecard", "program-pulse"],
         required=True,
         help=(
             "daily = D1 pulse over today's analyses; weekly = D2 delta over this "
             "week's; career = D3 position-trajectory review over all current "
             "analyses; catch-up = one daily pulse per backlog day (vacation recovery); "
-            "timecard = weekly timecard compiler (Mon–Fri, 4 rows)"
+            "timecard = weekly timecard compiler (Mon–Fri, 5 rows); "
+            "program-pulse = sweep Analyzed/ files into governance STATUS.md files"
         ),
     )
     parser.add_argument(
@@ -811,6 +812,14 @@ def main() -> int:
             "incremental by default to keep each run bounded as Analyzed/ grows"
         ),
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "program-pulse only: print what would be appended to each STATUS.md "
+            "without writing anything"
+        ),
+    )
     args = parser.parse_args()
 
     target_date = None
@@ -834,6 +843,10 @@ def main() -> int:
     if args.mode == "timecard":
         from .timecard import run_timecard
         return run_timecard(target_date=target_date)
+
+    if args.mode == "program-pulse":
+        from .program_pulse import run_program_pulse
+        return run_program_pulse(dry_run=args.dry_run)
 
     return run(args.mode, week=args.week, target_date=target_date, full=args.full)
 

@@ -53,6 +53,7 @@ from .synthesize import (
     _meeting_date,
     _DATE_TOKEN,
 )
+from . import calendar_reader
 
 # ---------------------------------------------------------------------------
 # Row constants — names must match what you paste into the timecard system
@@ -201,6 +202,28 @@ def _duration(meta: _FileMeta) -> int:
     return 60
 
 
+def _classify_calendar_event(ev: "calendar_reader.CalendarEvent") -> str:
+    """Map a CalendarEvent to a timecard row using the same rules as _classify()."""
+    # Synthesize a pseudo _FileMeta from the calendar event for reuse
+    participants = [p for p in ev.attendees if p]
+    meta = _FileMeta(
+        path=Path("."),
+        meeting_date=ev.start.date() if ev.start else None,
+        title=ev.title,
+        workstream="",
+        meeting_type="",
+        participants=participants,
+    )
+    return _classify(meta)
+
+
+def _duration_from_calendar(ev: "calendar_reader.CalendarEvent") -> int:
+    if ev.start and ev.end:
+        mins = int((ev.end - ev.start).total_seconds() / 60)
+        return 30 if mins <= 35 else 60
+    return 60
+
+
 # ---------------------------------------------------------------------------
 # LLM compression call
 # ---------------------------------------------------------------------------
@@ -250,6 +273,14 @@ class _DayBucket:
     files: list[_FileMeta] = field(default_factory=list)
 
 
+@dataclass
+class _CalStub:
+    meeting_date: Optional[date]
+    title: str
+    row: str
+    duration_min: int
+
+
 def run_timecard(target_date: Optional[date] = None) -> int:
     analyzed_path = CONFIG.analyzed_path
     if not analyzed_path.exists():
@@ -268,22 +299,49 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     week_day_set = set(week_days)
     files = [f for f in files if (_d := _meeting_date(f)) and _d in week_day_set]
 
-    if not files:
-        print(
-            f"No [ANALYZED] files found for week of {monday.isoformat()} — nothing to compile."
-        )
-        return 0
-
-    # Parse metadata and classify
+    # Parse metadata and classify transcript-backed files
     metas = [_parse_meta(f) for f in files]
     for m in metas:
         m.row = _classify(m)
         m.duration_min = _duration(m)
 
-    print(f"Timecard week: {monday.isoformat()} – {week_end.isoformat()}")
-    print(f"Found {len(metas)} file(s):")
+    # Fetch calendar events for the week and identify gaps (meetings with no transcript)
+    cal_events = calendar_reader.fetch_range(monday, week_end)
+    analyzed_titles_by_day: dict[date, set[str]] = {}
     for m in metas:
-        print(f"  [{m.row}] {m.meeting_date} — {m.title} ({m.duration_min}min)")
+        if m.meeting_date:
+            analyzed_titles_by_day.setdefault(m.meeting_date, set()).add(
+                m.title.lower().strip()
+            )
+
+    # Calendar-only stubs: events that have no matching analyzed file
+    cal_stubs: list[_CalStub] = []
+    for ev in cal_events:
+        ev_date = ev.start.date() if ev.start else None
+        if ev_date not in week_day_set:
+            continue
+        ev_title_lower = ev.title.lower().strip()
+        already_analyzed = any(
+            ev_title_lower in title or title in ev_title_lower
+            for title in analyzed_titles_by_day.get(ev_date, set())
+        )
+        if not already_analyzed:
+            row = _classify_calendar_event(ev)
+            dur = _duration_from_calendar(ev)
+            cal_stubs.append(_CalStub(ev_date, ev.title, row, dur))
+
+    if not files and not cal_stubs:
+        print(
+            f"No [ANALYZED] files or calendar events found for week of {monday.isoformat()} — nothing to compile."
+        )
+        return 0
+
+    print(f"Timecard week: {monday.isoformat()} – {week_end.isoformat()}")
+    print(f"Found {len(metas)} analyzed file(s), {len(cal_stubs)} calendar-only event(s):")
+    for m in metas:
+        print(f"  [analyzed] [{m.row}] {m.meeting_date} — {m.title} ({m.duration_min}min)")
+    for s in cal_stubs:
+        print(f"  [cal-only] [{s.row}] {s.meeting_date} — {s.title} ({s.duration_min}min)")
 
     # System context (brief + rolodex, same as other synthesis modes)
     context_brief = ""
@@ -301,14 +359,25 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     if CONFIG.model_override:
         model = CONFIG.model_override
 
-    # Build per-row per-day buckets, then compress each non-empty cell
-    # Structure: grid[row][day] = [_FileMeta, ...]
+    # Build per-row per-day buckets.
+    # grid_analyzed: cells with transcript files → LLM-compressed summaries
+    # grid_stubs: cells with calendar-only events → title stubs (no LLM call)
     grid: dict[str, dict[date, list[_FileMeta]]] = {
         row: {d: [] for d in week_days} for row in _ALL_ROWS
     }
     for m in metas:
         if m.meeting_date in week_day_set:
             grid[m.row][m.meeting_date].append(m)
+
+    # Calendar stubs grouped by row+day
+    grid_stubs: dict[str, dict[date, list[str]]] = {
+        row: {d: [] for d in week_days} for row in _ALL_ROWS
+    }
+    for s in cal_stubs:
+        if s.meeting_date in week_day_set:
+            grid_stubs[s.row][s.meeting_date].append(
+                f"{s.title} ({s.duration_min}min)"
+            )
 
     day_names = ["Mon", "Tue", "Wed", "Thu", "Fri"]
     output_rows: dict[str, dict[date, str]] = {row: {} for row in _ALL_ROWS}
@@ -320,33 +389,54 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     for row in _ALL_ROWS:
         for d in week_days:
             entries = grid[row][d]
-            if not entries:
+            stubs = grid_stubs[row][d]
+            if not entries and not stubs:
                 output_rows[row][d] = "—"
                 continue
-            processed += 1
-            day_label = day_names[week_days.index(d)]
-            print(
-                f"  Compressing {row} / {day_label} {d.isoformat()} "
-                f"({len(entries)} meeting(s), cell {processed}/{total_cells})..."
-            )
-            try:
-                output_rows[row][d] = _compress(entries, system, model)
-            except Exception as e:
+            if entries:
+                processed += 1
+                day_label = day_names[week_days.index(d)]
                 print(
-                    f"  WARNING: compression failed for {row}/{d} — {e}",
-                    file=sys.stderr,
+                    f"  Compressing {row} / {day_label} {d.isoformat()} "
+                    f"({len(entries)} meeting(s), cell {processed}/{total_cells})..."
                 )
-                # Fallback: join titles
-                fallback = "; ".join(m.title for m in entries)
-                output_rows[row][d] = fallback[:255]
+                try:
+                    compressed = _compress(entries, system, model)
+                except Exception as e:
+                    print(
+                        f"  WARNING: compression failed for {row}/{d} — {e}",
+                        file=sys.stderr,
+                    )
+                    compressed = "; ".join(m.title for m in entries)[:255]
+            else:
+                compressed = ""
+            # Append calendar-only stubs as italicized titles
+            if stubs:
+                stub_text = "; ".join(stubs)
+                if compressed:
+                    output_rows[row][d] = f"{compressed}  *(+ cal: {stub_text})*"
+                else:
+                    output_rows[row][d] = f"*(cal only)* {stub_text}"
+            else:
+                output_rows[row][d] = compressed
 
     # --- Build the markdown output ---
     now = datetime.now()
     iso = now.strftime("%Y-%m-%dT%H-%M-%S")
+    cal_total = len(cal_events)
+    cal_covered = cal_total - len(cal_stubs)
+    coverage_note = (
+        f"*Calendar coverage: {cal_covered}/{cal_total} meetings have transcripts; "
+        f"{len(cal_stubs)} are calendar-only stubs (marked `cal only` in the rows below).*"
+        if cal_total > 0
+        else "*Calendar data unavailable — binary not found or permission not granted.*"
+    )
+
     lines = [
         f"# Weekly Timecard — Week of {monday.isoformat()} – {week_end.isoformat()}",
         f"",
         f"*Generated {now.strftime('%Y-%m-%d %H:%M')} from {len(metas)} analyzed meeting file(s).*",
+        coverage_note,
         f"*Note: hours are estimated (30min = standup/daily; 60min = all others). Adjust as needed.*",
         f"",
     ]

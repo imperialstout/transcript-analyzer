@@ -13,6 +13,7 @@ colors:
   red: "#f76f6f"
   purple: "#b08ef7"
   cyan: "#3ecfcf"
+  gold: "#cfaf3e"
 typography:
   ui:
     fontFamily: '"SF Pro Text", system-ui, sans-serif'
@@ -106,7 +107,7 @@ Interactive components are precise and considered. Buttons have a hair of transi
 
 **Key Characteristics:**
 - Near-black field (`#0f1117`) as the absolute base — the screen recedes
-- Semantic color vocabulary: six named signal colors, each owned by a single role
+- Semantic color vocabulary: seven named signal colors, each owned by a single role
 - Flat tonal layering, no drop shadows anywhere
 - 11px uppercase tracked labels for all section headers and table columns
 - SF Pro Text / system-ui as the sole prose face; SF Mono exclusively for code and live job output
@@ -127,6 +128,7 @@ A near-monochromatic dark field punctuated by six precisely-owned signal colors.
 - **Alert Red** (`#f76f6f`): EXEC badge, overdue badge, error flash, triage alert banner, danger button text. Implies "act now."
 - **Delegation Purple** (`#b08ef7`): They-owe badge. Named to distinguish "other person's ownership."
 - **Watch Cyan** (`#3ecfcf`): Insight badge. Quiet, informational — not urgent.
+- **Deferred Gold** (`#cfaf3e`): Deferred badge text and the inbox card header — the only warm-yellow signal, owned by the "not now, but not dropped" state.
 
 ### Neutral
 - **Deep Void** (`#0f1117`): Page background. The terminal floor.
@@ -136,7 +138,7 @@ A near-monochromatic dark field punctuated by six precisely-owned signal colors.
 - **Muted Text** (`#7a7f96`): Timestamps, cost figures, section headers in cards, placeholder and secondary metadata.
 
 ### Named Rules
-**The One Hue, One Role Rule.** Each signal color — blue, green, orange, red, purple, cyan — is owned by exactly one semantic role. Never repurpose `--accent` for decoration, never use `--green` for anything other than success/confirmation, and never use `--red` for anything other than urgency/danger. The vocabulary works because it's consistent; a single exception breaks the whole system.
+**The One Hue, One Role Rule.** Each signal color — blue, green, orange, red, purple, cyan, gold — is owned by exactly one semantic role. Never repurpose `--accent` for decoration, never use `--green` for anything other than success/confirmation, and never use `--red` for anything other than urgency/danger. The vocabulary works because it's consistent; a single exception breaks the whole system.
 
 **The Neutral Majority Rule.** At least 90% of any given screen surface uses only the four neutral tokens. Signal colors are the 10% that earns attention by being rare.
 
@@ -233,6 +235,7 @@ The primary structural unit. All content lives in cards.
 - **Focus:** border shifts to `--accent` (no glow, no box-shadow — consistent with the no-shadow rule)
 - **Date pickers:** same base style; appear inline in the action row alongside buttons
 - **Textarea (Slack Paste):** same tokens, 360px min-height, vertical resize only
+- **Toggle switch:** 36×20px pill track (`--border` unchecked, `--accent` checked), 14×14px circular thumb. Hidden `<input>` has `position: absolute`; keyboard focus ring (2px `--accent` outline) appears on the `.slider` track via `:focus-visible + .slider` — visible to keyboard users without disrupting mouse-driven layout.
 
 ### Navigation
 
@@ -254,9 +257,10 @@ A signature component of the dashboard. Flex-wrap row of minimum-width tiles, ea
 The live terminal embed shown when a synthesis or analysis job is running.
 
 - **Container:** `--surface` background, `1px --border`, 8px radius, 16px padding
-- **Output text:** 12px SF Mono, `--text`, 1.6 line-height, `pre-wrap`, max-height 320px, scroll-to-bottom on update
+- **Output text:** 12px SF Mono, `--text`, 1.6 line-height, `pre-wrap`, `overflow-wrap: break-word`, max-height 320px, scroll-to-bottom on update
 - **Status line:** 12px uppercase `--muted`, with an inline CSS animation spinner (`--border`/`--accent`) when running
 - **Failure state:** the "done" indicator turns `--red` and the panel stays visible — never auto-reloads a failed job away
+- **Accessibility:** `role="log"` and `aria-live="polite"` on the output container so screen readers announce streamed lines
 
 ### Alert Banner (Triage)
 
@@ -275,6 +279,8 @@ The highest-urgency surface. Appears only when undismissed triage alerts exist.
 - **Do** keep the stat tile value at 22px bold — it's the only large text in the system. A second large-text element breaks the visual hierarchy.
 - **Do** use the dark-tinted badge pattern (dark saturated background + colored text) for all new semantic badge types — never a solid bright background.
 - **Do** make the OVERDUE badge (`#4a1010` / `--red` bold) the most visually prominent badge. It should be louder than everything except the triage alert banner.
+- **Do** apply `overflow-wrap: break-word` to all flex-child text containers (`.bs-text`, `.alert-text`, job output). AI-generated obligation text and long meeting titles will shatter flex layouts without it.
+- **Do** truncate the source-file column in tables (`max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap`) and expose the full name in a `title` attribute.
 
 ### Don't:
 - **Don't** add box-shadows. The depth model is tonal. Any shadow is a regression.
@@ -283,3 +289,4 @@ The highest-urgency surface. Appears only when undismissed triage alerts exist.
 - **Don't** mix radius tiers within a component. Cards are 8px. Buttons/inputs are 6px. Badges are 4px. No ad-hoc values.
 - **Don't** use uppercase for body text. The uppercase register is exclusively structural (labels, badges, column headers). Body text and item text are sentence case.
 - **Don't** auto-reload the page after a failed job. The output panel must stay visible when `returncode !== 0`. Reloading a failure away is a loss of diagnostic signal.
+- **Don't** introduce new accent colors. The seven signal colors are complete: blue (action), green (success), orange (warning), red (danger/urgency), purple (delegation), cyan (information), gold (deferred). An eighth color dilutes the vocabulary.

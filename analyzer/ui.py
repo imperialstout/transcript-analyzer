@@ -57,6 +57,10 @@ _job: dict | None = None  # {"mode": str, "output": str, "done": bool, "returnco
 # an analysis run, not the UI. main() reconstructs the real `-m analyzer ui` form.
 _REEXEC_ARGV: list[str] = []
 
+# Ambient warning state — set by the most recent _render() call so the
+# indicator survives across pages without re-querying on every request.
+_last_render_warnings: list[str] = []
+
 
 def _load_env_file() -> dict[str, str]:
     vals: dict[str, str] = {}
@@ -121,6 +125,9 @@ def _run_job(cmd: list[str], mode: str) -> None:
         text=True,
         cwd=str(Path(__file__).parent.parent),
     )
+    with _job_lock:
+        if _job is not None:
+            _job["proc"] = proc
     buf: list[str] = []
     log = None
     try:
@@ -169,6 +176,7 @@ _MODE_LABELS = {
     "career": "Career Trajectory review",
     "catch-up": "catch-up (one pulse per backlog day)",
     "timecard": "Weekly Timecard compilation",
+    "program-pulse": "Program Pulse sweep",
     "analysis": "transcript analysis",
 }
 
@@ -274,12 +282,19 @@ def _shared_folder_url() -> str:
     return os.environ.get("SHARED_FOLDER_URL", "") or _load_env_file().get("SHARED_FOLDER_URL", "")
 
 
+_PAGE_TITLES = {
+    "brief-state": "Brief State — Transcript Analyzer",
+    "home": "Files — Transcript Analyzer",
+    "slack-paste": "Slack Paste — Transcript Analyzer",
+    "settings": "Settings — Transcript Analyzer",
+}
+
 _HTML = """\
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Transcript Analyzer</title>
+<title>{{ page_title }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -297,6 +312,12 @@ _HTML = """\
     --bg-danger:   #3a1f1f; --border-danger: #5a2e2e;
     --bg-inbox:    #1e1c10; --border-inbox: #3a3010;
     --bg-job-run:  #1a2540;
+    /* deep tints — dark variants for hover states and specialty surfaces */
+    --bg-exec-deep:     #4a2828;
+    --bg-daily-deep:    #1b3628;
+    --bg-void-deep:     #1e1e1e;
+    --bg-deferred-deep: #5a3e1f;
+    --bg-watch-deep:    #1a3030;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font: 14px/1.5 "SF Pro Text", system-ui, sans-serif; }
@@ -310,7 +331,7 @@ _HTML = """\
 
   header { background: var(--surface); border-bottom: 1px solid var(--border);
            padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
-  header h1 { font-size: 15px; font-weight: 600; }
+  header h1 { font-size: 14px; font-weight: 600; }
   nav { display: flex; gap: 4px; }
   nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 6px; transition: color .15s, background .15s; }
   nav a:hover, nav a.active { color: var(--text); background: var(--border); }
@@ -326,7 +347,7 @@ _HTML = """\
   .btn-secondary, button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
   .btn-secondary:hover, button.secondary:hover { background: var(--border); opacity: 1; }
   .btn-destructive, button.danger { background: var(--bg-danger); color: var(--red); border: 1px solid var(--border-danger); }
-  .btn-destructive:hover, button.danger:hover { background: #4a2828; opacity: 1; }
+  .btn-destructive:hover, button.danger:hover { background: var(--bg-exec-deep); opacity: 1; }
   .btn-sm { padding: 3px 10px; font-size: 11px; border-radius: 4px; }
 
   /* ── Focus rings (keyboard navigation) ── */
@@ -343,7 +364,7 @@ _HTML = """\
   input[type=date]:focus { outline: none; border-color: var(--accent); }
 
   .flash { padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-  .flash-ok  { background: #1b3628; color: var(--green); }
+  .flash-ok  { background: var(--bg-daily-deep); color: var(--green); }
   .flash-err { background: var(--bg-danger); color: var(--red); }
 
   /* ── Stats ── */
@@ -372,6 +393,7 @@ _HTML = """\
   th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase;
        letter-spacing: .05em; padding: 6px 10px; border-bottom: 1px solid var(--border); }
   td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .td-source { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
 
   /* ── Badges ── */
@@ -383,8 +405,8 @@ _HTML = """\
   .badge-standup   { background: var(--bg-standup);  color: var(--orange); }
   .badge-notes     { background: var(--bg-notes);    color: var(--purple); }
   .badge-pulse     { background: var(--bg-pulse);    color: var(--green); }
-  .badge-delta     { background: var(--bg-standup);   color: var(--orange); }
-  .badge-synthesis { background: var(--bg-daily);    color: var(--green); }
+  .badge-delta     { background: var(--bg-watch-deep); color: var(--cyan); }
+  .badge-synthesis { background: var(--bg-notes);     color: var(--purple); }
   .badge-act       { background: var(--bg-act);      color: var(--red); }
   .badge-watch     { background: var(--bg-watch);    color: var(--orange); }
   .badge-delegate  { background: var(--bg-delegate); color: var(--accent); }
@@ -394,7 +416,7 @@ _HTML = """\
   .badge-complete  { background: var(--bg-complete); color: var(--green); }
   .badge-deferred  { background: var(--bg-deferred); color: var(--gold); }
   .badge-expired   { background: var(--bg-expired);  color: var(--red); }
-  .badge-dropped   { background: #1e1e1e;            color: var(--muted); }
+  .badge-dropped   { background: var(--bg-void-deep); color: var(--muted); }
   .badge-overdue   { background: var(--bg-overdue);  color: var(--red); font-weight: 700; }
 
   /* ── Job panel ── */
@@ -403,7 +425,8 @@ _HTML = """\
   #job-status h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
                    color: var(--muted); margin-bottom: 10px; }
   #job-output { font: 12px/1.6 "SF Mono", "Menlo", monospace; color: var(--text);
-                white-space: pre-wrap; max-height: 320px; overflow-y: auto; }
+                white-space: pre-wrap; max-height: 320px; overflow-y: auto;
+                overflow-wrap: break-word; }
   .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border);
              border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -419,7 +442,8 @@ _HTML = """\
   .field .desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .toggle-row { display: flex; align-items: center; gap: 10px; }
   .toggle { position: relative; width: 36px; height: 20px; }
-  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
   .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border);
             border-radius: 20px; transition: .2s; }
   .slider:before { content: ""; position: absolute; height: 14px; width: 14px;
@@ -450,7 +474,7 @@ _HTML = """\
   .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
                 border-top: 1px solid var(--bg-alert-item); }
   .alert-item:first-of-type { border-top: none; }
-  .alert-text { flex: 1; font-size: 13px; line-height: 1.5; }
+  .alert-text { flex: 1; font-size: 13px; line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
   .alert-source { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
   /* ── Brief state ── */
@@ -458,7 +482,7 @@ _HTML = """\
              border-top: 1px solid var(--border); }
   .bs-item:first-of-type { border-top: none; }
   .bs-body { flex: 1; min-width: 0; }
-  .bs-text { font-size: 13px; line-height: 1.5; }
+  .bs-text { font-size: 13px; line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
   .bs-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
   .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
@@ -476,22 +500,154 @@ _HTML = """\
   /* ── Inbox card (candidates) ── */
   .card-inbox { background: var(--bg-inbox); border-color: var(--border-inbox); }
   .card-inbox h2 { color: var(--gold); }
+
+  /* ── Nav badge (pending count) ── */
+  .nav-badge { background: var(--red); color: #fff; border-radius: 10px;
+               padding: 0 6px; font-size: 12px; font-weight: 700; line-height: 18px;
+               display: inline-block; vertical-align: middle; margin-left: 4px; }
+
+  /* ── Inline code token ── */
+  .code-inline { color: var(--text); font-family: "SF Mono", "Menlo", monospace; font-size: 11px; }
+
+  /* ── Render-warnings ambient chip in header ── */
+  .render-warn-chip { display: inline-flex; align-items: center; gap: 5px;
+                      background: var(--bg-danger); color: var(--orange); border: 1px solid var(--bg-deferred-deep);
+                      border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700;
+                      text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+
+  /* ── Brief-state briefing banner (overdue-aware) ── */
+  .bs-brief-banner { background: var(--bg-alert); border: 1px solid var(--border-alert);
+                     border-radius: 8px; padding: 14px 20px; margin-bottom: 20px;
+                     display: flex; align-items: flex-start; gap: 12px; }
+  .bs-brief-banner-icon { font-size: 16px; flex-shrink: 0; padding-top: 1px; }
+  .bs-brief-banner-body { flex: 1; }
+  .bs-brief-banner-title { font-size: 13px; font-weight: 700; color: var(--red);
+                           text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .bs-brief-banner-items { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .bs-brief-banner-items li { font-size: 13px; line-height: 1.5;
+                               overflow-wrap: break-word; word-break: break-word; }
+
+  /* ── Staleness badge on Brief State nav link ── */
+  .bs-stale-badge { background: var(--bg-overdue); color: var(--red); border-radius: 4px;
+                    padding: 1px 5px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+                    text-transform: uppercase; margin-left: 4px; vertical-align: middle; }
+
+  /* ── Defer toggle ── */
+  .defer-wrap { display: none; flex-wrap: wrap; gap: 6px; align-items: center;
+                margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .defer-wrap.open { display: flex; }
+  .btn-defer-toggle { background: none; border: 1px solid var(--border); color: var(--muted);
+                      border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;
+                      cursor: pointer; }
+  .btn-defer-toggle:hover { color: var(--text); border-color: var(--muted); opacity: 1; }
+
+  /* ── Screen-reader only ── */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+             overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  /* ── Header quick-run strip (Brief State only) ── */
+  .header-quick-run { display: flex; gap: 6px; align-items: center; margin-left: 8px;
+                      padding-left: 12px; border-left: 1px solid var(--border); }
+
+  /* ── Synthesis button frequency tiers ── */
+  .btn-daily-pulse { background: var(--accent); color: #fff; border: none; }
+  .btn-daily-pulse:hover { opacity: .85; }
+  .btn-periodic { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-periodic:hover { background: var(--border); opacity: 1; }
+  .btn-rare { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .btn-rare:hover { color: var(--text); background: var(--border); opacity: 1; }
+
+  /* ── Operations drawer (collapsible) ── */
+  details.ops-drawer > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center;
+    gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); padding: 2px 0 14px; user-select: none; }
+  details.ops-drawer > summary::-webkit-details-marker { display: none; }
+  details.ops-drawer > summary .ops-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.ops-drawer[open] > summary .ops-chevron { transform: rotate(90deg); }
+
+  /* ── Pulse freshness chip ── */
+  .pulse-freshness { font-size: 11px; white-space: nowrap; }
+  .pulse-green  { color: var(--green); }
+  .pulse-orange { color: var(--orange); }
+  .pulse-red    { color: var(--red); }
+  .pulse-gray   { color: var(--muted); }
+
+  /* ── Weekly Delta staleness nudge ── */
+  .weekly-nudge { font-size: 11px; white-space: nowrap; }
+  .weekly-nudge-orange { color: var(--orange); }
+  .weekly-nudge-muted  { color: var(--muted); }
+
+  /* ── Career full-active border hint ── */
+  .career-full-active { border-color: var(--orange) !important; }
+
+  /* ── Meeting Prep card ── */
+  .prep-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .prep-controls select, .prep-controls input[type=text] {
+    flex: 1; min-width: 180px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px; padding: 7px 10px; }
+  .prep-controls select:focus, .prep-controls input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .prep-bullet { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
+  .prep-bullet:last-child { border-bottom: none; }
+
+  /* ── Source drawer ── */
+  #source-drawer { position: fixed; top: 0; right: 0; width: 540px; max-width: 95vw; height: 100vh;
+    background: var(--surface); border-left: 1px solid var(--border); z-index: 100;
+    display: flex; flex-direction: column; transform: translateX(100%); transition: transform .2s ease; }
+  #source-drawer.open { transform: translateX(0); }
+  #source-drawer-header { display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #source-drawer-title { font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #source-drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  #source-drawer-content { font: 12px/1.6 "SF Mono", "Menlo", monospace; color: var(--text);
+    white-space: pre-wrap; overflow-wrap: break-word; }
+
+  /* ── Keyboard focus act item ── */
+  .bs-item-focused { border-left: 2px solid var(--accent); padding-left: 18px; margin-left: -20px;
+    padding-right: 20px; margin-right: -20px; background: rgba(79,142,247,.06); }
+  .kb-hint { font-size: 11px; color: var(--muted); padding: 8px 0 2px; border-top: 1px solid var(--border); margin-top: 8px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Transcript Analyzer</h1>
   <nav>
-    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %} <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700;line-height:18px;display:inline-block;vertical-align:middle;margin-left:4px">{{ pending_act_count }}</span>{% endif %}</a>
+    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %}<span class="nav-badge" aria-label="{{ pending_act_count }} pending">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/files" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
-  {% if shared_url %}
-  <a class="btn" style="margin-left:auto" href="{{ shared_url }}" target="_blank" rel="noopener">
-    ↗ Shared Meeting Files
-  </a>
+  {% if page == 'brief-state' %}
+  <div class="header-quick-run">
+    <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
+      <button type="submit" class="btn-sm" title="Pick up new transcripts from the inbox">⚡ Run Analysis</button>
+    </form>
+    <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:5px;align-items:center" id="daily-pulse-quick-form">
+      <input type="hidden" name="mode" value="daily">
+      <button type="submit" class="btn-daily-pulse btn-sm" title="Synthesize today's analyses into a Daily Pulse">▶ Daily Pulse</button>
+    </form>
+    {% if last_pulse %}
+      {% if last_pulse.analyses_since > 0 %}
+      <span class="pulse-freshness pulse-{{ last_pulse.status }}">
+        {{ last_pulse.analyses_since }} new — <a href="#" onclick="document.getElementById('daily-pulse-quick-form').submit();return false;" style="color:inherit;text-decoration:underline">run now?</a>
+      </span>
+      {% else %}
+      <span class="pulse-freshness pulse-{{ last_pulse.status }}">Last pulse: {{ last_pulse.label }}</span>
+      {% endif %}
+    {% endif %}
+  </div>
   {% endif %}
+  <div class="header-spacer" style="flex:1"></div>
+  <div class="header-right" style="display:flex;gap:8px;align-items:center">
+    {% if render_warnings %}
+    <span class="render-warn-chip" title="{{ render_warnings | join('; ') }}">⚠ {{ render_warnings | length }} warning{{ 's' if render_warnings | length != 1 else '' }}</span>
+    {% endif %}
+    {% if shared_url %}
+    <a class="btn{% if render_warnings %} btn-secondary{% endif %}" href="{{ shared_url }}" target="_blank" rel="noopener">
+      ↗ Shared Meeting Files
+    </a>
+    {% endif %}
+  </div>
 </header>
 <div class="content">
 {{ body | safe }}
@@ -528,8 +684,11 @@ function startPoll(label) {
   document.getElementById('job-done').style.display = 'none';
   if (indicator) indicator.style.display = 'inline';
   _pollTimer = setInterval(async () => {
-    const r = await fetch('/job-status');
-    const d = await r.json();
+    let d;
+    try {
+      const r = await fetch('/job-status');
+      d = await r.json();
+    } catch (_) { return; } // network blip — retry next tick
     document.getElementById('job-output').textContent = d.output || '';
     const el = document.getElementById('job-output');
     el.scrollTop = el.scrollHeight;
@@ -544,8 +703,10 @@ function startPoll(label) {
         done.style.display = 'inline';
         done.style.color = 'var(--red)';
         done.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.';
+        document.title = '⚠ Job failed — Transcript Analyzer';
       } else {
         document.getElementById('job-done').style.display = 'inline';
+        document.title = '✓ Done — Transcript Analyzer';
         // Reload page so new files appear; pass a flash if analysis found new files
         let reloadUrl = location.pathname;
         if (d.new_count && d.new_count > 0) {
@@ -557,10 +718,147 @@ function startPoll(label) {
     }
   }, 1200);
 }
+// Keyboard triage for act items (Brief State only)
+(function() {
+  var _focusedIdx = -1;
+  function _actItems() { return Array.from(document.querySelectorAll('[data-act-id]')); }
+  function _setFocus(idx) {
+    var items = _actItems();
+    if (!items.length) return;
+    items.forEach(function(el) { el.classList.remove('bs-item-focused'); });
+    _focusedIdx = Math.max(0, Math.min(idx, items.length - 1));
+    items[_focusedIdx].classList.add('bs-item-focused');
+    items[_focusedIdx].scrollIntoView({block:'nearest'});
+  }
+  function _submitAction(el, selector) {
+    var btn = el.querySelector(selector);
+    if (btn) btn.closest('form') ? btn.closest('form').submit() : btn.click();
+  }
+  document.addEventListener('keydown', function(e) {
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var items = _actItems();
+    if (!items.length) return;
+    if (_focusedIdx < 0) _focusedIdx = 0;
+    var el = items[_focusedIdx];
+    if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); _setFocus(_focusedIdx + 1); return; }
+    if (e.key === 'ArrowUp'   || e.key === 'i') { e.preventDefault(); _setFocus(_focusedIdx - 1); return; }
+    if (e.key === 'k') { e.preventDefault(); _submitAction(el, '[data-act-action="done"]'); return; }
+    if (e.key === 'd') {
+      e.preventDefault();
+      var dropBtn = el.querySelector('[data-act-action="drop"]');
+      if (dropBtn) {
+        var frm = dropBtn.closest('form');
+        if (frm && confirm('Drop this item? It will be marked dropped.')) frm.submit();
+      }
+      return;
+    }
+    if (e.key === '1') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,1); return; }
+    if (e.key === '3') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,3); return; }
+    if (e.key === 'm') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,0); return; }
+  });
+  // Auto-focus first item on page load if on brief-state
+  if (document.querySelector('[data-act-id]')) { setTimeout(function(){_setFocus(0);}, 50); }
+})();
+
+// Source drawer
+async function openSourceDrawer(itemId, sourcePulse) {
+  const drawer = document.getElementById('source-drawer');
+  const title = document.getElementById('source-drawer-title');
+  const content = document.getElementById('source-drawer-content');
+  title.textContent = sourcePulse || 'Source';
+  content.textContent = 'Loading…';
+  drawer.classList.add('open');
+  try {
+    const resp = await fetch('/source/' + encodeURIComponent(itemId));
+    const data = await resp.json();
+    content.textContent = data.text || '(empty)';
+  } catch(e) {
+    content.textContent = 'Failed to load: ' + e;
+  }
+}
+function closeSourceDrawer() {
+  document.getElementById('source-drawer').classList.remove('open');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSourceDrawer();
+});
+
+// Meeting Prep
+async function runMeetingPrep() {
+  const program = document.getElementById('prep-program').value;
+  if (!program) { alert('Select a program first'); return; }
+  const context = document.getElementById('prep-context').value;
+  const btn = document.getElementById('prep-submit');
+  btn.disabled = true; btn.textContent = 'Prepping…';
+  try {
+    const resp = await fetch('/meeting-prep', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({program, context})
+    });
+    const data = await resp.json();
+    const out = document.getElementById('prep-output');
+    if (data.bullets && data.bullets.length) {
+      out.innerHTML = data.bullets.map(b => '<div class="prep-bullet">' + b.replace(/[*][*]([^*]+)[*][*]/g, '<strong>$1</strong>') + '</div>').join('');
+    } else {
+      out.innerHTML = '<div class="prep-bullet muted">No bullets returned.</div>';
+    }
+    out.style.display = 'block';
+  } catch(e) {
+    const out = document.getElementById('prep-output');
+    out.innerHTML = '<div class="prep-bullet" style="color:var(--red)">Request failed: ' + e + '</div>';
+    out.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Prep';
+}
+
+// Refresh signals (program pulse sweep)
+function refreshSignals() {
+  const btn = document.getElementById('prep-refresh-btn');
+  const prepBtn = document.getElementById('prep-submit');
+  btn.disabled = true; btn.textContent = 'Refreshing…';
+  if (prepBtn) prepBtn.disabled = true;
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = '/synthesize';
+  const modeInput = document.createElement('input');
+  modeInput.type = 'hidden'; modeInput.name = 'mode'; modeInput.value = 'program-pulse';
+  form.appendChild(modeInput);
+  document.body.appendChild(form);
+  startPoll('Running Program Pulse sweep…');
+  form.submit();
+}
+
+// Career full re-read guard
+function careerSubmit(form, startPollFn) {
+  const full = form.querySelector('#career-full');
+  if (full && full.checked) {
+    if (!confirm('Full re-read will process all analyzed files through Opus. This may take 10+ minutes and cost $5–15. Proceed?')) return false;
+  }
+  startPollFn('Running Career Trajectory review…');
+  return true;
+}
+
+// Prevent double-submission on all brief-state action forms.
+// Synthesis forms use startPoll() which reloads the page, so they self-reset.
+document.addEventListener('submit', function(e) {
+  const form = e.target;
+  // Don't lock synthesis/analysis forms — startPoll shows status independently.
+  if (form.action && (
+      form.action.includes('/synthesize') ||
+      form.action.includes('/run-analysis')
+  )) return;
+  form.querySelectorAll('button[type=submit]').forEach(function(btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+  });
+});
+
 // Auto-resume polling if server reports a job in-flight when page loads
 (function() {
   {% if job_running %}
-  startPoll('{{ job_label }}…');
+  startPoll({{ job_label | tojson }} + '…');
   {% endif %}
 })();
 </script>
@@ -581,7 +879,8 @@ _HOME_BODY = """\
 <div class="alert-banner">
   <div class="alert-banner-header">
     <span class="alert-banner-title">⚠ {{ triage_alerts|length }} Triage Alert{{ 's' if triage_alerts|length != 1 else '' }} — Action Required</span>
-    <form method="post" action="/alerts/dismiss-all" style="display:inline">
+    <form method="post" action="/alerts/dismiss-all" style="display:inline"
+          onsubmit="return confirm('Dismiss all {{ triage_alerts|length }} alert{{ \'s\' if triage_alerts|length != 1 else \'\' }}?');">
       <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
     </form>
   </div>
@@ -592,7 +891,7 @@ _HOME_BODY = """\
       <div class="alert-source">{{ a.source }}{% if a.source_date %} · {{ a.source_date }}{% endif %}</div>
     </div>
     <form method="post" action="/alerts/dismiss/{{ a.id }}" style="display:inline">
-      <button type="submit" class="btn-destructive btn-sm">Dismiss</button>
+      <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
     </form>
   </div>
   {% endfor %}
@@ -624,7 +923,7 @@ _HOME_BODY = """\
     {% for r in rows[:25] %}
     <tr>
       <td class="muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
-      <td>
+      <td class="td-source">
         {% if r.mode == "synthesis" %}
           <a class="quick-link" href="/open-file?path={{ analyzed_path }}/{{ r.output }}" title="{{ r.source }}">{{ r.output }}</a>
         {% else %}
@@ -669,7 +968,7 @@ _SETTINGS_BODY = """\
 <div class="card" style="height:100%">
   <h2>Configuration</h2>
   <p style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6">
-    Saved to <code style="color:var(--text);font-family:'SF Mono',monospace;font-size:11px">~/.config/transcript-analyzer/.env</code>.
+    Saved to <code class="code-inline">~/.config/transcript-analyzer/.env</code>.
     Restart server for changes to take effect.
   </p>
 
@@ -692,7 +991,7 @@ _SETTINGS_BODY = """\
   {% endfor %}
 
   <div style="padding-top:4px">
-    <button type="submit" class="btn-secondary">Save settings</button>
+    <button type="submit">Save settings</button>
   </div>
 </div>
 </form>
@@ -725,7 +1024,7 @@ _SETTINGS_BODY = """\
           onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
       <button type="submit" class="btn-secondary">↻ Restart server</button>
     </form>
-    <div class="desc" style="margin-top:8px">Re-execs in place to pick up code or <code>.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
+    <div class="desc" style="margin-top:8px">Re-execs in place to pick up code or <code class="code-inline">.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
   </div>
 </div>
 
@@ -743,70 +1042,107 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-<div class="card">
-  <h2>Operations</h2>
-  <div class="action-tier">
-    <span class="action-tier-label">Daily</span>
-    <div class="action-group">
-      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
-        <button type="submit">⚡ Run Analysis</button>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="daily">
-        <button type="submit" class="btn-secondary">▶ Daily Pulse</button>
-        <input type="date" name="date" title="Leave blank for today; pick a past date to back-date">
-      </form>
-    </div>
+{# ── MEETING PREP ── #}
+<div class="card" id="meeting-prep-card">
+  <h2>Meeting Prep</h2>
+  <div class="prep-controls">
+    <select id="prep-program" name="program">
+      <option value="">Select program…</option>
+      {% for p in programs %}
+      <option value="{{ p.key }}">{{ p.label }}{% if p.last_updated %} ({{ p.last_updated }}){% endif %}{% if p.stale_warn %} ⚠{% endif %}</option>
+      {% endfor %}
+    </select>
+    <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
+    <button class="btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
+    <button class="btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
   </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Periodic</span>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
-        <input type="date" name="date" title="Leave blank for this week">
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="catch-up">
-        <button type="submit" class="btn-secondary">▶ Catch Up</button>
-        <input type="date" name="since" title="Start from this date (leave blank for full backlog)">
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Career Trajectory review…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="career">
-        <button type="submit" class="btn-secondary">▶ Career</button>
-        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
-               title="Re-read ALL analyses to re-baseline. Off = incremental.">
-          <input type="checkbox" name="full" value="1"> full
-        </label>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="timecard">
-        <button type="submit" class="btn-secondary">▶ Timecard</button>
-        <input type="date" name="date" title="Leave blank for current week">
-      </form>
-    </div>
-  </div>
+  <div id="prep-output" style="display:none"></div>
 </div>
 
-<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
-  <h3>
-    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
-    <span id="job-done" style="display:none">Done — refreshing…</span>
-  </h3>
-  <div id="job-output">{{ job_output }}</div>
+{# ── P0 BRIEF BANNER: overdue acts surfaced before anything else ── #}
+{% set overdue_acts = act_items | selectattr('overdue') | list %}
+{% if overdue_acts %}
+<div class="bs-brief-banner" role="region" aria-label="Overdue obligations">
+  <div class="bs-brief-banner-icon">🔴</div>
+  <div class="bs-brief-banner-body">
+    <div class="bs-brief-banner-title">{{ overdue_acts|length }} overdue act{{ 's' if overdue_acts|length != 1 else '' }} — action required</div>
+    <ul class="bs-brief-banner-items">
+      {% for item in overdue_acts %}
+      <li>{{ item.text }}{% if item.days_overdue %} <span class="badge badge-overdue" style="font-size:10px">{{ item.days_overdue }}d overdue</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{# ── ACT ITEMS ── #}
+<div class="card" style="{% if overdue_acts %}border-color:var(--border-alert){% endif %}">
+  <h2>Act items — Brad owns</h2>
+  {% if act_items %}
+  {% for item in act_items %}
+  <div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
+    <div class="bs-body">
+      <div class="bs-text">
+        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
+        {{ item.text }}
+        {% if item.source_pulse %}<a href="#" class="quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
+      </div>
+      <div class="bs-meta">
+        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
+        From {{ item.source_brief[:10] if item.source_brief else '—' }}
+      </div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="complete">
+          <button type="submit" class="btn-secondary btn-sm" data-act-action="done">Done</button>
+        </form>
+        <form method="post" action="/brief-state/close/{{ item.id }}"
+              onsubmit="return confirm('Drop this item? It will be marked dropped.');">
+          <input type="hidden" name="status" value="dropped">
+          <button type="submit" class="btn-destructive btn-sm" data-act-action="drop">Drop</button>
+        </form>
+        <span class="bs-defer-sep"></span>
+        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
+        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
+        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
+        <details style="display:inline-block">
+          <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+          <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:180px">
+            <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+              <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
+              <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
+              <button type="submit" class="btn-secondary btn-sm">Defer</button>
+            </form>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% if act_items|length >= 2 %}
+  <div class="kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
+  {% endif %}
+  {% else %}
+  <div class="bs-empty" style="display:flex;align-items:center;gap:8px">
+    <span style="color:var(--green);font-size:15px">✓</span>
+    All clear — no pending acts.
+  </div>
+  {% endif %}
 </div>
 
+{# ── INBOX (candidates) ── #}
 {% if candidate_items %}
 <div class="card card-inbox">
-  <h2>Inbox — signals pending triage ({{ candidate_items|length }})</h2>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <h2 style="margin-bottom:0">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
+    <form method="post" action="/brief-state/dismiss-all-candidates" style="display:inline"
+          onsubmit="return confirm('Dismiss all {{ candidate_items|length }} candidate item{{ \'s\' if candidate_items|length != 1 else \'\'}}? They will be marked dismissed.');">
+      <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
+    </form>
+  </div>
   {% for item in candidate_items %}
   <div class="bs-item">
     <div class="bs-body">
@@ -826,7 +1162,8 @@ _BRIEF_STATE_BODY = """\
         <input type="hidden" name="type" value="{{ item.type }}">
         <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)">Accept</button>
       </form>
-      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}">
+      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
+            onsubmit="return confirm('Dismiss this candidate item?');">
         <button type="submit" class="btn-destructive btn-sm">Dismiss</button>
       </form>
     </div>
@@ -835,48 +1172,84 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-<div class="card" style="{% if act_items|selectattr('overdue')|list %}border-color:var(--border-alert){% endif %}">
-  <h2>Act items — Brad owns</h2>
-  {% if act_items %}
-  {% for item in act_items %}
-  <div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}">
-    <div class="bs-body">
-      <div class="bs-text">
-        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
-        {{ item.text }}
-      </div>
-      <div class="bs-meta">
-        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
-        From {{ item.source_brief[:10] if item.source_brief else '—' }}
-      </div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+{# ── OPERATIONS ── #}
+<div class="card">
+  <details class="ops-drawer">
+    <summary><span class="ops-chevron">▶</span> Run synthesis</summary>
+  <div class="action-tier">
+    <span class="action-tier-label">Daily</span>
+    <div class="action-group">
+      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
+        <button type="submit">⚡ Run Analysis</button>
+      </form>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm">Done</button>
-      </form>
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="btn-destructive btn-sm">Drop</button>
-      </form>
-      <div class="bs-defer-sep"></div>
-      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
-      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
-      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to Monday">Mon</button>
-      <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-        <input type="date" name="target" required title="Defer to a specific date" style="width:130px">
-        <button type="submit" class="btn-secondary btn-sm">Defer</button>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="daily">
+        <button type="submit" class="btn-daily-pulse">▶ Daily Pulse</button>
+        <label class="sr-only" for="daily-date">Back-date (optional)</label>
+        <input type="date" id="daily-date" name="date" title="Leave blank for today; pick a past date to back-date">
       </form>
     </div>
   </div>
-  {% endfor %}
-  {% else %}
-  <div class="bs-empty" style="display:flex;align-items:center;gap:8px">
-    <span style="color:var(--green);font-size:15px">✓</span>
-    All clear — no pending acts.
+  <div class="action-tier">
+    <span class="action-tier-label">Periodic</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="weekly">
+        <button type="submit" class="btn-periodic">▶ {% if last_weekly and last_weekly.bdays and last_weekly.bdays > 8 %}Weekly Delta ({{ last_weekly.bdays }}d catch-up){% else %}Weekly Delta{% endif %}</button>
+        <label class="sr-only" for="weekly-date">Week anchor date (optional)</label>
+        <input type="date" id="weekly-date" name="date" title="Leave blank for this week">
+        {% if last_weekly %}
+          {% if last_weekly.label and last_weekly.bdays and last_weekly.bdays > 5 %}
+          <span class="weekly-nudge weekly-nudge-orange" title="Last weekly was {{ last_weekly.label }}">Last: {{ last_weekly.label }}</span>
+          {% elif not last_weekly.label %}
+          <span class="weekly-nudge weekly-nudge-muted">Not yet run</span>
+          {% endif %}
+        {% endif %}
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="catch-up">
+        <button type="submit" class="btn-periodic">▶ Catch Up</button>
+        <label class="sr-only" for="catchup-since">Since date (optional)</label>
+        <input type="date" id="catchup-since" name="since" title="Start from this date (leave blank for full backlog)">
+      </form>
+    </div>
   </div>
-  {% endif %}
+  <div class="action-tier">
+    <span class="action-tier-label">Rare</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" id="career-form"
+            onsubmit="return careerSubmit(this, startPoll)" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="career">
+        <button type="submit" id="career-btn" class="btn-rare">▶ Career</button>
+        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
+               title="Re-read ALL analyses to re-baseline. Off = incremental.">
+          <input type="checkbox" name="full" value="1" id="career-full"
+                 onchange="document.getElementById('career-btn').classList.toggle('career-full-active',this.checked)"> full
+        </label>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="timecard">
+        <button type="submit" class="btn-rare">▶ Timecard</button>
+        <label class="sr-only" for="timecard-date">Week date (optional)</label>
+        <input type="date" id="timecard-date" name="date" title="Leave blank for current week">
+      </form>
+    </div>
+  </div>
+  </details>
+</div>
+
+<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
+  <h3>
+    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-done" style="display:none">Done — refreshing…</span>
+  </h3>
+  <div id="job-output" role="log" aria-live="polite" aria-label="Job output">{{ job_output }}</div>
 </div>
 
 {% if watch_items %}
@@ -899,7 +1272,8 @@ _BRIEF_STATE_BODY = """\
           <input type="hidden" name="status" value="complete">
           <button type="submit" class="btn-secondary btn-sm">Done</button>
         </form>
-        <form method="post" action="/brief-state/close/{{ item.id }}">
+        <form method="post" action="/brief-state/close/{{ item.id }}"
+              onsubmit="return confirm('Drop this watch item? It will be marked dropped.');">
           <input type="hidden" name="status" value="dropped">
           <button type="submit" class="btn-destructive btn-sm">Drop</button>
         </form>
@@ -980,10 +1354,15 @@ _BRIEF_STATE_BODY = """\
 
 {% if recent_closed %}
 <div class="card">
-  <h2>Closed (last 7 days)</h2>
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      Closed (last 7 days)
+      <span class="badge badge-complete" style="margin-left:4px">{{ recent_closed|length }}</span>
+    </summary>
   <table>
     <thead>
-      <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th></tr>
+      <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr>
     </thead>
     <tbody>
     {% for item in recent_closed %}
@@ -992,12 +1371,29 @@ _BRIEF_STATE_BODY = """\
       <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
       <td><span class="badge badge-{{ item.status }}">{{ item.status }}</span></td>
       <td class="muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+      <td>
+        <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
+          <button type="submit" class="btn-secondary btn-sm">Reopen</button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
+  </details>
 </div>
 {% endif %}
+
+{# ── SOURCE DRAWER ── #}
+<div id="source-drawer">
+  <div id="source-drawer-header">
+    <span id="source-drawer-title">Source</span>
+    <button class="btn-secondary btn-sm" onclick="closeSourceDrawer()">✕ Close</button>
+  </div>
+  <div id="source-drawer-body">
+    <pre id="source-drawer-content"></pre>
+  </div>
+</div>
 """
 
 _SLACK_PASTE_BODY = """\
@@ -1033,6 +1429,127 @@ _SLACK_PASTE_BODY = """\
 """
 
 
+def _last_pulse_info() -> dict:
+    """Return freshness info for the most recent [DAILY PULSE] file.
+
+    Returns dict with keys: label, hours, status (green/orange/red/gray),
+    and analyses_since (count of [ANALYZED] files newer than the pulse).
+    Business-day-aware coloring: green <1 bday, orange 1-2 bdays, red >2 bdays.
+    """
+    from datetime import datetime as _dt
+    try:
+        from .config import CONFIG
+        analyzed_dir = CONFIG.analyzed_path
+        pulse_mtime = None
+        for fname in analyzed_dir.iterdir():
+            if "[DAILY PULSE]" in fname.name and fname.is_file():
+                mt = fname.stat().st_mtime
+                if pulse_mtime is None or mt > pulse_mtime:
+                    pulse_mtime = mt
+        if pulse_mtime is None:
+            return {"label": "Never run", "hours": None, "status": "gray", "analyses_since": 0}
+        pulse_dt = _dt.fromtimestamp(pulse_mtime)
+        label = pulse_dt.strftime("%b %-d, %-I:%M %p")
+        hours_ago = (_dt.now() - pulse_dt).total_seconds() / 3600
+        bdays = _business_days_since_dt(pulse_dt)
+        if bdays == 0:
+            status = "green"
+        elif bdays <= 2:
+            status = "orange"
+        else:
+            status = "red"
+        analyses_since = 0
+        for fname in analyzed_dir.iterdir():
+            if "[ANALYZED]" in fname.name and fname.is_file():
+                if fname.stat().st_mtime > pulse_mtime:
+                    analyses_since += 1
+        return {"label": label, "hours": round(hours_ago, 1), "status": status, "analyses_since": analyses_since}
+    except Exception:
+        return {"label": "Unknown", "hours": None, "status": "gray", "analyses_since": 0}
+
+
+def _last_weekly_info() -> dict:
+    """Return freshness info for the most recent [SLACK DELTA] or [WEEKLY SUMMARY] file."""
+    from datetime import datetime as _dt
+    try:
+        from .config import CONFIG
+        analyzed_dir = CONFIG.analyzed_path
+        weekly_mtime = None
+        for fname in analyzed_dir.iterdir():
+            if ("[SLACK DELTA]" in fname.name or "[WEEKLY SUMMARY]" in fname.name) and fname.is_file():
+                mt = fname.stat().st_mtime
+                if weekly_mtime is None or mt > weekly_mtime:
+                    weekly_mtime = mt
+        if weekly_mtime is None:
+            return {"label": None, "days": None, "bdays": None}
+        weekly_dt = _dt.fromtimestamp(weekly_mtime)
+        label = weekly_dt.strftime("%a %b %-d")
+        days = (_dt.now() - weekly_dt).total_seconds() / 86400
+        bdays = _business_days_since_dt(weekly_dt)
+        return {"label": label, "days": round(days, 1), "bdays": bdays}
+    except Exception:
+        return {"label": None, "days": None, "bdays": None}
+
+
+def _business_days_since_dt(dt) -> int:
+    """Count business days (Mon-Fri) between dt and now."""
+    from datetime import datetime as _dt, date as _date
+    today = _date.today()
+    start = dt.date() if hasattr(dt, "date") else dt
+    if start >= today:
+        return 0
+    count = 0
+    current = start
+    from datetime import timedelta as _td
+    while current < today:
+        current += _td(days=1)
+        if current.weekday() < 5:
+            count += 1
+    return count
+
+
+def _get_programs() -> list[dict]:
+    """Scan SiemensRCAGov for STATUS.md files, return sorted list of {key, label, last_updated}."""
+    import re
+    gov_root = Path("~/code/SiemensRCAGov").expanduser()
+    programs = []
+    for status_path in gov_root.rglob("STATUS.md"):
+        try:
+            text = status_path.read_text(encoding="utf-8")
+            fm = {}
+            if text.startswith("---"):
+                end = text.find("---", 3)
+                if end > 0:
+                    for line in text[3:end].splitlines():
+                        if ":" in line:
+                            k, _, v = line.partition(":")
+                            fm[k.strip()] = v.strip().strip('"')
+            key = fm.get("program", "")
+            label = fm.get("label", key)
+            last_updated = fm.get("last_updated", "")
+            if key:
+                stale_warn = False
+                if last_updated:
+                    try:
+                        from datetime import date as _date2
+                        lu = _date2.fromisoformat(last_updated)
+                        bdays_old = _business_days_since_dt(lu)
+                        stale_warn = bdays_old > 3
+                    except Exception:
+                        pass
+                programs.append({
+                    "key": key,
+                    "label": label,
+                    "last_updated": last_updated,
+                    "path": str(status_path),
+                    "stale_warn": stale_warn,
+                })
+        except Exception:
+            continue
+    programs.sort(key=lambda p: p["label"])
+    return programs
+
+
 def _pending_act_count() -> int:
     try:
         from . import brief_state as _bs
@@ -1041,14 +1558,103 @@ def _pending_act_count() -> int:
         return 0
 
 
+def _collect_pipeline_warnings() -> list[str]:
+    """Return a list of short warning strings about pipeline health.
+
+    Called once per page render; results cached in _last_render_warnings so
+    the chip in the header stays consistent across navigations without
+    re-running on each subrequest.
+    """
+    global _last_render_warnings
+    warnings: list[str] = []
+    try:
+        from . import alerts as _alerts
+        undismissed = _alerts.undismissed()
+        if undismissed:
+            warnings.append(f"{len(undismissed)} triage alert{'s' if len(undismissed) != 1 else ''}")
+    except Exception:
+        pass
+    try:
+        # Surface staleness if last analysis is > 8 h old.
+        rows = _analyzed_files()
+        _, stale = _last_analyzed_at(rows)
+        if stale == "danger":
+            warnings.append("pipeline stale (>24 h)")
+        elif stale == "warn":
+            warnings.append("pipeline stale (>8 h)")
+    except Exception:
+        pass
+    _last_render_warnings = warnings
+    return warnings
+
+
 def _render(template: str, **ctx) -> str:
+    import json
     from jinja2 import Environment
-    env = Environment(autoescape=False)
+    env = Environment(autoescape=True)
+    env.filters["tojson"] = json.dumps
+    # Cap flash from URL params so a crafted link can't break layout.
+    if "flash" in ctx and ctx["flash"]:
+        ctx["flash"] = str(ctx["flash"])[:200]
     wrapper = env.from_string(_HTML)
+    from markupsafe import Markup
     body_tmpl = env.from_string(template)
-    body = body_tmpl.render(**ctx)
+    body = Markup(body_tmpl.render(**ctx))
     ctx.setdefault("pending_act_count", _pending_act_count())
+    ctx.setdefault("render_warnings", _collect_pipeline_warnings())
+    ctx.setdefault("page_title", _PAGE_TITLES.get(ctx.get("page", ""), "Transcript Analyzer"))
     return wrapper.render(body=body, shared_url=_shared_folder_url(), **ctx)
+
+
+def _meeting_prep_brief(program_key: str, context_text: str, programs: list[dict]) -> dict:
+    """Generate a meeting prep brief for the given program. Returns {bullets, program_label}."""
+    try:
+        from . import brief_state as _bs
+        from . import claude_cli as _cli
+
+        prog = next((p for p in programs if p["key"] == program_key), None)
+        if prog is None:
+            return {"bullets": ["Program not found."], "program_label": program_key}
+
+        status_path = Path(prog["path"])
+        status_text = status_path.read_text(encoding="utf-8")
+
+        # Extract the last 2 "## Open signals" blocks
+        open_signals_section = ""
+        blocks = status_text.split("## Open signals")
+        if len(blocks) > 1:
+            last_two = "## Open signals".join(blocks[-2:]) if len(blocks) >= 3 else blocks[-1]
+            open_signals_section = "## Open signals" + last_two
+        else:
+            open_signals_section = status_text[-3000:]
+
+        # Get pending act items for this program
+        by_prog = _bs.pending_by_program()
+        prog_acts = by_prog.get(program_key, [])
+        acts_text = "\n".join(f"- {i['text']}" for i in prog_acts) if prog_acts else "(none)"
+
+        context_line = f"\nMeeting context: {context_text.strip()}" if context_text.strip() else ""
+
+        prompt = f"""You are preparing Brad Gross (Revenue Cloud CTO) for a meeting about {prog['label']}.{context_line}
+
+## Program status (STATUS.md — recent signals):
+{open_signals_section[:2000]}
+
+## Open act items for this program:
+{acts_text}
+
+Return exactly 3-5 bullet points. Each bullet: one concrete thing Brad should know or do in this meeting. No preamble, no hedging, no padding. Start each bullet with a **bold keyword**."""
+
+        from .config import CONFIG as _cfg
+        model = _cfg.models.get("STANDUP", "claude-sonnet-4-6")
+        data = _cli.run_claude_p(prompt, model=model)
+        raw_text = _cli.result_text(data)
+        lines = [l.strip() for l in raw_text.strip().splitlines() if l.strip().startswith(("-", "•", "*"))]
+        if not lines:
+            lines = [l.strip() for l in raw_text.strip().splitlines() if l.strip()]
+        return {"bullets": lines[:5], "program_label": prog["label"]}
+    except Exception as exc:
+        return {"bullets": [f"Error generating brief: {exc}"], "program_label": program_key}
 
 
 def create_app():
@@ -1111,7 +1717,7 @@ def create_app():
         global _job
         from datetime import datetime as _dt
         mode = request.form.get("mode", "daily")
-        if mode not in ("daily", "weekly", "career", "catch-up", "timecard"):
+        if mode not in ("daily", "weekly", "career", "catch-up", "timecard", "program-pulse"):
             return redirect(url_for("brief_state_page", flash="Invalid mode", ft="err"))
 
         # Optional back-date for daily/weekly/timecard (recover a missed run). Ignored for career.
@@ -1175,6 +1781,7 @@ def create_app():
                 "output": _job["output"],
                 "returncode": _job["returncode"],
                 "new_count": _job.get("new_count", 0),
+                # "proc" intentionally excluded — Popen is not JSON-serializable
             })
 
     @app.get("/settings")
@@ -1247,8 +1854,9 @@ def create_app():
         if not raw_filename:
             raw_filename = _date.today().isoformat() + " Slack Canvas"
 
-        # Sanitize: strip path separators, ensure .md extension
-        safe_name = raw_filename.replace("/", "-").replace("\\", "-")
+        # Sanitize: strip path separators, null bytes, cap length, ensure .md extension.
+        safe_name = raw_filename.replace("/", "-").replace("\\", "-").replace("\x00", "")
+        safe_name = safe_name[:120]  # prevent absurdly long filenames
         if not safe_name.endswith(".md"):
             safe_name += ".md"
 
@@ -1306,7 +1914,6 @@ def create_app():
             return item
 
         all_items = _bs.all_items()
-        cutoff = (today.isoformat()[:8] + "01")  # rough 7-day filter via string sort
         from datetime import timedelta
         week_ago = (today - timedelta(days=7)).isoformat()
         recent_closed = [
@@ -1344,6 +1951,9 @@ def create_app():
             job_running=job_running,
             job_label=job_label,
             job_output=job_output,
+            last_pulse=_last_pulse_info(),
+            last_weekly=_last_weekly_info(),
+            programs=_get_programs(),
         )
 
     @app.post("/brief-state/accept/<item_id>")
@@ -1357,6 +1967,16 @@ def create_app():
         msg = f"Accepted as {item_type}" if found else "Item not found"
         ft = "ok" if found else "err"
         return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/dismiss-all-candidates")
+    def brief_state_dismiss_all_candidates():
+        from . import brief_state as _bs
+        candidates = _bs.pending_candidates()
+        for item in candidates:
+            _bs.dismiss_candidate(item["id"])
+        n = len(candidates)
+        msg = f"Dismissed {n} candidate{'s' if n != 1 else ''}" if n else "No candidates to dismiss"
+        return redirect(url_for("brief_state_page", flash=msg, ft="ok"))
 
     @app.post("/brief-state/dismiss-candidate/<item_id>")
     def brief_state_dismiss_candidate(item_id):
@@ -1377,6 +1997,14 @@ def create_app():
         ft = "ok" if found else "err"
         return redirect(url_for("brief_state_page", flash=msg, ft=ft))
 
+    @app.post("/brief-state/reopen/<item_id>")
+    def brief_state_reopen(item_id):
+        from . import brief_state as _bs
+        found = _bs.reopen(item_id)
+        msg = "Reopened" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
     @app.post("/brief-state/defer/<item_id>")
     def brief_state_defer(item_id):
         from . import brief_state as _bs
@@ -1394,35 +2022,78 @@ def create_app():
     @app.post("/brief-state/re-own/<item_id>")
     def brief_state_re_own(item_id):
         from . import brief_state as _bs
-        items = _bs.all_items()
-        # Flip type back to act, owner back to Brad
-        state_path = Path("~/.cache/transcript-analyzer/brief-state.json").expanduser()
-        raw = __import__("json").loads(state_path.read_text())
-        found = False
-        for item in raw:
-            if item["id"] == item_id:
-                item["type"] = "act"
-                item["owner"] = "Brad"
-                item["notes"] = (item.get("notes") or "") + "; re-owned via UI"
-                found = True
-                break
-        if found:
-            state_path.write_text(__import__("json").dumps(raw, indent=2))
-        msg = "Re-owned" if found else "Item not found"
-        ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        all_items = _bs.all_items()
+        target = next((i for i in all_items if i["id"] == item_id), None)
+        if target is None:
+            return redirect(url_for("brief_state_page", flash="Item not found", ft="err"))
+        updated = dict(target)
+        updated["type"] = "act"
+        updated["owner"] = "Brad"
+        updated["notes"] = ((updated.get("notes") or "") + "; re-owned via UI").lstrip("; ")
+        _bs.upsert(updated)
+        return redirect(url_for("brief_state_page", flash="Re-owned", ft="ok"))
+
+    @app.get("/source/<item_id>")
+    def source_view(item_id):
+        from flask import jsonify
+        from . import brief_state as _bs
+        all_items = _bs.all_items()
+        item = next((i for i in all_items if i["id"] == item_id), None)
+        if item is None:
+            return jsonify({"text": "Item not found."}), 404
+        source_pulse = item.get("source_pulse", "")
+        if not source_pulse:
+            return jsonify({"text": "(No source file linked to this item.)"}), 200
+        try:
+            analyzed_dir = CONFIG.analyzed_path
+            source_path = analyzed_dir / source_pulse
+            if not source_path.exists():
+                # Try partial match
+                candidates = [f for f in analyzed_dir.iterdir() if source_pulse in f.name]
+                if candidates:
+                    source_path = candidates[0]
+                else:
+                    return jsonify({"text": f"Source file not found: {source_pulse}"}), 200
+            text = source_path.read_text(encoding="utf-8", errors="replace")
+            return jsonify({"text": text[:50000]})
+        except Exception as exc:
+            return jsonify({"text": f"Error reading source: {exc}"}), 200
+
+    @app.post("/meeting-prep")
+    def meeting_prep():
+        from flask import jsonify, request as _req
+        import json as _json
+        data = _req.get_json(force=True, silent=True) or {}
+        program_key = str(data.get("program", "")).strip()
+        context_text = str(data.get("context", "")).strip()[:500]
+
+        programs = _get_programs()
+        valid_keys = {p["key"] for p in programs}
+        if program_key not in valid_keys:
+            return jsonify({"bullets": ["Invalid program key."], "program_label": ""}), 400
+
+        result = _meeting_prep_brief(program_key, context_text, programs)
+        return jsonify(result)
 
     @app.post("/restart")
     def restart():
-        # Refuse while a job is running — re-exec would orphan the worker thread
-        # and the user would lose the in-flight analysis/synthesis output.
+        # If a job is running, terminate it before re-execing so the subprocess
+        # doesn't run orphaned (billing Claude quota with no UI visibility).
         with _job_lock:
-            if _job and not _job["done"]:
-                return redirect(url_for(
-                    "settings",
-                    flash="A job is running — wait for it to finish before restarting.",
-                    ft="err",
-                ))
+            if _job and not _job.get("done"):
+                proc = _job.get("proc")
+                if proc is not None:
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    except Exception:
+                        pass
+                else:
+                    return redirect(url_for(
+                        "settings",
+                        flash="A job is running — wait for it to finish before restarting.",
+                        ft="err",
+                    ))
 
         # Re-exec this process in place (same interpreter + argv), which reloads
         # all module code and re-reads CONFIG/.env at import. os.execv replaces

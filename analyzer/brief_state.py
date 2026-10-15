@@ -168,6 +168,18 @@ def close(item_id: str, status: str, notes: str = "") -> bool:
     return False
 
 
+def reopen(item_id: str) -> bool:
+    """Reopen a closed/dropped/expired item, setting status back to pending."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["status"] = "pending"
+            item["closed_at"] = None
+            _save(items)
+            return True
+    return False
+
+
 def defer(item_id: str, target_date: str, notes: str = "") -> bool:
     """Defer an item to a future date. Returns True if found.
 

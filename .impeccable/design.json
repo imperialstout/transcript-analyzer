@@ -8,13 +8,14 @@
       "surface": { "role": "neutral",   "displayName": "Surface Layer",       "canonical": "#1a1d27", "tonalRamp": ["#0f1117", "#1a1d27", "#22263a", "#2a2f45", "#333851", "#3d4260", "#474d6e", "#545a7d"] },
       "border":  { "role": "neutral",   "displayName": "Quiet Border",        "canonical": "#2a2d3a", "tonalRamp": ["#1a1d27", "#2a2d3a", "#353848", "#404457", "#4c5066", "#585d76", "#656a86", "#737896"] },
       "text":    { "role": "neutral",   "displayName": "Primary Text",        "canonical": "#e2e4ec", "tonalRamp": ["#6e7080", "#8e909e", "#aeb0bc", "#c4c6d0", "#d4d6e0", "#e2e4ec", "#eef0f6", "#f8f9fc"] },
-      "muted":   { "role": "neutral",   "displayName": "Muted Text",          "canonical": "#7a7f96", "tonalRamp": ["#3a3f55", "#4a4f66", "#5a5f78", "#6a6f8a", "#7a7f96", "#8e94a8", "#a4a9bc", "#bbbfc e"] },
+      "muted":   { "role": "neutral",   "displayName": "Muted Text",          "canonical": "#7a7f96", "tonalRamp": ["#3a3f55", "#4a4f66", "#5a5f78", "#6a6f8a", "#7a7f96", "#8e94a8", "#a4a9bc", "#bbbfce"] },
       "accent":  { "role": "primary",   "displayName": "Signal Blue",         "canonical": "#4f8ef7", "tonalRamp": ["#0d1f3c", "#1a3560", "#234c88", "#2d63b0", "#3c7ad8", "#4f8ef7", "#74a8ff", "#a0c4ff"] },
       "green":   { "role": "secondary", "displayName": "Confirmation Green",  "canonical": "#3ecf8e", "tonalRamp": ["#0a2e1e", "#10402a", "#165438", "#1c6845", "#287d54", "#3ecf8e", "#6ddba9", "#9de8c3"] },
       "orange":  { "role": "tertiary",  "displayName": "Warning Orange",      "canonical": "#f7a24f", "tonalRamp": ["#2e1a06", "#4a2a0a", "#663b10", "#834d18", "#a06024", "#c07a38", "#f7a24f", "#ffbe80"] },
       "red":     { "role": "tertiary",  "displayName": "Alert Red",           "canonical": "#f76f6f", "tonalRamp": ["#2e0a0a", "#4a1010", "#661818", "#832222", "#a02e2e", "#c04040", "#f76f6f", "#ff9898"] },
       "purple":  { "role": "tertiary",  "displayName": "Delegation Purple",   "canonical": "#b08ef7", "tonalRamp": ["#1a0d2e", "#2a1848", "#3c2860", "#503878", "#664a90", "#8060b8", "#b08ef7", "#cdb4ff"] },
-      "cyan":    { "role": "tertiary",  "displayName": "Watch Cyan",          "canonical": "#3ecfcf", "tonalRamp": ["#0a2a2a", "#103e3e", "#165454", "#1c6a6a", "#288080", "#3ab0b0", "#3ecfcf", "#70e0e0"] }
+      "cyan":    { "role": "tertiary",  "displayName": "Watch Cyan",          "canonical": "#3ecfcf", "tonalRamp": ["#0a2a2a", "#103e3e", "#165454", "#1c6a6a", "#288080", "#3ab0b0", "#3ecfcf", "#70e0e0"] },
+      "gold":    { "role": "tertiary",  "displayName": "Deferred Gold",       "canonical": "#cfaf3e", "tonalRamp": ["#261e06", "#3a2e0a", "#504012", "#665218", "#7c6420", "#9a7e2c", "#cfaf3e", "#e8cc70"] }
     },
     "typographyMeta": {
       "ui":    { "displayName": "UI / Body",        "purpose": "All prose, table cells, nav, form copy. The default register." },
@@ -23,9 +24,9 @@
     },
     "shadows": [],
     "motion": [
-      { "name": "opacity-hover",   "value": "opacity 0.15s ease",             "purpose": "Button hover — opacity 1 → 0.85. The only interactive transition." },
-      { "name": "slider-toggle",   "value": "background 0.2s, transform 0.2s","purpose": "Toggle switch track and thumb. System-convention timing." },
-      { "name": "spinner",         "value": "spin 0.7s linear infinite",       "purpose": "Running-job indicator. Only appears during active pipeline work." }
+      { "name": "opacity-hover",   "value": "opacity 0.15s ease",              "purpose": "Button hover — opacity 1 → 0.85. The only interactive transition." },
+      { "name": "slider-toggle",   "value": "background 0.2s, transform 0.2s", "purpose": "Toggle switch track and thumb. System-convention timing." },
+      { "name": "spinner",         "value": "spin 0.7s linear infinite",        "purpose": "Running-job indicator. Only appears during active pipeline work." }
     ],
     "breakpoints": []
   },
@@ -76,7 +77,7 @@
       "refersTo": "card",
       "description": "Primary structural unit. All content lives in cards against the --bg floor.",
       "html": "<div class=\"ds-card\"><h2 class=\"ds-card-title\">Analyzed files</h2><p class=\"ds-card-body\">Content goes here.</p></div>",
-      "css": ".ds-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 20px; } .ds-card-title { font: 700 13px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #7a7f96; margin-bottom: 14px; } .ds-card-body { font: 400 13px/1.5 'SF Pro Text', system-ui, sans-serif; color: #e2e4ec; }"
+      "css": ".ds-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 20px; } .ds-card-title { font: 700 13px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #7a7f96; margin-bottom: 14px; } .ds-card-body { font: 400 13px/1.5 'SF Pro Text', system-ui, sans-serif; color: #e2e4ec; overflow-wrap: break-word; word-break: break-word; }"
     },
     {
       "name": "Stat Tile",
@@ -90,14 +91,21 @@
       "kind": "input",
       "description": "Form fields in Settings and Slack Paste. Recessed (--bg background) below the card surface.",
       "html": "<div class=\"ds-field\"><label class=\"ds-field-label\">Model override</label><input class=\"ds-input\" type=\"text\" placeholder=\"e.g. claude-opus-4-8\"><div class=\"ds-field-desc\">Force a specific model for all runs.</div></div>",
-      "css": ".ds-field { margin-bottom: 18px; } .ds-field-label { display: block; font: 700 12px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: #7a7f96; margin-bottom: 5px; } .ds-input { background: #0f1117; border: 1px solid #2a2d3a; border-radius: 6px; color: #e2e4ec; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 7px 10px; width: 100%; box-sizing: border-box; } .ds-input:focus { outline: none; border-color: #4f8ef7; } .ds-field-desc { font: 400 12px/1.4 'SF Pro Text', system-ui, sans-serif; color: #7a7f96; margin-top: 4px; }"
+      "css": ".ds-field { margin-bottom: 18px; } .ds-field-label { display: block; font: 700 12px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: #7a7f96; margin-bottom: 5px; } .ds-input { background: #0f1117; border: 1px solid #2a2d3a; border-radius: 6px; color: #e2e4ec; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 7px 10px; width: 100%; box-sizing: border-box; } .ds-input:focus { outline: none; border-color: #4f8ef7; } .ds-input:focus-visible { border-color: #4f8ef7; } .ds-field-desc { font: 400 12px/1.4 'SF Pro Text', system-ui, sans-serif; color: #7a7f96; margin-top: 4px; }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "input",
+      "description": "Boolean settings toggle. Pill track 36×20px; circular thumb 14×14px. Keyboard focus ring appears on the track via :focus-visible + .slider.",
+      "html": "<label class=\"ds-toggle\"><input class=\"ds-toggle-input\" type=\"checkbox\"><span class=\"ds-toggle-slider\"></span></label>",
+      "css": ".ds-toggle { position: relative; width: 36px; height: 20px; display: inline-block; flex-shrink: 0; } .ds-toggle-input { opacity: 0; width: 0; height: 0; position: absolute; } .ds-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #2a2d3a; border-radius: 20px; transition: background 0.2s; } .ds-toggle-slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; } .ds-toggle-input:checked + .ds-toggle-slider { background: #4f8ef7; } .ds-toggle-input:checked + .ds-toggle-slider::before { transform: translateX(16px); } .ds-toggle-input:focus-visible + .ds-toggle-slider { outline: 2px solid #4f8ef7; outline-offset: 2px; }"
     },
     {
       "name": "Navigation",
       "kind": "nav",
       "description": "Top-header nav strip. Active state uses --border fill. Pending count badge is a red pill appended inline.",
-      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-active\" href=\"#\">Analyzed Files</a><a class=\"ds-nav-link\" href=\"#\">Brief State <span class=\"ds-nav-badge\">3</span></a><a class=\"ds-nav-link\" href=\"#\">Settings</a></nav>",
-      "css": ".ds-nav { display: flex; gap: 4px; } .ds-nav-link { color: #7a7f96; text-decoration: none; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 6px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; } .ds-nav-link:hover, .ds-nav-active { color: #e2e4ec; background: #2a2d3a; } .ds-nav-badge { background: #f76f6f; color: #fff; border-radius: 10px; padding: 0 5px; font: 700 10px/1.6 'SF Pro Text', system-ui, sans-serif; }"
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-active\" href=\"#\">Brief State <span class=\"ds-nav-badge\">3</span></a><a class=\"ds-nav-link\" href=\"#\">Analyzed Files</a><a class=\"ds-nav-link\" href=\"#\">Settings</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 4px; } .ds-nav-link { color: #7a7f96; text-decoration: none; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 6px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; } .ds-nav-link:hover, .ds-nav-active { color: #e2e4ec; background: #2a2d3a; } .ds-nav-link:focus-visible { outline: 2px solid #4f8ef7; outline-offset: 2px; } .ds-nav-badge { background: #f76f6f; color: #fff; border-radius: 10px; padding: 0 5px; font: 700 10px/1.6 'SF Pro Text', system-ui, sans-serif; }"
     }
   ],
   "narrative": {
@@ -105,14 +113,14 @@
     "overview": "This interface is a classified-grade analyst's workspace. Raw transcripts and meeting notes flow in through a background pipeline; distilled obligations, decisions, and program signal emerge on screen. The design premise is that the analysis is the product — the interface exists only to surface it with zero friction and maximum legibility. In a tool this personal and this operational, every pixel that isn't carrying signal is overhead.\n\nThe palette is near-black with surgical precision accents. Category signals (EXEC, SOLUTION, DAILY, overdue acts) are color-coded in the same semantic vocabulary across every surface — once learned, a glance at the file table communicates the morning's meeting mix before a single word is read. Depth comes from tonal layering, not shadows: the hierarchy is --bg → --surface → foreground, and you always know where you are in it.\n\nInteractive components are precise and considered. Buttons have a hair of transition on hover; badges use deeply-saturated-but-dark backgrounds that read clearly without shouting. Nothing moves unless it's earning its motion — the spinner on a running job, the scroll auto-advance in the output panel.",
     "keyCharacteristics": [
       "Near-black field (#0f1117) as the absolute base — the screen recedes",
-      "Semantic color vocabulary: six named signal colors, each owned by a single role",
+      "Semantic color vocabulary: seven named signal colors, each owned by a single role",
       "Flat tonal layering, no drop shadows anywhere",
       "11px uppercase tracked labels for all section headers and table columns",
       "SF Pro Text / system-ui as the sole prose face; SF Mono exclusively for code and live job output",
       "Dense information layout — 14px base size, 1100px content cap, no wasted whitespace"
     ],
     "rules": [
-      { "name": "The One Hue, One Role Rule",    "body": "Each signal color — blue, green, orange, red, purple, cyan — is owned by exactly one semantic role. Never repurpose --accent for decoration, never use --green for anything other than success/confirmation, and never use --red for anything other than urgency/danger.",  "section": "colors" },
+      { "name": "The One Hue, One Role Rule",    "body": "Each signal color — blue, green, orange, red, purple, cyan, gold — is owned by exactly one semantic role. Never repurpose --accent for decoration, never use --green for anything other than success/confirmation, and never use --red for anything other than urgency/danger.",  "section": "colors" },
       { "name": "The Neutral Majority Rule",      "body": "At least 90% of any given screen surface uses only the four neutral tokens. Signal colors are the 10% that earns attention by being rare.",                                                                                                                                            "section": "colors" },
       { "name": "The Uppercase Label Rule",       "body": "Organizational text — card section headers, table column headers, badge text, stat labels — is always 11px uppercase with letter-spacing. Body text is never uppercase.",                                                                                                                      "section": "typography" },
       { "name": "The No-Shadow Rule",             "body": "Drop shadows are permanently absent. When a surface needs to read as elevated, it uses --surface background against a --bg surround, optionally framed by a 1px --border outline. Adding shadows is a hard regression.",                                                                     "section": "elevation" },
@@ -124,11 +132,13 @@
       "Do use SF Mono only for machine-generated or machine-readable text: job output, file paths, inline code, .env key names.",
       "Do keep the stat tile value at 22px bold — it's the only large text in the system.",
       "Do use the dark-tinted badge pattern (dark saturated background + colored text) for all new semantic badge types.",
-      "Do make the OVERDUE badge (#4a1010 / --red bold) the most visually prominent badge."
+      "Do make the OVERDUE badge (#4a1010 / --red bold) the most visually prominent badge.",
+      "Do apply overflow-wrap: break-word to all flex-child text containers (.bs-text, .alert-text, job output). AI-generated obligation text and long meeting titles will shatter flex layouts without it.",
+      "Do truncate the source-file column in tables (max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap) and expose the full name in a title attribute."
     ],
     "donts": [
       "Don't add box-shadows. The depth model is tonal. Any shadow is a regression.",
-      "Don't introduce new accent colors. The six signal colors are complete: blue, green, orange, red, purple, cyan.",
+      "Don't introduce new accent colors. The seven signal colors are complete: blue (action), green (success), orange (warning), red (danger/urgency), purple (delegation), cyan (information), gold (deferred). An eighth color dilutes the vocabulary.",
       "Don't use color for decoration. Every non-neutral color on screen must carry semantic meaning.",
       "Don't mix radius tiers within a component. Cards are 8px. Buttons/inputs are 6px. Badges are 4px.",
       "Don't use uppercase for body text. The uppercase register is exclusively structural.",

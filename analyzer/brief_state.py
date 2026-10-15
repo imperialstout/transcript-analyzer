@@ -323,14 +323,15 @@ def expire_stale(business_days: int | None = None) -> list[dict]:
 
 
 def pending_candidates() -> list[dict]:
-    """Return candidate items (status=pending, source_analyzed set), newest first.
+    """Return candidate items (status=pending, source_analyzed set).
 
-    Candidates are AI-extracted signals from individual analyzed files that
-    haven't been triaged yet. They live in the INBOX section of the UI.
+    Urgent items (urgency="high") sort before normal candidates.
+    Within each tier, newest first. Two stable sorts achieve this cleanly.
     """
     items = _load()
     result = [i for i in items if i.get("status") == "pending" and i.get("source_analyzed")]
-    result.sort(key=lambda i: i.get("created_at", ""), reverse=True)
+    result.sort(key=lambda i: i.get("created_at", ""), reverse=True)   # newest first
+    result.sort(key=lambda i: 0 if i.get("urgency") == "high" else 1)  # urgent tier first (stable)
     return result
 
 
@@ -347,6 +348,7 @@ def accept_candidate(item_id: str, item_type: str) -> bool:
         if item["id"] == item_id:
             item["type"] = item_type
             item["source_analyzed"] = None  # promoted — no longer a candidate
+            item.pop("urgency", None)        # urgency tag only meaningful in inbox
             _save(items)
             return True
     return False

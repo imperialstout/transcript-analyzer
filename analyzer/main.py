@@ -473,12 +473,12 @@ def _main_locked(cfg, force: bool) -> int:
             cost = entry["cost_usd"]
             total_cost += cost
 
-            # Triage alert extraction — BEST-EFFORT. Scans the analysis for
-            # Brad-directed action items and writes them to the alert store so
-            # the UI can surface them immediately without waiting for the pulse.
-            alert_count = alerts.extract_from_file(result.text, output_filename)
-            if alert_count:
-                print(f"  [{i}/{n}] {alert_count} triage alert(s) extracted")
+            # Urgent signal extraction — BEST-EFFORT. Regex-scans the analysis for
+            # Brad-directed action items and writes them to brief-state as urgent
+            # inbox candidates so the UI can surface them without waiting for the pulse.
+            urgent_count = alerts.extract_from_file(result.text, output_filename)
+            if urgent_count:
+                print(f"  [{i}/{n}] {urgent_count} urgent candidate(s) extracted")
 
             # Signal extraction — BEST-EFFORT. Extracts 1–5 Brad-relevant
             # candidates into brief-state inbox for triage in the UI.
@@ -493,11 +493,11 @@ def _main_locked(cfg, force: bool) -> int:
 
             fs.move_to_processed(src, meeting_date)
             shareable_note = ", +shareable" if shareable_name else ""
-            alerts_note = f", {alert_count} alert(s)" if alert_count else ""
+            urgent_note = f", {urgent_count} urgent" if urgent_count else ""
             print(
                 f"  [{i}/{n}] done — filed as {output_filename} "
                 f"(${cost:.2f}, {duration:.1f}s, "
-                f"cache_read={result.usage.cache_read_input_tokens}{shareable_note}{alerts_note})"
+                f"cache_read={result.usage.cache_read_input_tokens}{shareable_note}{urgent_note})"
             )
             succeeded += 1
         except Exception as e:
@@ -513,11 +513,9 @@ def _main_locked(cfg, force: bool) -> int:
     if pending_docs:
         detail_parts.append(f"docs: {docs_succeeded}/{docs_succeeded + docs_failed}")
     detail = f" ({'; '.join(detail_parts)})" if len(detail_parts) > 1 else ""
-    total_alerts = alerts.undismissed()
-    alerts_note = f" {len(total_alerts)} triage alert(s) pending." if total_alerts else ""
     print(
         f"All done. {total_succeeded} succeeded, {total_failed} failed. "
-        f"Total cost: ${total_cost:.2f}.{detail}{alerts_note}"
+        f"Total cost: ${total_cost:.2f}.{detail}"
     )
     return 0 if total_failed == 0 else 2
 

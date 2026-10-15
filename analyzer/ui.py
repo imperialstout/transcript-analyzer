@@ -285,6 +285,7 @@ def _shared_folder_url() -> str:
 _PAGE_TITLES = {
     "brief-state": "Brief State — Transcript Analyzer",
     "home": "Files — Transcript Analyzer",
+    "prep": "Meeting Prep — Transcript Analyzer",
     "slack-paste": "Slack Paste — Transcript Analyzer",
     "settings": "Settings — Transcript Analyzer",
 }
@@ -466,16 +467,14 @@ _HTML = """\
     padding: 10px; resize: vertical; }
   textarea.paste-area:focus { outline: none; border-color: var(--accent); }
 
-  /* ── Triage alerts ── */
-  .alert-banner { background: var(--bg-alert); border: 1px solid var(--border-alert); border-radius: 8px;
-                  padding: 16px 20px; margin-bottom: 20px; }
-  .alert-banner-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .alert-banner-title { font-size: 13px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; }
-  .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
-                border-top: 1px solid var(--bg-alert-item); }
-  .alert-item:first-of-type { border-top: none; }
-  .alert-text { flex: 1; font-size: 13px; line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
-  .alert-source { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  /* ── Inbox urgency tier ── */
+  .inbox-urgent-header { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                         letter-spacing: .06em; color: var(--red); padding: 6px 0 8px;
+                         border-bottom: 1px solid var(--border-alert); margin-bottom: 4px; }
+  .inbox-normal-header { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                         letter-spacing: .06em; color: var(--gold); padding: 10px 0 8px;
+                         border-bottom: 1px solid var(--border-inbox); margin-bottom: 4px; }
+  .bs-item-urgent { background: var(--bg-alert); border-left: 3px solid var(--red); padding-left: 10px; }
 
   /* ── Brief state ── */
   .bs-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
@@ -614,6 +613,7 @@ _HTML = """\
   <nav>
     <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %}<span class="nav-badge" aria-label="{{ pending_act_count }} pending">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/files" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
+    <a href="/prep" class="{{ 'active' if page == 'prep' else '' }}">Meeting Prep</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
@@ -875,30 +875,6 @@ _HOME_BODY = """\
 </div>
 {% endif %}
 
-{% if triage_alerts %}
-<div class="alert-banner">
-  <div class="alert-banner-header">
-    <span class="alert-banner-title">⚠ {{ triage_alerts|length }} Triage Alert{{ 's' if triage_alerts|length != 1 else '' }} — Action Required</span>
-    <form method="post" action="/alerts/dismiss-all" style="display:inline"
-          onsubmit="return confirm('Dismiss all {{ triage_alerts|length }} alert{{ \'s\' if triage_alerts|length != 1 else \'\' }}?');">
-      <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
-    </form>
-  </div>
-  {% for a in triage_alerts %}
-  <div class="alert-item">
-    <div style="flex:1">
-      <div class="alert-text">{{ a.text }}</div>
-      <div class="alert-source">{{ a.source }}{% if a.source_date %} · {{ a.source_date }}{% endif %}</div>
-    </div>
-    <form method="post" action="/alerts/dismiss/{{ a.id }}" style="display:inline">
-      <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
-    </form>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-
 <div class="stats">
   <div class="stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
   <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","transcript")|list|length }}</div><div class="lbl">Transcripts</div></div>
@@ -1042,23 +1018,6 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{# ── MEETING PREP ── #}
-<div class="card" id="meeting-prep-card">
-  <h2>Meeting Prep</h2>
-  <div class="prep-controls">
-    <select id="prep-program" name="program">
-      <option value="">Select program…</option>
-      {% for p in programs %}
-      <option value="{{ p.key }}">{{ p.label }}{% if p.last_updated %} ({{ p.last_updated }}){% endif %}{% if p.stale_warn %} ⚠{% endif %}</option>
-      {% endfor %}
-    </select>
-    <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
-    <button class="btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
-    <button class="btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
-  </div>
-  <div id="prep-output" style="display:none"></div>
-</div>
-
 {# ── P0 BRIEF BANNER: overdue acts surfaced before anything else ── #}
 {% set overdue_acts = act_items | selectattr('overdue') | list %}
 {% if overdue_acts %}
@@ -1135,6 +1094,8 @@ _BRIEF_STATE_BODY = """\
 
 {# ── INBOX (candidates) ── #}
 {% if candidate_items %}
+{% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
+{% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
 <div class="card card-inbox">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <h2 style="margin-bottom:0">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
@@ -1143,7 +1104,37 @@ _BRIEF_STATE_BODY = """\
       <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
     </form>
   </div>
-  {% for item in candidate_items %}
+  {% if urgent_items %}
+  <div class="inbox-urgent-header">⚠ {{ urgent_items|length }} urgent — action required</div>
+  {% for item in urgent_items %}
+  <div class="bs-item bs-item-urgent">
+    <div class="bs-body">
+      <div class="bs-text">
+        <span class="badge badge-act" style="background:var(--bg-alert);color:var(--red)">URGENT</span>
+        {{ item.text }}
+      </div>
+      <div class="bs-meta">
+        From {{ item.source_analyzed or '—' }}
+        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
+        {% if item.program %} · {{ item.program }}{% endif %}
+      </div>
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/accept/{{ item.id }}">
+        <input type="hidden" name="type" value="act">
+        <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--red);color:var(--red)">Accept</button>
+      </form>
+      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
+            onsubmit="return confirm('Dismiss this urgent item?');">
+        <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+  {% if normal_items %}
+  {% if urgent_items %}<div class="inbox-normal-header">Signals</div>{% endif %}
+  {% for item in normal_items %}
   <div class="bs-item">
     <div class="bs-body">
       <div class="bs-text">
@@ -1164,11 +1155,12 @@ _BRIEF_STATE_BODY = """\
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
             onsubmit="return confirm('Dismiss this candidate item?');">
-        <button type="submit" class="btn-destructive btn-sm">Dismiss</button>
+        <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
       </form>
     </div>
   </div>
   {% endfor %}
+  {% endif %}
 </div>
 {% endif %}
 
@@ -1396,6 +1388,27 @@ _BRIEF_STATE_BODY = """\
 </div>
 """
 
+_PREP_BODY = """\
+{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+
+<div class="card" id="meeting-prep-card">
+  <h2>Meeting Prep</h2>
+  <p class="muted" style="font-size:12px;margin-bottom:14px">Select a program to generate a pre-meeting brief from its recent signals and open act items.</p>
+  <div class="prep-controls">
+    <select id="prep-program" name="program">
+      <option value="">Select program…</option>
+      {% for p in programs %}
+      <option value="{{ p.key }}">{{ p.label }}{% if p.last_updated %} ({{ p.last_updated }}){% endif %}{% if p.stale_warn %} ⚠{% endif %}</option>
+      {% endfor %}
+    </select>
+    <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
+    <button class="btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
+    <button class="btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
+  </div>
+  <div id="prep-output" style="display:none"></div>
+</div>
+"""
+
 _SLACK_PASTE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
@@ -1568,13 +1581,6 @@ def _collect_pipeline_warnings() -> list[str]:
     global _last_render_warnings
     warnings: list[str] = []
     try:
-        from . import alerts as _alerts
-        undismissed = _alerts.undismissed()
-        if undismissed:
-            warnings.append(f"{len(undismissed)} triage alert{'s' if len(undismissed) != 1 else ''}")
-    except Exception:
-        pass
-    try:
         # Surface staleness if last analysis is > 8 h old.
         rows = _analyzed_files()
         _, stale = _last_analyzed_at(rows)
@@ -1670,7 +1676,6 @@ def create_app():
 
     @app.get("/files")
     def files_page():
-        from . import alerts as _alerts
         from .config import CONFIG
         rows = _analyzed_files()
         flash = request.args.get("flash", "")
@@ -1697,20 +1702,7 @@ def create_app():
             job_label=job_label,
             job_output=job_output,
             job_done=job_done,
-            triage_alerts=_alerts.undismissed(),
         )
-
-    @app.post("/alerts/dismiss/<alert_id>")
-    def dismiss_alert(alert_id):
-        from . import alerts as _alerts
-        _alerts.dismiss(alert_id)
-        return redirect(url_for("brief_state_page"))
-
-    @app.post("/alerts/dismiss-all")
-    def dismiss_all_alerts():
-        from . import alerts as _alerts
-        _alerts.dismiss_all()
-        return redirect(url_for("brief_state_page", flash="All alerts dismissed", ft="ok"))
 
     @app.post("/synthesize")
     def synthesize():
@@ -1953,7 +1945,6 @@ def create_app():
             job_output=job_output,
             last_pulse=_last_pulse_info(),
             last_weekly=_last_weekly_info(),
-            programs=_get_programs(),
         )
 
     @app.post("/brief-state/accept/<item_id>")
@@ -2058,6 +2049,16 @@ def create_app():
             return jsonify({"text": text[:50000]})
         except Exception as exc:
             return jsonify({"text": f"Error reading source: {exc}"}), 200
+
+    @app.get("/prep")
+    def prep_page():
+        return _render(
+            _PREP_BODY,
+            page="prep",
+            programs=_get_programs(),
+            flash=request.args.get("flash", ""),
+            flash_type=request.args.get("ft", "ok"),
+        )
 
     @app.post("/meeting-prep")
     def meeting_prep():

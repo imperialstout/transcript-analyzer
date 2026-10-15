@@ -27,6 +27,7 @@ Schema per item:
 
 import hashlib
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,6 +35,16 @@ _STATE_PATH = Path("~/.cache/transcript-analyzer/brief-state.json").expanduser()
 
 _VALID_TYPES = {"act", "watch", "delegate", "they-owe", "insight"}
 _VALID_STATUSES = {"pending", "complete", "deferred", "expired", "dropped", "dismissed"}
+
+# Words that carry no discriminating signal for duplicate detection
+_STOPWORDS = {
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "as", "is", "was", "be", "been", "are",
+    "that", "this", "it", "its", "per", "not", "no", "before", "after",
+    "if", "about", "whether", "need", "needs", "before", "already", "still",
+    "brad", "item", "meeting", "notes", "call", "today",
+}
+_SIMILARITY_THRESHOLD = 3  # shared significant tokens to flag as probable duplicate
 
 # Business-day expiry thresholds by type (calendar days used as approximation)
 _EXPIRY_BUSINESS_DAYS = {
@@ -70,6 +81,35 @@ def _item_id(source_brief: str, text: str) -> str:
     return hashlib.sha1(f"{source_brief}|{text}".encode()).hexdigest()[:12]
 
 
+def _significant_tokens(text: str) -> set[str]:
+    """Lowercase words from text, length >= 4, not stopwords."""
+    return {
+        w for w in re.findall(r"[a-z]+", text.lower())
+        if len(w) >= 4 and w not in _STOPWORDS
+    }
+
+
+def find_similar_pending(text: str, items: list[dict], threshold: int = _SIMILARITY_THRESHOLD) -> list[dict]:
+    """Return pending items that share >= threshold significant tokens with text.
+
+    Skips insights (day-specific, expected to repeat) and the item itself.
+    Caller decides what to do — upsert() logs a warning; UI can prompt to merge.
+    """
+    tokens = _significant_tokens(text)
+    if len(tokens) < threshold:
+        return []
+    matches = []
+    for item in items:
+        if item.get("status") != "pending":
+            continue
+        if item.get("type") == "insight":
+            continue
+        overlap = tokens & _significant_tokens(item.get("text", "") + " " + item.get("notes", ""))
+        if len(overlap) >= threshold:
+            matches.append(item)
+    return matches
+
+
 def _load() -> list[dict]:
     if not _STATE_PATH.exists():
         return []
@@ -97,6 +137,19 @@ def upsert(item: dict) -> None:
     if item["id"] in existing_ids:
         items[existing_ids[item["id"]]].update(item)
     else:
+        # Warn if a similar pending item already exists — likely a duplicate
+        similar = find_similar_pending(item.get("text", ""), items)
+        if similar:
+            import sys
+            for s in similar:
+                print(
+                    f"  [brief_state] POSSIBLE DUPLICATE: new item shares keywords with "
+                    f"existing pending {s['id'][:8]}.\n"
+                    f"    existing: {s['text'][:100]}\n"
+                    f"    new:      {item.get('text', '')[:100]}",
+                    file=sys.stderr,
+                )
+
         # Fill in defaults for required fields
         defaults = {
             "type": "act",

@@ -605,68 +605,7 @@ _HOME_BODY = """\
 </div>
 
 <div class="card">
-  <h2>Operations</h2>
-  <div class="action-tier">
-    <span class="action-tier-label">Daily</span>
-    <div class="action-group">
-      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
-        <button type="submit">⚡ Run Analysis</button>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="daily">
-        <button type="submit" class="btn-secondary">▶ Daily Pulse</button>
-        <input type="date" name="date" title="Leave blank for today; pick a past date to back-date">
-      </form>
-    </div>
-  </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Periodic</span>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Slack Delta…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
-        <input type="date" name="date" title="Leave blank for this week; pick a date in the week to back-date">
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="catch-up">
-        <button type="submit" class="btn-secondary" title="One Daily Pulse per backlog day, in order.">▶ Catch Up</button>
-        <input type="date" name="since" title="Start from this date (leave blank for full backlog)">
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Career Trajectory review…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="career">
-        <button type="submit" class="btn-secondary">▶ Career</button>
-        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
-               title="Re-read ALL analyses to re-baseline. Off = incremental.">
-          <input type="checkbox" name="full" value="1"> full
-        </label>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="timecard">
-        <button type="submit" class="btn-secondary">▶ Timecard</button>
-        <input type="date" name="date" title="Leave blank for current week">
-      </form>
-    </div>
-  </div>
-</div>
-
-<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
-  <h3>
-    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
-    <span id="job-done" style="display:none">Done — refreshing…</span>
-  </h3>
-  <div id="job-output">{{ job_output }}</div>
-</div>
-
-<div class="card">
-  <h2>Analyzed files (most recent first)</h2>
+  <h2>Analyzed files — most recent 25 of {{ rows|length }}</h2>
   {% if rows %}
   <table>
     <thead>
@@ -675,7 +614,7 @@ _HOME_BODY = """\
       </tr>
     </thead>
     <tbody>
-    {% for r in rows %}
+    {% for r in rows[:25] %}
     <tr>
       <td class="muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
       <td>
@@ -699,6 +638,11 @@ _HOME_BODY = """\
     {% endfor %}
     </tbody>
   </table>
+  {% if rows|length > 25 %}
+  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+    Showing 25 of {{ rows|length }} files — open <a class="quick-link" style="font-size:12px" href="{{ analyzed_path_url }}">Analyzed/</a> in Finder for the full history.
+  </div>
+  {% endif %}
   {% else %}
   <p class="muted">No analyzed files yet.</p>
   {% endif %}
@@ -772,6 +716,73 @@ _SETTINGS_BODY = """\
 
 _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if job_running %}
+<div class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
+  <span class="spinner"></span>
+  <strong>Running {{ job_label }}…</strong> The page will refresh when done.
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Operations</h2>
+  <div class="action-tier">
+    <span class="action-tier-label">Daily</span>
+    <div class="action-group">
+      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
+        <button type="submit">⚡ Run Analysis</button>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="daily">
+        <button type="submit" class="btn-secondary">▶ Daily Pulse</button>
+        <input type="date" name="date" title="Leave blank for today; pick a past date to back-date">
+      </form>
+    </div>
+  </div>
+  <div class="action-tier">
+    <span class="action-tier-label">Periodic</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Slack Delta…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="weekly">
+        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
+        <input type="date" name="date" title="Leave blank for this week">
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="catch-up">
+        <button type="submit" class="btn-secondary">▶ Catch Up</button>
+        <input type="date" name="since" title="Start from this date (leave blank for full backlog)">
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Career Trajectory review…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="career">
+        <button type="submit" class="btn-secondary">▶ Career</button>
+        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
+               title="Re-read ALL analyses to re-baseline. Off = incremental.">
+          <input type="checkbox" name="full" value="1"> full
+        </label>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="timecard">
+        <button type="submit" class="btn-secondary">▶ Timecard</button>
+        <input type="date" name="date" title="Leave blank for current week">
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
+  <h3>
+    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-done" style="display:none">Done — refreshing…</span>
+  </h3>
+  <div id="job-output">{{ job_output }}</div>
+</div>
 
 {% if candidate_items %}
 <div class="card card-inbox">
@@ -1050,6 +1061,7 @@ def create_app():
             total_cost=_total_cost(rows),
             last_analyzed=_last_analyzed_at(rows),
             analyzed_path=str(CONFIG.analyzed_path),
+            analyzed_path_url=_analyzed_path_url(),
             flash=flash,
             flash_type=flash_type,
             job_running=job_running,
@@ -1283,6 +1295,11 @@ def create_app():
         ]
         recent_closed.sort(key=lambda i: i.get("closed_at", ""), reverse=True)
 
+        with _job_lock:
+            job_running = bool(_job and not _job["done"])
+            job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
+            job_output = _job["output"] if _job else ""
+
         return _render(
             _BRIEF_STATE_BODY,
             page="brief-state",
@@ -1294,6 +1311,9 @@ def create_app():
             recent_closed=recent_closed,
             flash=request.args.get("flash", ""),
             flash_type=request.args.get("ft", "ok"),
+            job_running=job_running,
+            job_label=job_label,
+            job_output=job_output,
         )
 
     @app.post("/brief-state/accept/<item_id>")

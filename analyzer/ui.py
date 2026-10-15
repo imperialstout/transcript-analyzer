@@ -526,11 +526,6 @@ _HTML = """\
   .bs-brief-banner-items li { font-size: 13px; line-height: 1.5;
                                overflow-wrap: break-word; word-break: break-word; }
 
-  /* ── Staleness badge on Brief State nav link ── */
-  .bs-stale-badge { background: var(--bg-overdue); color: var(--red); border-radius: 4px;
-                    padding: 1px 5px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
-                    text-transform: uppercase; margin-left: 4px; vertical-align: middle; }
-
   /* ── Defer toggle ── */
   .defer-wrap { display: none; flex-wrap: wrap; gap: 6px; align-items: center;
                 margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
@@ -1149,8 +1144,14 @@ _BRIEF_STATE_BODY = """\
       </div>
     </div>
     <div class="bs-actions">
-      <form method="post" action="/brief-state/accept/{{ item.id }}">
-        <input type="hidden" name="type" value="{{ item.type }}">
+      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+        <select name="type" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+          <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
+          <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
+          <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
+          <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
+          <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
+        </select>
         <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)">Accept</button>
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
@@ -1397,9 +1398,19 @@ _PREP_BODY = """\
   <div class="prep-controls">
     <select id="prep-program" name="program">
       <option value="">Select program…</option>
+      {% set ns = namespace(cur_group=None) %}
       {% for p in programs %}
+        {% if p.group != ns.cur_group %}
+          {% if ns.cur_group is not none %}</optgroup>{% endif %}
+          {% set ns.cur_group = p.group %}
+          {% if p.group == 'projects' %}<optgroup label="── Projects ──">
+          {% elif p.group == 'presales' %}<optgroup label="── Presales ──">
+          {% else %}<optgroup label="── Watch ──">
+          {% endif %}
+        {% endif %}
       <option value="{{ p.key }}">{{ p.label }}{% if p.last_updated %} ({{ p.last_updated }}){% endif %}{% if p.stale_warn %} ⚠{% endif %}</option>
       {% endfor %}
+      {% if ns.cur_group is not none %}</optgroup>{% endif %}
     </select>
     <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
     <button class="btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
@@ -1550,16 +1561,26 @@ def _get_programs() -> list[dict]:
                         stale_warn = bdays_old > 3
                     except Exception:
                         pass
+                _WATCH_KEYS = {"siemens-general", "presales"}
+                _PRESALES_PREFIX = "presales-"
+                if key in _WATCH_KEYS:
+                    group = "watch"
+                elif key.startswith(_PRESALES_PREFIX):
+                    group = "presales"
+                else:
+                    group = "projects"
                 programs.append({
                     "key": key,
                     "label": label,
                     "last_updated": last_updated,
                     "path": str(status_path),
                     "stale_warn": stale_warn,
+                    "group": group,
                 })
         except Exception:
             continue
-    programs.sort(key=lambda p: p["label"])
+    _GROUP_ORDER = {"projects": 0, "presales": 1, "watch": 2}
+    programs.sort(key=lambda p: (_GROUP_ORDER.get(p["group"], 9), p["label"]))
     return programs
 
 

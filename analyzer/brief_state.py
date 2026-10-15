@@ -81,7 +81,9 @@ def _load() -> list[dict]:
 
 def _save(items: list[dict]) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_PATH.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    tmp = _STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    tmp.replace(_STATE_PATH)
 
 
 def upsert(item: dict) -> None:

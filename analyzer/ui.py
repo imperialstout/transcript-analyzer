@@ -49,7 +49,7 @@ _SETTINGS_FIELDS = [
 
 # Background job state (simple — only one synthesis can run at a time).
 _job_lock = threading.Lock()
-_job: dict | None = None  # {"mode": str, "output": str, "done": bool, "returncode": int|None}
+_job: dict | None = None  # {"mode": str, "output": str, "done": bool, "returncode": int|None, "new_count": int}
 
 # argv for the /restart self-re-exec, set by main(). We can't trust the live
 # sys.argv: by the time a route fires, __main__.py has already stripped the "ui"
@@ -104,6 +104,16 @@ def _run_job(cmd: list[str], mode: str) -> None:
     global _job
     from datetime import datetime as _dt
     label = _MODE_LABELS.get(mode, mode)
+
+    # Snapshot manifest size before the run so we can report how many new files landed.
+    _manifest_size_before = 0
+    if mode == "analysis":
+        try:
+            from .manifest import load as _load_manifest
+            _manifest_size_before = len(_load_manifest())
+        except Exception:
+            pass
+
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -137,16 +147,25 @@ def _run_job(cmd: list[str], mode: str) -> None:
             log.close()
         except Exception:
             pass
+    new_count = 0
+    if mode == "analysis" and proc.returncode == 0 and _manifest_size_before > 0:
+        try:
+            from .manifest import load as _load_manifest
+            new_count = max(0, len(_load_manifest()) - _manifest_size_before)
+        except Exception:
+            pass
+
     with _job_lock:
         _job["done"] = True
         _job["returncode"] = proc.returncode
+        _job["new_count"] = new_count
 
 
 _SYNTHESIS_TAGS = ("[DAILY PULSE]", "[SLACK DELTA]", "[WEEKLY SUMMARY]")
 
 _MODE_LABELS = {
     "daily": "Daily Pulse synthesis",
-    "weekly": "Weekly Slack Delta synthesis",
+    "weekly": "Weekly Delta synthesis",
     "career": "Career Trajectory review",
     "catch-up": "catch-up (one pulse per backlog day)",
     "timecard": "Weekly Timecard compilation",
@@ -364,7 +383,7 @@ _HTML = """\
   .badge-standup   { background: var(--bg-standup);  color: var(--orange); }
   .badge-notes     { background: var(--bg-notes);    color: var(--purple); }
   .badge-pulse     { background: var(--bg-pulse);    color: var(--green); }
-  .badge-delta     { background: var(--bg-insight);   color: var(--cyan); }
+  .badge-delta     { background: var(--bg-standup);   color: var(--orange); }
   .badge-synthesis { background: var(--bg-daily);    color: var(--green); }
   .badge-act       { background: var(--bg-act);      color: var(--red); }
   .badge-watch     { background: var(--bg-watch);    color: var(--orange); }
@@ -527,8 +546,13 @@ function startPoll(label) {
         done.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.';
       } else {
         document.getElementById('job-done').style.display = 'inline';
-        // Reload page so the new synthesis file appears in the table
-        setTimeout(() => location.reload(), 1500);
+        // Reload page so new files appear; pass a flash if analysis found new files
+        let reloadUrl = location.pathname;
+        if (d.new_count && d.new_count > 0) {
+          const noun = d.new_count === 1 ? 'file' : 'files';
+          reloadUrl += '?flash=' + encodeURIComponent(d.new_count + ' new ' + noun + ' processed') + '&ft=ok';
+        }
+        setTimeout(() => location.href = reloadUrl, 1500);
       }
     }
   }, 1200);
@@ -639,12 +663,14 @@ _HOME_BODY = """\
 _SETTINGS_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
 <form method="post" action="/settings">
-<div class="card">
+<div class="card" style="height:100%">
   <h2>Configuration</h2>
-  <p class="muted" style="margin-bottom:18px;font-size:12px">
-    Values are saved to <code style="color:var(--text)">~/.config/transcript-analyzer/.env</code>.
-    Restart the analyzer (or the launchd job) for changes to take effect.
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6">
+    Saved to <code style="color:var(--text);font-family:'SF Mono',monospace;font-size:11px">~/.config/transcript-analyzer/.env</code>.
+    Restart server for changes to take effect.
   </p>
 
   {% for key, label, kind, desc in fields %}
@@ -665,39 +691,46 @@ _SETTINGS_BODY = """\
   </div>
   {% endfor %}
 
-  <button type="submit" class="btn-secondary">Save settings</button>
+  <div style="padding-top:4px">
+    <button type="submit" class="btn-secondary">Save settings</button>
+  </div>
 </div>
 </form>
 
-<hr class="sep">
+<div style="display:flex;flex-direction:column;gap:20px">
 
 <div class="card">
-  <h2>Edit content files</h2>
-  <p class="section-title">Drive files (open in editor)</p>
+  <h2>Content files</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Drive files — opens in your default editor.</p>
   {% for label, path in drive_files %}
-  <div style="margin-bottom:8px">
-    <a class="quick-link" href="/open-file?path={{ path }}">
-      ✏ {{ label }}
-      <span class="muted" style="font-size:11px">{{ path }}</span>
+  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+    <a class="quick-link" href="/open-file?path={{ path }}" style="display:flex;flex-direction:column;gap:2px">
+      <span style="font-weight:600;font-size:13px">{{ label }}</span>
+      <span class="muted" style="font-size:11px;font-family:'SF Mono',monospace">{{ path }}</span>
     </a>
   </div>
   {% endfor %}
+  <div style="margin-top:-2px;padding-top:0;border-top:none"></div>
 </div>
-
-<hr class="sep">
 
 <div class="card">
   <h2>Diagnostics</h2>
-  <a class="quick-link" href="/open-log">📋 Open run log</a>
-  <span class="muted" style="font-size:11px;margin-left:8px">{{ log_path }}</span>
-
-  <p class="section-title" style="margin-top:18px">Server</p>
-  <form method="post" action="/restart" style="display:inline"
-        onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
-    <button type="submit" class="btn-secondary">↻ Restart server</button>
-  </form>
-  <div class="desc">Re-execs the server in place to pick up code or <code>.env</code> changes. The analysis itself already runs fresh each time — this only refreshes the long-lived UI process.</div>
+  <div style="margin-bottom:16px">
+    <a class="quick-link" href="/open-log" style="font-size:13px;font-weight:600">Open run log</a>
+    <div style="font-size:11px;color:var(--muted);font-family:'SF Mono',monospace;margin-top:3px">{{ log_path }}</div>
+  </div>
+  <div style="padding-top:14px;border-top:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px">Server</div>
+    <form method="post" action="/restart" style="display:inline"
+          onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
+      <button type="submit" class="btn-secondary">↻ Restart server</button>
+    </form>
+    <div class="desc" style="margin-top:8px">Re-execs in place to pick up code or <code>.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
+  </div>
 </div>
+
+</div><!-- right column -->
+</div><!-- grid -->
 """
 
 
@@ -730,9 +763,9 @@ _BRIEF_STATE_BODY = """\
   <div class="action-tier">
     <span class="action-tier-label">Periodic</span>
     <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Slack Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-secondary">▶ Slack Delta</button>
+        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
         <input type="date" name="date" title="Leave blank for this week">
       </form>
     </div>
@@ -1027,7 +1060,7 @@ def create_app():
 
     @app.get("/")
     def home():
-        return redirect(url_for("files_page"))
+        return redirect(url_for("brief_state_page"))
 
     @app.get("/files")
     def files_page():
@@ -1107,7 +1140,7 @@ def create_app():
         with _job_lock:
             if _job and not _job["done"]:
                 return redirect(url_for("brief_state_page", flash="A synthesis job is already running", ft="err"))
-            _job = {"mode": mode, "output": "", "done": False, "returncode": None}
+            _job = {"mode": mode, "output": "", "done": False, "returncode": None, "new_count": 0}
 
         cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
         if date_arg:
@@ -1125,7 +1158,7 @@ def create_app():
         with _job_lock:
             if _job and not _job["done"]:
                 return redirect(url_for("brief_state_page", flash="A job is already running", ft="err"))
-            _job = {"mode": "analysis", "output": "", "done": False, "returncode": None}
+            _job = {"mode": "analysis", "output": "", "done": False, "returncode": None, "new_count": 0}
 
         cmd = [sys.executable, "-u", "-m", "analyzer"]
         threading.Thread(target=_run_job, args=(cmd, "analysis"), daemon=True).start()
@@ -1141,6 +1174,7 @@ def create_app():
                 "done": _job["done"],
                 "output": _job["output"],
                 "returncode": _job["returncode"],
+                "new_count": _job.get("new_count", 0),
             })
 
     @app.get("/settings")

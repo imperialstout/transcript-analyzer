@@ -89,7 +89,9 @@ _PRESALES_TITLE_KW = re.compile(
 )
 
 _ADMIN_TITLE_KW = re.compile(
-    r"tune-in|practice\s+team|revcloud\s+community|introduction\s+to|survey\b|jodi\b",
+    r"tune-in|practice\s+team|revcloud\s+community|introduction\s+to|survey\b|jodi\b"
+    r"|revcloud\s+and\s+spiff|spiff\s+practice|rc\s+practice|revenue\s+cloud\s+practice"
+    r"|break\s+room\b",
     re.IGNORECASE,
 )
 _ADMIN_WORKSTREAMS = {"internal", "internal-salesforce"}
@@ -228,18 +230,33 @@ def _duration_from_calendar(ev: "calendar_reader.CalendarEvent") -> int:
 # LLM compression call
 # ---------------------------------------------------------------------------
 
-_COMPRESS_SYSTEM = (
-    "You are a timecard assistant. Given meeting analyses, produce a single "
-    "plain-text summary of the work done that day for ONE timecard row. "
-    "Requirements:\n"
-    "- Hard limit: 255 characters (not words — characters including spaces).\n"
-    "- Concrete and specific: name the meeting, decision made, problem "
-    "unblocked, or deliverable advanced. Avoid vague phrases like 'discussed issues'.\n"
-    "- Comma-separated shorthand is fine: e.g. 'arch review (1h), gap analysis on DRO "
-    "pricing — aligned on threshold approach, stakeholder sync'.\n"
-    "- Include approximate total hours in parentheses at the start if >1h.\n"
-    "- Output ONLY the summary text. No preamble, no labels, no explanation."
+_COMPRESS_SYSTEM_CLIENT = (
+    "You are writing a timecard entry that a Siemens client will read to approve billable time.\n"
+    "RULES — read carefully:\n"
+    "- HARD limit: 255 characters total (including spaces). Count before outputting.\n"
+    "- Frame as professional consulting work: architecture decisions, design reviews, stakeholder "
+    "alignment, technical analysis, solution design. Justify the value of the time.\n"
+    "- Actions and decisions ONLY. Drop internal process detail, uncertainty, and team friction.\n"
+    "- Never name internal Salesforce team members or reference internal Salesforce dynamics.\n"
+    "- Use comma-separated shorthand: 'pricing engine design review, amendment logic validated, "
+    "UC3 scope aligned with client stakeholders'.\n"
+    "- Include total hours at the start only if >1h, e.g. '(3h)'.\n"
+    "- If you cannot fit everything, drop the least-important items — never exceed 255.\n"
+    "- Output ONLY the summary. No preamble, labels, or explanation."
 )
+
+_COMPRESS_SYSTEM_INTERNAL = (
+    "You are a timecard assistant. Summarize a day's meetings into ONE plain-text entry.\n"
+    "RULES — read carefully:\n"
+    "- HARD limit: 255 characters total (including spaces). Count before outputting.\n"
+    "- Actions and decisions ONLY. Drop context, background, and informational content.\n"
+    "- Use comma-separated shorthand: 'arch decision on X, unblocked Y, reviewed Z'.\n"
+    "- Include total hours at the start only if >1h, e.g. '(3h)'.\n"
+    "- If you cannot fit everything, drop the least-important items — never exceed 255.\n"
+    "- Output ONLY the summary. No preamble, labels, or explanation."
+)
+
+_CLIENT_ROWS = {ROW_DISW, ROW_DISW_POC, ROW_SI_RCA, ROW_PRESALES}
 
 
 def _compress(entries: list[_FileMeta], system: str, model: str) -> str:
@@ -321,8 +338,10 @@ def run_timecard(target_date: Optional[date] = None) -> int:
         if ev_date not in week_day_set:
             continue
         ev_title_lower = ev.title.lower().strip()
+        ev_words = set(re.split(r"[\W_]+", ev_title_lower)) - {"the", "a", "an", "and", "or", "of", "to", "in", "for", "with", "on", ""}
         already_analyzed = any(
             ev_title_lower in title or title in ev_title_lower
+            or (len(ev_words) >= 2 and len(ev_words & (set(re.split(r"[\W_]+", title)) - {"the", "a", "an", "and", "or", "of", "to", "in", "for", "with", "on", ""})) >= min(2, len(ev_words) - 1))
             for title in analyzed_titles_by_day.get(ev_date, set())
         )
         if not already_analyzed:
@@ -343,21 +362,24 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     for s in cal_stubs:
         print(f"  [cal-only] [{s.row}] {s.meeting_date} — {s.title} ({s.duration_min}min)")
 
-    # System context (brief + rolodex, same as other synthesis modes)
+    # System context (brief + rolodex) — combined per-row in _system_for_row()
     context_brief = ""
     if CONFIG.context_brief_path.exists():
         context_brief = CONFIG.context_brief_path.read_text(encoding="utf-8")
     rolodex = prompts_mod.load_rolodex()
-    system_parts = [_COMPRESS_SYSTEM]
-    if context_brief:
-        system_parts.append(f"=== PROGRAM CONTEXT ===\n{context_brief}")
-    if rolodex:
-        system_parts.append(f"=== PEOPLE ROLODEX ===\n{rolodex}")
-    system = "\n\n".join(system_parts)
 
     model = CONFIG.models.get("STANDUP", "claude-sonnet-4-6")
     if CONFIG.model_override:
         model = CONFIG.model_override
+
+    def _system_for_row(row: str) -> str:
+        base = _COMPRESS_SYSTEM_CLIENT if row in _CLIENT_ROWS else _COMPRESS_SYSTEM_INTERNAL
+        parts = [base]
+        if context_brief:
+            parts.append(f"=== PROGRAM CONTEXT ===\n{context_brief}")
+        if rolodex:
+            parts.append(f"=== PEOPLE ROLODEX ===\n{rolodex}")
+        return "\n\n".join(parts)
 
     # Build per-row per-day buckets.
     # grid_analyzed: cells with transcript files → LLM-compressed summaries
@@ -401,7 +423,7 @@ def run_timecard(target_date: Optional[date] = None) -> int:
                     f"({len(entries)} meeting(s), cell {processed}/{total_cells})..."
                 )
                 try:
-                    compressed = _compress(entries, system, model)
+                    compressed = _compress(entries, _system_for_row(row), model)
                 except Exception as e:
                     print(
                         f"  WARNING: compression failed for {row}/{d} — {e}",
@@ -410,13 +432,9 @@ def run_timecard(target_date: Optional[date] = None) -> int:
                     compressed = "; ".join(m.title for m in entries)[:255]
             else:
                 compressed = ""
-            # Append calendar-only stubs as italicized titles
-            if stubs:
-                stub_text = "; ".join(stubs)
-                if compressed:
-                    output_rows[row][d] = f"{compressed}  *(+ cal: {stub_text})*"
-                else:
-                    output_rows[row][d] = f"*(cal only)* {stub_text}"
+            # Cal-only stubs are listed in a separate section; don't append to LLM cells
+            if stubs and not compressed:
+                output_rows[row][d] = f"*(cal only)* {'; '.join(s.split(' (')[0] for s in stubs)}"
             else:
                 output_rows[row][d] = compressed
 
@@ -424,10 +442,11 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     now = datetime.now()
     iso = now.strftime("%Y-%m-%dT%H-%M-%S")
     cal_total = len(cal_events)
-    cal_covered = cal_total - len(cal_stubs)
+    analyzed_count = len(metas)
+    cal_only_count = len(cal_stubs)
     coverage_note = (
-        f"*Calendar coverage: {cal_covered}/{cal_total} meetings have transcripts; "
-        f"{len(cal_stubs)} are calendar-only stubs (marked `cal only` in the rows below).*"
+        f"*Calendar coverage: {analyzed_count} meetings have transcripts; "
+        f"{cal_only_count} calendar-only (no transcript).*"
         if cal_total > 0
         else "*Calendar data unavailable — binary not found or permission not granted.*"
     )

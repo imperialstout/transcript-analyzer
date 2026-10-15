@@ -41,6 +41,12 @@ _SKIP_PATTERNS = [
     r"\blunch\b", r"\bbreakfast\b", r"\bcommute\b", r"\bfocus time\b",
     r"\bbirthday\b", r"\bholiday\b", r"\bvacation\b",
     r"\btravel\b", r"\bflights?\b",
+    r"\bpto\b", r"[-–]\s*out\b",              # PTO / "Brad - Out" markers
+    r"cpq\s+pi\s+\d+",                         # CPQ PI sprint daily placeholders
+    r"seap\s+dive|take\s+a\s+seap\b",          # SEAP office hours
+    r"agentforce\s+office\s+hours",             # AMERS/regional Agentforce office hours
+    r"break\s+room\b",                          # The Break Room social series
+    r"kortney.{0,10}tequila|tequila.{0,10}kortney",  # Kortney/Tequila sync (DISW internal, no Brad action)
 ]
 
 # Calendars to skip entirely

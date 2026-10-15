@@ -27,6 +27,8 @@ python -m analyzer synthesize --mode weekly   # D2 Slack Delta — this week's f
 python -m analyzer synthesize --mode career   # D3 Career Trajectory — all current files (personal machine)
 python -m analyzer synthesize --mode catch-up # one Daily Pulse per backlog day (vacation recovery)
 python -m analyzer synthesize --mode catch-up --since 2026-06-16  # only backlog days on/after a date
+python -m analyzer synthesize --mode program-pulse          # sweep Analyzed/ → SiemensRCAGov STATUS.md files
+python -m analyzer synthesize --mode program-pulse --dry-run  # print what would be written, no writes
 ```
 
 Launch the web dashboard (opens browser automatically at http://localhost:7070):
@@ -101,7 +103,7 @@ Division of labor: **work** machine does per-meeting `analyze` + daily/weekly `s
 ### Entry point dispatch (`__main__.py`)
 
 `python -m analyzer` → `main.main()` (transcript + notes intake pipeline)
-`python -m analyzer synthesize --mode daily|weekly|career` → `synthesize.main()` (D1/D2/D3 synthesis)
+`python -m analyzer synthesize --mode daily|weekly|career|catch-up|program-pulse` → `synthesize.main()`
 `python -m analyzer ui [--port N]` → `ui.main()` (Flask dashboard)
 
 ### Three-pipeline flow (main.py)
@@ -124,6 +126,7 @@ A summary line `All done. N succeeded, M failed. Total cost: $X.` is printed at 
 | `weekly` | `D2` Slack Delta | this ISO week (Mon–today) | Sonnet | yes |
 | `career` | `D3` Career & Position Trajectory | **analyses filed since the last `[CAREER TRAJECTORY]`** (incremental; `--full` re-reads all) | **B4 model (Opus on personal)** | **no** |
 | `catch-up` | (reuses `D1`) | one daily pulse **per backlog day** (`--since` lower-bounds it) | Sonnet | yes |
+| `program-pulse` | n/a | files newer than each STATUS.md watermark | Sonnet | **no** (writes to SiemensRCAGov, not Analyzed/) |
 
 **Selection keys on the *meeting date*, not the processing date.** `_meeting_date(path)` reads the authoritative frontmatter `meeting_date:` first, then the *trailing* filename token (`… - DATE [TAG]`), and only falls back to the first date token as a last resort — never the leading run-stamp. This matters because a late/bulk download (a vacation backlog) stamps every file's leading run-stamp with the download day; keying on that would collapse the whole backlog into one bucket with no `--date` able to separate it. (`filing._extract_meeting_date` also parses underscore source dates `2026_06_22` so new files' trailing token is correct too.) Note the **career incremental** cutoff is unrelated — it still uses the *leading* run-stamp (`_filed_timestamp`) deliberately, to mean "filed since the last review."
 
@@ -228,3 +231,48 @@ Synthesis outputs use `.md` extension and `[DAILY PULSE]` / `[SLACK DELTA]` / `[
 ### Program reference (`[PROGRAM REFERENCE].md`)
 
 Pipeline-maintained file in `Analyzed/`. Created and updated automatically when documents are processed. Contains durable program facts (team structure, milestones, process decisions, capability ownership) that survive across synthesis windows. Injected into all three synthesis modes (D1/D2/D3) between the context brief and the rolodex in the system prefix. The DOCUMENT prompt instructs the model to emit a `## Reference Updates` section; `main._extract_reference_updates()` splits on that heading and feeds the content to a second Claude call that merges it into the reference file. Override the document prompt via `### DOCUMENT.` in `PromptLibrary.md`.
+
+### Triage alerts (`alerts.py`)
+
+After each transcript is analyzed, `alerts.extract_from_file()` scans the output for Brad-directed items using regex against structured sections the prompts already emit (`## Needs your attention`, `## Commitments & action items`, `## Suggested dispositions`). Matching lines are filtered by a Brad-directed keyword list (`brad`, `you`, `urgent`, `blocked`, `waiting on`, etc.) and appended to `~/.cache/transcript-analyzer/alerts.json`. IDs are deterministic hashes so re-runs never duplicate. The UI shows a red banner on the home page with per-item dismiss buttons; `bin/analyze.sh` fires a separate "⚠ Triage Alert" macOS notification when new alerts land. **Best-effort**: extraction failure does not affect transcript recording. **Not connected to brief-state** — alerts are separate from brief-state act items and are not auto-promoted; promotion is manual via the UI.
+
+### Morning brief state (`brief_state.py`)
+
+Persistent triage item store at `~/.cache/transcript-analyzer/brief-state.json`. The `/morning-brief` slash command writes items here after each triage session; the UI's "Brief State" tab lets you close, defer, or re-own them.
+
+Item schema: `id` (SHA-1[:12] of source_brief + text), `text`, `type` (act/watch/delegate/they-owe/insight), `owner`, `deadline` (ISO date or null), `source_brief`, `source_pulse`, `status` (pending/complete/deferred/expired/dropped), `created_at`, `closed_at`, `deferred_to`, `notes`, `resurfaced_count`, `program` (optional — program key matching a STATUS.md, e.g. `SI-RCA`, `DISW-CPQ`, `presales-energy`; `None` = unassigned).
+
+Expiry rules (applied at the top of each synthesis run via `expire_stale()` + `resurface_deferred()`):
+- **act**: expired if deadline passed, or if no deadline and age > 1 business day
+- **watch**: expired if age > 5 business days
+- **delegate**: resurfaced (counter++) after 7 days — not expired
+- **they-owe**: promoted to a new act item ("Follow up: …") when deadline passes
+- **insight**: expired after 1 business day
+- **deferred**: flipped back to pending on or after `deferred_to` date
+
+A session-start hook (`bin/brief-state-hook.py`) injects pending act items and overdue items into every Claude Code session automatically. The "Open from morning brief" block at the top of a session is this hook's output.
+
+Key API: `upsert(item)`, `pending_acts()`, `pending_they_owe()`, `pending_watches()`, `pending_by_program()`, `close(id, status)`, `defer(id, date)`.
+
+### Program Pulse (`program_pulse.py`)
+
+Cross-repo sweep that keeps governance STATUS.md files in `~/code/SiemensRCAGov` current with signals from new `[ANALYZED]` files. Invoked via `synthesize --mode program-pulse [--dry-run]`.
+
+**Flow:** for each STATUS.md found under `~/code/SiemensRCAGov`, read its YAML frontmatter `last_analyzed_file` watermark, find `[ANALYZED]` files newer than that watermark that classify to the same program, call Claude for a 3–5 bullet signal summary, append a dated block under `## Open signals`, and update the watermark. `--dry-run` prints the would-be output without writing.
+
+**Classification** (`classify_file(path)`) reads frontmatter from the analyzed file and applies a priority-ordered keyword map:
+
+| Program key | Signals on |
+|---|---|
+| `presales-energy` | workstream/title: Energy, SE, Siemens Energy |
+| `presales-healthineers` | workstream/title: Healthineers, SHS |
+| `presales-financial-services` | workstream/title: Financial Services, SFS |
+| `DISW-RCA` | workstream: DI-SW RCA/DISW RCA/RCA PoC; participants: Chandan, Sanjay |
+| `DISW-CPQ` | workstream prefix DI-SW/DISW; title: Digital Industries, Neeraj, Tequila, Kortney |
+| `siemens-general` | workstream: Siemens All, cross-stream, executive; title/participants: Hana, Eike, Tara, Gunnar |
+| `SI-RCA` | catch-all for remaining Siemens files |
+| `_admin` | workstream: internal, internal-salesforce; title: Tune-In, Practice Team — **not written to any STATUS.md** |
+
+The `program` field on brief-state items uses these same keys so `pending_by_program()` can group open act items alongside their governance STATUS.md.
+
+See `docs/cross-repo-ops.md` for the full STATUS.md anatomy and cross-repo ops guide.

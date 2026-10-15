@@ -255,59 +255,110 @@ _HTML = """\
     --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
     --text: #e2e4ec; --muted: #7a7f96; --accent: #4f8ef7;
     --green: #3ecf8e; --orange: #f7a24f; --red: #f76f6f;
+    --purple: #b08ef7; --cyan: #3ecfcf; --gold: #cfaf3e;
+    /* badge backgrounds — tokenized so no raw hex bleeds into rules */
+    --bg-exec:     #3a2020; --bg-solution: #1e2c3a; --bg-daily:   #1e3a2c;
+    --bg-standup:  #2a2c1e; --bg-notes:    #2a1e3a; --bg-pulse:   #1e3020;
+    --bg-act:      #3a2020; --bg-watch:    #2a2c1e; --bg-delegate:#1e2c3a;
+    --bg-they-owe: #2a1e3a; --bg-insight:  #1e2c2c; --bg-overdue: #4a1010;
+    --bg-deferred: #2a2010; --bg-complete: #1e3a1e; --bg-expired: #2a1010;
+    --bg-alert:    #2a1a1a; --border-alert: #6b2f2f; --bg-alert-item: #3a2020;
+    --bg-danger:   #3a1f1f; --border-danger: #5a2e2e;
+    --bg-inbox:    #1e1c10; --border-inbox: #3a3010;
+    --bg-job-run:  #1a2540;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font: 14px/1.5 "SF Pro Text", system-ui, sans-serif; }
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  /* selection */
+  ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); }
+
   header { background: var(--surface); border-bottom: 1px solid var(--border);
-           padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+           padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
   header h1 { font-size: 15px; font-weight: 600; }
-  nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px;
-          border-radius: 6px; }
-  nav a:hover, nav a.active { color: var(--text); background: var(--border); }
-  /* Slack paste */
-  textarea.paste-area { width: 100%; height: 360px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font: 13px/1.5 "SF Mono", "Menlo", monospace;
-    padding: 10px; resize: vertical; }
-  textarea.paste-area:focus { outline: none; border-color: var(--accent); }
   nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 6px; transition: color .15s, background .15s; }
+  nav a:hover, nav a.active { color: var(--text); background: var(--border); }
+
   .content { padding: 24px; max-width: 1100px; }
+
+  /* ── Button system: 3 variants + sm modifier ── */
+  .btn, button { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px;
+                 padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+                 text-decoration: none; border: none; transition: opacity .15s; white-space: nowrap; }
+  .btn, button { background: var(--accent); color: #fff; }
+  .btn:hover, button:hover { opacity: .85; }
+  .btn-secondary, button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover, button.secondary:hover { background: var(--border); opacity: 1; }
+  .btn-destructive, button.danger { background: var(--bg-danger); color: var(--red); border: 1px solid var(--border-danger); }
+  .btn-destructive:hover, button.danger:hover { background: #4a2828; opacity: 1; }
+  .btn-sm { padding: 3px 10px; font-size: 11px; border-radius: 4px; }
+
+  /* ── Shared form chrome ── */
+  input[type=date] { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+                     color: var(--text); font-size: 11px; padding: 3px 6px; }
+  input[type=date]:focus { outline: none; border-color: var(--accent); }
+
+  .flash { padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+  .flash-ok  { background: #1b3628; color: var(--green); }
+  .flash-err { background: var(--bg-danger); color: var(--red); }
+
+  /* ── Stats ── */
   .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
           padding: 14px 20px; min-width: 140px; }
   .stat .val { font-size: 22px; font-weight: 700; }
   .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+  /* ── Card ── */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
           padding: 20px; margin-bottom: 20px; }
   .card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
              letter-spacing: .06em; color: var(--muted); margin-bottom: 14px; }
+
+  /* ── Action tiers ── */
+  .action-tier { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .action-tier + .action-tier { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .action-tier-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .07em; color: var(--muted); margin-right: 4px; }
+  .action-group { display: flex; align-items: center; gap: 6px; }
+  .action-date-hint { font-size: 11px; color: var(--muted); }
+
+  /* ── Table ── */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase;
        letter-spacing: .05em; padding: 6px 10px; border-bottom: 1px solid var(--border); }
   td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   tr:last-child td { border-bottom: none; }
+
+  /* ── Badges ── */
   .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px;
            font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .badge-exec   { background: #3a2020; color: var(--red); }
-  .badge-solution { background: #1e2c3a; color: var(--accent); }
-  .badge-daily  { background: #1e3a2c; color: var(--green); }
-  .badge-standup { background: #2a2c1e; color: var(--orange); }
-  .badge-notes  { background: #2a1e3a; color: #b08ef7; }
-  .badge-pulse  { background: #1e3020; color: #5ecf6e; }
-  .badge-delta  { background: #1e2820; color: #3ecf8e; }
-  .badge-synthesis { background: #1e2820; color: #3ecf8e; }
-  .muted { color: var(--muted); }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-  button, .btn { background: var(--accent); color: #fff; border: none; border-radius: 6px;
-                  padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-                  text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-  button:hover, .btn:hover { opacity: .85; }
-  button.secondary { background: var(--surface); color: var(--text);
-                     border: 1px solid var(--border); }
-  button.secondary:hover { background: var(--border); }
-  button.danger { background: #3a1f1f; color: var(--red); border: 1px solid #5a2e2e; }
-  .flash { padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-  .flash-ok  { background: #1b3628; color: var(--green); }
-  .flash-err { background: #3a1f1f; color: var(--red); }
+  .badge-exec      { background: var(--bg-exec);     color: var(--red); }
+  .badge-solution  { background: var(--bg-solution); color: var(--accent); }
+  .badge-daily     { background: var(--bg-daily);    color: var(--green); }
+  .badge-standup   { background: var(--bg-standup);  color: var(--orange); }
+  .badge-notes     { background: var(--bg-notes);    color: var(--purple); }
+  .badge-pulse     { background: var(--bg-pulse);    color: var(--green); }
+  .badge-delta     { background: var(--bg-daily);    color: var(--green); }
+  .badge-synthesis { background: var(--bg-daily);    color: var(--green); }
+  .badge-act       { background: var(--bg-act);      color: var(--red); }
+  .badge-watch     { background: var(--bg-watch);    color: var(--orange); }
+  .badge-delegate  { background: var(--bg-delegate); color: var(--accent); }
+  .badge-they-owe  { background: var(--bg-they-owe); color: var(--purple); }
+  .badge-insight   { background: var(--bg-insight);  color: var(--cyan); }
+  .badge-pending   { background: var(--bg-daily);    color: var(--green); }
+  .badge-complete  { background: var(--bg-complete); color: var(--green); }
+  .badge-deferred  { background: var(--bg-deferred); color: var(--gold); }
+  .badge-expired   { background: var(--bg-expired);  color: var(--red); }
+  .badge-dropped   { background: #1e1e1e;            color: var(--muted); }
+  .badge-overdue   { background: var(--bg-overdue);  color: var(--red); font-weight: 700; }
+
+  /* ── Job panel ── */
   #job-status { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
                 padding: 16px; margin-top: 16px; display: none; }
   #job-status h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
@@ -317,14 +368,15 @@ _HTML = """\
   .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border);
              border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  /* Settings */
+
+  /* ── Settings ── */
   .field { margin-bottom: 18px; }
   .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted);
                  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
   .field input[type=text], .field input[type=url] {
     background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
     color: var(--text); font-size: 13px; padding: 7px 10px; width: 100%; }
-  .field input:focus { outline: none; border-color: var(--accent); }
+  .field input[type=text]:focus, .field input[type=url]:focus { outline: none; border-color: var(--accent); }
   .field .desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .toggle-row { display: flex; align-items: center; gap: 10px; }
   .toggle { position: relative; width: 36px; height: 20px; }
@@ -335,35 +387,34 @@ _HTML = """\
                    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
   input:checked + .slider { background: var(--accent); }
   input:checked + .slider:before { transform: translateX(16px); }
+
+  /* ── Quick links ── */
   .quick-link { display: inline-flex; align-items: center; gap: 6px; color: var(--accent);
                 text-decoration: none; font-size: 12px; padding: 5px 0; }
   .quick-link:hover { text-decoration: underline; }
   hr.sep { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
   .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
                    letter-spacing: .07em; color: var(--muted); margin-bottom: 14px; }
-  /* Triage alerts */
-  .alert-banner { background: #2a1a1a; border: 1px solid #6b2f2f; border-radius: 8px;
+  .muted { color: var(--muted); }
+
+  /* ── Slack paste ── */
+  textarea.paste-area { width: 100%; height: 360px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font: 13px/1.5 "SF Mono", "Menlo", monospace;
+    padding: 10px; resize: vertical; }
+  textarea.paste-area:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Triage alerts ── */
+  .alert-banner { background: var(--bg-alert); border: 1px solid var(--border-alert); border-radius: 8px;
                   padding: 16px 20px; margin-bottom: 20px; }
-  .alert-banner-header { display: flex; align-items: center; justify-content: space-between;
-                         margin-bottom: 12px; }
-  .alert-banner-title { font-size: 13px; font-weight: 700; color: var(--red);
-                        text-transform: uppercase; letter-spacing: .05em; }
+  .alert-banner-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .alert-banner-title { font-size: 13px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; }
   .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
-                border-top: 1px solid #3a2020; }
+                border-top: 1px solid var(--bg-alert-item); }
   .alert-item:first-of-type { border-top: none; }
   .alert-text { flex: 1; font-size: 13px; line-height: 1.5; }
   .alert-source { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .alert-dismiss { background: #3a2020; color: var(--red); border: 1px solid #5a2e2e;
-                   border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600;
-                   cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-  .alert-dismiss:hover { background: #4a2828; }
-  .btn-dismiss-all { background: transparent; color: var(--muted); border: 1px solid var(--border);
-                     border-radius: 4px; padding: 4px 12px; font-size: 11px; cursor: pointer; }
-  .btn-dismiss-all:hover { color: var(--text); border-color: var(--muted); }
-  /* Brief state panel */
-  .bs-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                      letter-spacing: .07em; color: var(--muted); margin: 20px 0 10px; }
-  .bs-section-title:first-child { margin-top: 0; }
+
+  /* ── Brief state ── */
   .bs-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
              border-top: 1px solid var(--border); }
   .bs-item:first-of-type { border-top: none; }
@@ -372,36 +423,22 @@ _HTML = """\
   .bs-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
   .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
-  .bs-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
-  .badge-act     { background: #3a2020; color: var(--red); }
-  .badge-watch   { background: #2a2c1e; color: var(--orange); }
-  .badge-delegate { background: #1e2c3a; color: var(--accent); }
-  .badge-they-owe { background: #2a1e3a; color: #b08ef7; }
-  .badge-insight  { background: #1e2c2c; color: #3ecfcf; }
-  .badge-pending  { background: #1e3a2c; color: var(--green); }
-  .badge-complete { background: #1e3a1e; color: #6ecf6e; }
-  .badge-deferred { background: #2a2010; color: #cfaf3e; }
-  .badge-expired  { background: #2a1010; color: #cf6e6e; }
-  .badge-dropped  { background: #1e1e1e; color: var(--muted); }
-  .badge-overdue  { background: #4a1010; color: var(--red); font-weight: 700; }
-  .bs-btn { background: var(--surface); color: var(--text); border: 1px solid var(--border);
-            border-radius: 4px; padding: 3px 10px; font-size: 11px; font-weight: 600;
-            cursor: pointer; white-space: nowrap; }
-  .bs-btn:hover { background: var(--border); }
-  .bs-btn.danger { background: #3a1f1f; color: var(--red); border-color: #5a2e2e; }
-  .bs-btn.danger:hover { background: #4a2828; }
-  .bs-defer-form { display: flex; gap: 4px; align-items: center; }
-  .bs-defer-form input[type=date] { background: var(--bg); border: 1px solid var(--border);
-    border-radius: 4px; color: var(--text); font-size: 11px; padding: 3px 6px; }
+  .bs-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap; }
+  .bs-defer-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .bs-defer-chips { display: flex; gap: 4px; }
   .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+  /* ── Inbox card (candidates) ── */
+  .card-inbox { background: var(--bg-inbox); border-color: var(--border-inbox); }
+  .card-inbox h2 { color: var(--gold); }
 </style>
 </head>
 <body>
 <header>
   <h1>Transcript Analyzer</h1>
   <nav>
+    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %} <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700;line-height:18px;display:inline-block;vertical-align:middle;margin-left:4px">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
-    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %} <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;font-weight:700">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
@@ -415,6 +452,27 @@ _HTML = """\
 {{ body | safe }}
 </div>
 <script>
+// Quick-defer: daysOffset=0 → next Monday; >0 → N days from today
+function deferQuick(itemId, daysOffset) {
+  const d = new Date();
+  if (daysOffset === 0) {
+    const dow = d.getDay(); // 0=Sun,1=Mon…
+    const daysToMon = dow === 0 ? 1 : (8 - dow) % 7 || 7;
+    d.setDate(d.getDate() + daysToMon);
+  } else {
+    d.setDate(d.getDate() + daysOffset);
+  }
+  const iso = d.toISOString().slice(0, 10);
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = '/brief-state/defer/' + itemId;
+  const inp = document.createElement('input');
+  inp.type = 'hidden'; inp.name = 'target'; inp.value = iso;
+  form.appendChild(inp);
+  document.body.appendChild(form);
+  form.submit();
+}
+
 // Job polling (synthesis + analysis)
 let _pollTimer = null;
 function startPoll(label) {
@@ -463,7 +521,7 @@ function startPoll(label) {
 _HOME_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div class="flash" style="background:#1a2540;color:var(--accent);display:flex;align-items:center;gap:8px">
+<div class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
   <span class="spinner"></span>
   <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
 </div>
@@ -474,7 +532,7 @@ _HOME_BODY = """\
   <div class="alert-banner-header">
     <span class="alert-banner-title">⚠ {{ triage_alerts|length }} Triage Alert{{ 's' if triage_alerts|length != 1 else '' }} — Action Required</span>
     <form method="post" action="/alerts/dismiss-all" style="display:inline">
-      <button type="submit" class="btn-dismiss-all">Dismiss all</button>
+      <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
     </form>
   </div>
   {% for a in triage_alerts %}
@@ -484,10 +542,54 @@ _HOME_BODY = """\
       <div class="alert-source">{{ a.source }}{% if a.source_date %} · {{ a.source_date }}{% endif %}</div>
     </div>
     <form method="post" action="/alerts/dismiss/{{ a.id }}" style="display:inline">
-      <button type="submit" class="alert-dismiss">Dismiss</button>
+      <button type="submit" class="btn-destructive btn-sm">Dismiss</button>
     </form>
   </div>
   {% endfor %}
+</div>
+{% endif %}
+
+{% if pending_acts %}
+<div class="card" style="border-color:{% if has_overdue %}var(--border-alert){% else %}var(--border){% endif %}">
+  <h2 style="{% if has_overdue %}color:var(--red){% endif %}">
+    Obligations — {{ pending_acts|length }} act{% if pending_acts|length != 1 %}s{% endif %}{% if has_overdue %} · {{ overdue_count }} overdue{% endif %}
+  </h2>
+  {% for item in pending_acts %}
+  <div class="bs-item">
+    <div class="bs-body">
+      <div class="bs-text">
+        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
+        {{ item.text }}
+      </div>
+      <div class="bs-meta">
+        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d){% endif %} · {% endif %}
+        {% if item.owner and item.owner != "Brad" %}<span style="color:var(--muted)">{{ item.owner }} · </span>{% endif %}
+        {{ item.source_brief[:10] if item.source_brief else '—' }}
+      </div>
+      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    </div>
+    <div class="bs-actions">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="btn-secondary btn-sm">Done</button>
+      </form>
+      <div class="bs-defer-row">
+        <span class="bs-defer-chips">
+          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
+          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
+          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to next Monday">Mon</button>
+        </span>
+        <form method="post" action="/brief-state/defer/{{ item.id }}" class="bs-defer-form" style="display:flex;gap:4px">
+          <input type="date" name="target" required title="Defer to a specific date">
+          <button type="submit" class="btn-secondary btn-sm">Defer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+    <a href="/brief-state" class="quick-link">View full Brief State →</a>
+  </div>
 </div>
 {% endif %}
 
@@ -502,38 +604,57 @@ _HOME_BODY = """\
   {% endif %}
 </div>
 
-<div class="actions">
-  <form method="post" action="/run-analysis" style="display:inline" onsubmit="startPoll('Running transcript analysis…')">
-    <button type="submit" class="secondary">⚡ Run Analysis</button>
-  </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Daily Pulse synthesis…')">
-    <input type="hidden" name="mode" value="daily">
-    <input type="date" name="date" title="Leave blank for today; pick a past date to back-date a missed run">
-    <button type="submit">▶ Daily Pulse</button>
-  </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Weekly Slack Delta…')">
-    <input type="hidden" name="mode" value="weekly">
-    <input type="date" name="date" title="Leave blank for this week; pick a date in the week to back-date">
-    <button type="submit" class="secondary">▶ Weekly Slack Delta</button>
-  </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')">
-    <input type="hidden" name="mode" value="catch-up">
-    <input type="date" name="since" title="Vacation recovery: emits one Daily Pulse per backlog day. Pick the date you want to start from (e.g. your first day away); leave blank for the whole backlog.">
-    <button type="submit" class="secondary" title="One Daily Pulse per backlog day, in order. For catching up after time away.">▶ Catch Up</button>
-  </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Running Career Trajectory review…')">
-    <input type="hidden" name="mode" value="career">
-    <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:4px"
-           title="Re-read ALL analyses to re-baseline the trajectory. Off = incremental (only files filed since the last review).">
-      <input type="checkbox" name="full" value="1"> full re-read
-    </label>
-    <button type="submit" class="secondary">▶ Career Trajectory</button>
-  </form>
-  <form method="post" action="/synthesize" style="display:inline" onsubmit="startPoll('Compiling Weekly Timecard…')">
-    <input type="hidden" name="mode" value="timecard">
-    <input type="date" name="date" title="Leave blank for current week; pick any date in the target week to back-date">
-    <button type="submit" class="secondary">▶ Timecard</button>
-  </form>
+<div class="card">
+  <h2>Operations</h2>
+  <div class="action-tier">
+    <span class="action-tier-label">Daily</span>
+    <div class="action-group">
+      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
+        <button type="submit">⚡ Run Analysis</button>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="daily">
+        <button type="submit" class="btn-secondary">▶ Daily Pulse</button>
+        <input type="date" name="date" title="Leave blank for today; pick a past date to back-date">
+      </form>
+    </div>
+  </div>
+  <div class="action-tier">
+    <span class="action-tier-label">Periodic</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Slack Delta…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="weekly">
+        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
+        <input type="date" name="date" title="Leave blank for this week; pick a date in the week to back-date">
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="catch-up">
+        <button type="submit" class="btn-secondary" title="One Daily Pulse per backlog day, in order.">▶ Catch Up</button>
+        <input type="date" name="since" title="Start from this date (leave blank for full backlog)">
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Career Trajectory review…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="career">
+        <button type="submit" class="btn-secondary">▶ Career</button>
+        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
+               title="Re-read ALL analyses to re-baseline. Off = incremental.">
+          <input type="checkbox" name="full" value="1"> full
+        </label>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="timecard">
+        <button type="submit" class="btn-secondary">▶ Timecard</button>
+        <input type="date" name="date" title="Leave blank for current week">
+      </form>
+    </div>
+  </div>
 </div>
 
 <div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
@@ -613,7 +734,7 @@ _SETTINGS_BODY = """\
   </div>
   {% endfor %}
 
-  <button type="submit">Save settings</button>
+  <button type="submit" class="btn-secondary">Save settings</button>
 </div>
 </form>
 
@@ -642,7 +763,7 @@ _SETTINGS_BODY = """\
   <p class="section-title" style="margin-top:18px">Server</p>
   <form method="post" action="/restart" style="display:inline"
         onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
-    <button type="submit">↻ Restart server</button>
+    <button type="submit" class="btn-secondary">↻ Restart server</button>
   </form>
   <div class="desc">Re-execs the server in place to pick up code or <code>.env</code> changes. The analysis itself already runs fresh each time — this only refreshes the long-lived UI process.</div>
 </div>
@@ -653,8 +774,8 @@ _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
 {% if candidate_items %}
-<div class="card" style="border-color:#3a3010">
-  <h2 style="color:#cfaf3e">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
+<div class="card card-inbox">
+  <h2>Inbox — signals pending triage ({{ candidate_items|length }})</h2>
   {% for item in candidate_items %}
   <div class="bs-item">
     <div class="bs-body">
@@ -672,10 +793,10 @@ _BRIEF_STATE_BODY = """\
     <div class="bs-actions">
       <form method="post" action="/brief-state/accept/{{ item.id }}">
         <input type="hidden" name="type" value="{{ item.type }}">
-        <button type="submit" class="bs-btn" style="border-color:#cfaf3e;color:#cfaf3e">Accept</button>
+        <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)">Accept</button>
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}">
-        <button type="submit" class="bs-btn danger">Dismiss</button>
+        <button type="submit" class="btn-destructive btn-sm">Dismiss</button>
       </form>
     </div>
   </div>
@@ -683,7 +804,7 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-<div class="card">
+<div class="card" style="{% if act_items|selectattr('overdue')|list %}border-color:var(--border-alert){% endif %}">
   <h2>Act items — Brad owns</h2>
   {% if act_items %}
   {% for item in act_items %}
@@ -702,21 +823,28 @@ _BRIEF_STATE_BODY = """\
     <div class="bs-actions">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
-        <button type="submit" class="bs-btn">Done</button>
+        <button type="submit" class="btn-secondary btn-sm">Done</button>
       </form>
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="bs-btn danger">Drop</button>
+        <button type="submit" class="btn-destructive btn-sm">Drop</button>
       </form>
-      <form method="post" action="/brief-state/defer/{{ item.id }}" class="bs-defer-form">
-        <input type="date" name="target" required title="Defer to date">
-        <button type="submit" class="bs-btn">Defer</button>
+    </div>
+    <div class="bs-defer-row">
+      <span class="bs-defer-chips">
+        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
+        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
+        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to Monday">Mon</button>
+      </span>
+      <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+        <input type="date" name="target" required title="Defer to a specific date">
+        <button type="submit" class="btn-secondary btn-sm">Defer</button>
       </form>
     </div>
   </div>
   {% endfor %}
   {% else %}
-  <div class="bs-empty">No pending act items.</div>
+  <div class="bs-empty">No pending act items — clear board.</div>
   {% endif %}
 </div>
 
@@ -733,11 +861,11 @@ _BRIEF_STATE_BODY = """\
     <div class="bs-actions">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
-        <button type="submit" class="bs-btn">Done</button>
+        <button type="submit" class="btn-secondary btn-sm">Done</button>
       </form>
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="bs-btn danger">Drop</button>
+        <button type="submit" class="btn-destructive btn-sm">Drop</button>
       </form>
     </div>
   </div>
@@ -762,10 +890,10 @@ _BRIEF_STATE_BODY = """\
     <div class="bs-actions">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
-        <button type="submit" class="bs-btn">Confirmed done</button>
+        <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
       </form>
       <form method="post" action="/brief-state/re-own/{{ item.id }}">
-        <button type="submit" class="bs-btn danger">Re-own</button>
+        <button type="submit" class="btn-destructive btn-sm">Re-own</button>
       </form>
     </div>
   </div>
@@ -789,11 +917,11 @@ _BRIEF_STATE_BODY = """\
     <div class="bs-actions">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
-        <button type="submit" class="bs-btn">Received</button>
+        <button type="submit" class="btn-secondary btn-sm">Received</button>
       </form>
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="bs-btn danger">Drop</button>
+        <button type="submit" class="btn-destructive btn-sm">Drop</button>
       </form>
     </div>
   </div>
@@ -884,6 +1012,8 @@ def create_app():
     @app.get("/")
     def home():
         from . import alerts as _alerts
+        from . import brief_state as _bs
+        from datetime import date as _date
         rows = _analyzed_files()
         flash = request.args.get("flash", "")
         flash_type = request.args.get("ft", "ok")
@@ -893,6 +1023,26 @@ def create_app():
             job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
             job_output = _job["output"] if _job else ""
             job_done = _job["done"] if _job else True
+
+        # Obligations hero card
+        today = _date.today()
+        def _enrich_act(item):
+            item = dict(item)
+            dl = item.get("deadline")
+            if dl:
+                d = _date.fromisoformat(dl)
+                item["overdue"] = d < today
+                item["days_overdue"] = (today - d).days if d < today else 0
+            else:
+                item["overdue"] = False
+                item["days_overdue"] = 0
+            return item
+        try:
+            pending_acts = [_enrich_act(i) for i in _bs.pending_acts()]
+        except Exception:
+            pending_acts = []
+        overdue_count = sum(1 for i in pending_acts if i.get("overdue"))
+
         return _render(
             _HOME_BODY,
             page="home",
@@ -907,6 +1057,9 @@ def create_app():
             job_output=job_output,
             job_done=job_done,
             triage_alerts=_alerts.undismissed(),
+            pending_acts=pending_acts,
+            has_overdue=overdue_count > 0,
+            overdue_count=overdue_count,
         )
 
     @app.post("/alerts/dismiss/<alert_id>")

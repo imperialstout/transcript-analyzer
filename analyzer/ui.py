@@ -219,19 +219,31 @@ def _total_cost(rows: list[dict]) -> float:
     return round(sum(r["cost"] for r in rows), 4)
 
 
-def _last_analyzed_at(rows: list[dict]) -> str:
-    """Return the most recent analyzed_at timestamp across all manifest entries."""
+def _last_analyzed_at(rows: list[dict]) -> tuple[str, str]:
+    """Return (formatted timestamp, staleness) for the most recent analyzed_at.
+
+    staleness is '' | 'warn' (>8h) | 'danger' (>24h).
+    """
+    from datetime import datetime, timezone
     timestamps = [r["analyzed_at"] for r in rows if r.get("analyzed_at")]
     if not timestamps:
-        return ""
+        return "", ""
     ts = max(timestamps)
-    # Format as "Jun 6, 2026 14:32" for display
     try:
-        from datetime import datetime
         dt = datetime.fromisoformat(ts)
-        return dt.strftime("%b %-d, %Y %H:%M")
+        formatted = dt.strftime("%b %-d, %Y %H:%M")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+        if age_hours > 24:
+            staleness = "danger"
+        elif age_hours > 8:
+            staleness = "warn"
+        else:
+            staleness = ""
+        return formatted, staleness
     except Exception:
-        return ts[:16]
+        return ts[:16], ""
 
 
 def _analyzed_path_url() -> str:
@@ -298,6 +310,14 @@ _HTML = """\
   .btn-destructive:hover, button.danger:hover { background: #4a2828; opacity: 1; }
   .btn-sm { padding: 3px 10px; font-size: 11px; border-radius: 4px; }
 
+  /* ── Focus rings (keyboard navigation) ── */
+  .btn:focus-visible, button:focus-visible,
+  nav a:focus-visible,
+  .quick-link:focus-visible,
+  details.bs-section summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=date]:focus-visible, input[type=text]:focus-visible,
+  input[type=url]:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); }
+
   /* ── Shared form chrome ── */
   input[type=date] { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
                      color: var(--text); font-size: 11px; padding: 3px 6px; }
@@ -344,7 +364,7 @@ _HTML = """\
   .badge-standup   { background: var(--bg-standup);  color: var(--orange); }
   .badge-notes     { background: var(--bg-notes);    color: var(--purple); }
   .badge-pulse     { background: var(--bg-pulse);    color: var(--green); }
-  .badge-delta     { background: var(--bg-daily);    color: var(--green); }
+  .badge-delta     { background: var(--bg-insight);   color: var(--cyan); }
   .badge-synthesis { background: var(--bg-daily);    color: var(--green); }
   .badge-act       { background: var(--bg-act);      color: var(--red); }
   .badge-watch     { background: var(--bg-watch);    color: var(--orange); }
@@ -424,9 +444,15 @@ _HTML = """\
   .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
   .bs-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap; }
-  .bs-defer-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-  .bs-defer-chips { display: flex; gap: 4px; }
+  .bs-defer-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
   .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+  .bs-item-overdue { background: rgba(247,111,111,0.07); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+  .bs-item-due-soon { background: rgba(247,162,79,0.06); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+  details.bs-section summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+                                padding: 10px 0; color: var(--muted); font-size: 13px; user-select: none; }
+  details.bs-section summary::-webkit-details-marker { display: none; }
+  details.bs-section summary .bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.bs-section[open] summary .bs-section-chevron { transform: rotate(90deg); }
 
   /* ── Inbox card (candidates) ── */
   .card-inbox { background: var(--bg-inbox); border-color: var(--border-inbox); }
@@ -438,7 +464,7 @@ _HTML = """\
   <h1>Transcript Analyzer</h1>
   <nav>
     <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %} <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700;line-height:18px;display:inline-block;vertical-align:middle;margin-left:4px">{{ pending_act_count }}</span>{% endif %}</a>
-    <a href="/" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
+    <a href="/files" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
@@ -549,49 +575,6 @@ _HOME_BODY = """\
 </div>
 {% endif %}
 
-{% if pending_acts %}
-<div class="card" style="border-color:{% if has_overdue %}var(--border-alert){% else %}var(--border){% endif %}">
-  <h2 style="{% if has_overdue %}color:var(--red){% endif %}">
-    Obligations — {{ pending_acts|length }} act{% if pending_acts|length != 1 %}s{% endif %}{% if has_overdue %} · {{ overdue_count }} overdue{% endif %}
-  </h2>
-  {% for item in pending_acts %}
-  <div class="bs-item">
-    <div class="bs-body">
-      <div class="bs-text">
-        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
-        {{ item.text }}
-      </div>
-      <div class="bs-meta">
-        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d){% endif %} · {% endif %}
-        {% if item.owner and item.owner != "Brad" %}<span style="color:var(--muted)">{{ item.owner }} · </span>{% endif %}
-        {{ item.source_brief[:10] if item.source_brief else '—' }}
-      </div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
-    </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm">Done</button>
-      </form>
-      <div class="bs-defer-row">
-        <span class="bs-defer-chips">
-          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
-          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
-          <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to next Monday">Mon</button>
-        </span>
-        <form method="post" action="/brief-state/defer/{{ item.id }}" class="bs-defer-form" style="display:flex;gap:4px">
-          <input type="date" name="target" required title="Defer to a specific date">
-          <button type="submit" class="btn-secondary btn-sm">Defer</button>
-        </form>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-    <a href="/brief-state" class="quick-link">View full Brief State →</a>
-  </div>
-</div>
-{% endif %}
 
 <div class="stats">
   <div class="stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
@@ -600,7 +583,7 @@ _HOME_BODY = """\
   <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","synthesis")|list|length }}</div><div class="lbl">Syntheses</div></div>
   <div class="stat"><div class="val">${{ "%.2f"|format(total_cost) }}</div><div class="lbl">Total cost</div></div>
   {% if last_analyzed %}
-  <div class="stat"><div class="val" style="font-size:13px">{{ last_analyzed }}</div><div class="lbl">Last analyzed</div></div>
+  <div class="stat"><div class="val" style="font-size:13px{% if last_analyzed_stale == 'danger' %};color:var(--red){% elif last_analyzed_stale == 'warn' %};color:var(--orange){% endif %}">{{ last_analyzed }}</div><div class="lbl">Last analyzed</div></div>
   {% endif %}
 </div>
 
@@ -644,7 +627,11 @@ _HOME_BODY = """\
   </div>
   {% endif %}
   {% else %}
-  <p class="muted">No analyzed files yet.</p>
+  <div style="padding:24px 0;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted)">
+    <span style="font-size:28px;opacity:0.4">⏳</span>
+    <span style="font-size:13px">No analyzed files yet</span>
+    <span style="font-size:12px;max-width:340px;text-align:center;opacity:0.7">Drop transcripts into the Call Transcripts inbox and hit <strong style="color:var(--text)">Run Analysis</strong> on Brief State.</span>
+  </div>
   {% endif %}
 </div>
 """
@@ -743,9 +730,9 @@ _BRIEF_STATE_BODY = """\
   <div class="action-tier">
     <span class="action-tier-label">Periodic</span>
     <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Slack Delta…')" style="display:flex;gap:6px;align-items:center">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Slack Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-secondary">▶ Weekly Delta</button>
+        <button type="submit" class="btn-secondary">▶ Slack Delta</button>
         <input type="date" name="date" title="Leave blank for this week">
       </form>
     </div>
@@ -819,7 +806,7 @@ _BRIEF_STATE_BODY = """\
   <h2>Act items — Brad owns</h2>
   {% if act_items %}
   {% for item in act_items %}
-  <div class="bs-item">
+  <div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}">
     <div class="bs-body">
       <div class="bs-text">
         {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
@@ -840,103 +827,121 @@ _BRIEF_STATE_BODY = """\
         <input type="hidden" name="status" value="dropped">
         <button type="submit" class="btn-destructive btn-sm">Drop</button>
       </form>
-    </div>
-    <div class="bs-defer-row">
-      <span class="bs-defer-chips">
-        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
-        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
-        <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to Monday">Mon</button>
-      </span>
+      <div class="bs-defer-sep"></div>
+      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',1)" title="Defer 1 day">+1d</button>
+      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',3)" title="Defer 3 days">+3d</button>
+      <button type="button" class="btn-secondary btn-sm" onclick="deferQuick('{{ item.id }}',0)" title="Defer to Monday">Mon</button>
       <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-        <input type="date" name="target" required title="Defer to a specific date">
+        <input type="date" name="target" required title="Defer to a specific date" style="width:130px">
         <button type="submit" class="btn-secondary btn-sm">Defer</button>
       </form>
     </div>
   </div>
   {% endfor %}
   {% else %}
-  <div class="bs-empty">No pending act items — clear board.</div>
+  <div class="bs-empty" style="display:flex;align-items:center;gap:8px">
+    <span style="color:var(--green);font-size:15px">✓</span>
+    All clear — no pending acts.
+  </div>
   {% endif %}
 </div>
 
 {% if watch_items %}
 <div class="card">
-  <h2>Watch</h2>
-  {% for item in watch_items %}
-  <div class="bs-item">
-    <div class="bs-body">
-      <div class="bs-text">{{ item.text }}</div>
-      <div class="bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      Watch
+      <span class="badge badge-watch" style="margin-left:4px">{{ watch_items|length }}</span>
+    </summary>
+    {% for item in watch_items %}
+    <div class="bs-item">
+      <div class="bs-body">
+        <div class="bs-text">{{ item.text }}</div>
+        <div class="bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
+        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+      </div>
+      <div class="bs-actions">
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="complete">
+          <button type="submit" class="btn-secondary btn-sm">Done</button>
+        </form>
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="dropped">
+          <button type="submit" class="btn-destructive btn-sm">Drop</button>
+        </form>
+      </div>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm">Done</button>
-      </form>
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="btn-destructive btn-sm">Drop</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
+  </details>
 </div>
 {% endif %}
 
 {% if delegate_items %}
 <div class="card">
-  <h2>Delegated</h2>
-  {% for item in delegate_items %}
-  <div class="bs-item">
-    <div class="bs-body">
-      <div class="bs-text">{{ item.text }}</div>
-      <div class="bs-meta">
-        Owner: <strong>{{ item.owner }}</strong>
-        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
-        {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      Delegated
+      <span class="badge badge-delegate" style="margin-left:4px">{{ delegate_items|length }}</span>
+    </summary>
+    {% for item in delegate_items %}
+    <div class="bs-item">
+      <div class="bs-body">
+        <div class="bs-text">{{ item.text }}</div>
+        <div class="bs-meta">
+          Owner: <strong>{{ item.owner }}</strong>
+          {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
+          {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
+        </div>
+        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
       </div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+      <div class="bs-actions">
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="complete">
+          <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
+        </form>
+        <form method="post" action="/brief-state/re-own/{{ item.id }}">
+          <button type="submit" class="btn-destructive btn-sm">Re-own</button>
+        </form>
+      </div>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
-      </form>
-      <form method="post" action="/brief-state/re-own/{{ item.id }}">
-        <button type="submit" class="btn-destructive btn-sm">Re-own</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
+  </details>
 </div>
 {% endif %}
 
 {% if they_owe_items %}
 <div class="card">
-  <h2>They owe you</h2>
-  {% for item in they_owe_items %}
-  <div class="bs-item">
-    <div class="bs-body">
-      <div class="bs-text">{{ item.text }}</div>
-      <div class="bs-meta">
-        <strong>{{ item.owner }}</strong>
-        {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      They owe you
+      <span class="badge badge-they-owe" style="margin-left:4px">{{ they_owe_items|length }}</span>
+    </summary>
+    {% for item in they_owe_items %}
+    <div class="bs-item">
+      <div class="bs-body">
+        <div class="bs-text">{{ item.text }}</div>
+        <div class="bs-meta">
+          <strong>{{ item.owner }}</strong>
+          {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
+        </div>
+        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
       </div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+      <div class="bs-actions">
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="complete">
+          <button type="submit" class="btn-secondary btn-sm">Received</button>
+        </form>
+        <form method="post" action="/brief-state/close/{{ item.id }}">
+          <input type="hidden" name="status" value="dropped">
+          <button type="submit" class="btn-destructive btn-sm">Drop</button>
+        </form>
+      </div>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm">Received</button>
-      </form>
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="btn-destructive btn-sm">Drop</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
+  </details>
 </div>
 {% endif %}
 
@@ -1022,44 +1027,29 @@ def create_app():
 
     @app.get("/")
     def home():
+        return redirect(url_for("files_page"))
+
+    @app.get("/files")
+    def files_page():
         from . import alerts as _alerts
-        from . import brief_state as _bs
-        from datetime import date as _date
+        from .config import CONFIG
         rows = _analyzed_files()
         flash = request.args.get("flash", "")
         flash_type = request.args.get("ft", "ok")
-        from .config import CONFIG
         with _job_lock:
             job_running = bool(_job and not _job["done"])
             job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
             job_output = _job["output"] if _job else ""
             job_done = _job["done"] if _job else True
 
-        # Obligations hero card
-        today = _date.today()
-        def _enrich_act(item):
-            item = dict(item)
-            dl = item.get("deadline")
-            if dl:
-                d = _date.fromisoformat(dl)
-                item["overdue"] = d < today
-                item["days_overdue"] = (today - d).days if d < today else 0
-            else:
-                item["overdue"] = False
-                item["days_overdue"] = 0
-            return item
-        try:
-            pending_acts = [_enrich_act(i) for i in _bs.pending_acts()]
-        except Exception:
-            pending_acts = []
-        overdue_count = sum(1 for i in pending_acts if i.get("overdue"))
-
+        _last_ts, _last_stale = _last_analyzed_at(rows)
         return _render(
             _HOME_BODY,
             page="home",
             rows=rows,
             total_cost=_total_cost(rows),
-            last_analyzed=_last_analyzed_at(rows),
+            last_analyzed=_last_ts,
+            last_analyzed_stale=_last_stale,
             analyzed_path=str(CONFIG.analyzed_path),
             analyzed_path_url=_analyzed_path_url(),
             flash=flash,
@@ -1069,22 +1059,19 @@ def create_app():
             job_output=job_output,
             job_done=job_done,
             triage_alerts=_alerts.undismissed(),
-            pending_acts=pending_acts,
-            has_overdue=overdue_count > 0,
-            overdue_count=overdue_count,
         )
 
     @app.post("/alerts/dismiss/<alert_id>")
     def dismiss_alert(alert_id):
         from . import alerts as _alerts
         _alerts.dismiss(alert_id)
-        return redirect(url_for("home"))
+        return redirect(url_for("brief_state_page"))
 
     @app.post("/alerts/dismiss-all")
     def dismiss_all_alerts():
         from . import alerts as _alerts
         _alerts.dismiss_all()
-        return redirect(url_for("home", flash="All alerts dismissed", ft="ok"))
+        return redirect(url_for("brief_state_page", flash="All alerts dismissed", ft="ok"))
 
     @app.post("/synthesize")
     def synthesize():
@@ -1092,7 +1079,7 @@ def create_app():
         from datetime import datetime as _dt
         mode = request.form.get("mode", "daily")
         if mode not in ("daily", "weekly", "career", "catch-up", "timecard"):
-            return redirect(url_for("home", flash="Invalid mode", ft="err"))
+            return redirect(url_for("brief_state_page", flash="Invalid mode", ft="err"))
 
         # Optional back-date for daily/weekly/timecard (recover a missed run). Ignored for career.
         date_arg = request.form.get("date", "").strip()
@@ -1100,7 +1087,7 @@ def create_app():
             try:
                 _dt.strptime(date_arg, "%Y-%m-%d")
             except ValueError:
-                return redirect(url_for("home", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
+                return redirect(url_for("brief_state_page", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
         else:
             date_arg = ""
 
@@ -1110,7 +1097,7 @@ def create_app():
             try:
                 _dt.strptime(since_arg, "%Y-%m-%d")
             except ValueError:
-                return redirect(url_for("home", flash=f"Invalid since-date {since_arg!r} (need YYYY-MM-DD)", ft="err"))
+                return redirect(url_for("brief_state_page", flash=f"Invalid since-date {since_arg!r} (need YYYY-MM-DD)", ft="err"))
         else:
             since_arg = ""
 
@@ -1119,7 +1106,7 @@ def create_app():
 
         with _job_lock:
             if _job and not _job["done"]:
-                return redirect(url_for("home", flash="A synthesis job is already running", ft="err"))
+                return redirect(url_for("brief_state_page", flash="A synthesis job is already running", ft="err"))
             _job = {"mode": mode, "output": "", "done": False, "returncode": None}
 
         cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
@@ -1130,19 +1117,19 @@ def create_app():
         if full:
             cmd.append("--full")
         threading.Thread(target=_run_job, args=(cmd, mode), daemon=True).start()
-        return redirect(url_for("home"))
+        return redirect(url_for("brief_state_page"))
 
     @app.post("/run-analysis")
     def run_analysis():
         global _job
         with _job_lock:
             if _job and not _job["done"]:
-                return redirect(url_for("home", flash="A job is already running", ft="err"))
+                return redirect(url_for("brief_state_page", flash="A job is already running", ft="err"))
             _job = {"mode": "analysis", "output": "", "done": False, "returncode": None}
 
         cmd = [sys.executable, "-u", "-m", "analyzer"]
         threading.Thread(target=_run_job, args=(cmd, "analysis"), daemon=True).start()
-        return redirect(url_for("home"))
+        return redirect(url_for("brief_state_page"))
 
     @app.get("/job-status")
     def job_status():
@@ -1300,11 +1287,20 @@ def create_app():
             job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
             job_output = _job["output"] if _job else ""
 
+        def _sort_acts(items):
+            def _key(i):
+                overdue = i.get("overdue", False)
+                dl = i.get("deadline") or ""
+                return (0 if overdue else 1, dl or "9999-99-99")
+            return sorted(items, key=_key)
+
+        raw_acts = [_enrich_act(i) for i in _bs.pending_acts()]
         return _render(
             _BRIEF_STATE_BODY,
             page="brief-state",
+            today_iso=today.isoformat(),
             candidate_items=_bs.pending_candidates(),
-            act_items=[_enrich_act(i) for i in _bs.pending_acts()],
+            act_items=_sort_acts(raw_acts),
             watch_items=_bs.pending_watches(),
             delegate_items=[i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"],
             they_owe_items=[_enrich_they_owe(i) for i in _bs.pending_they_owe()],

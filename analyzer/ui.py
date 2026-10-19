@@ -690,6 +690,8 @@ function startPoll(label) {
     if (d.done) {
       clearInterval(_pollTimer); _pollTimer = null;
       if (indicator) indicator.style.display = 'none';
+      const banner = document.getElementById('job-running-banner');
+      if (banner) banner.style.display = 'none';
       if (d.returncode && d.returncode !== 0) {
         // Job failed (non-zero exit). Keep the panel up with the captured output
         // so the error is visible — do NOT reload it away. (returncode 2 is a
@@ -864,7 +866,7 @@ document.addEventListener('submit', function(e) {
 _HOME_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
+<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
   <span class="spinner"></span>
   <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
 </div>
@@ -1007,7 +1009,7 @@ _SETTINGS_BODY = """\
 _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
+<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
   <span class="spinner"></span>
   <strong>Running {{ job_label }}…</strong> The page will refresh when done.
 </div>

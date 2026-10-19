@@ -1093,7 +1093,7 @@ _BRIEF_STATE_BODY = """\
 {% if candidate_items %}
 {% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
 {% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
-<div class="card card-inbox">
+<div class="card card-inbox" id="inbox">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <h2 style="margin-bottom:0">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
     <form method="post" action="/brief-state/dismiss-all-candidates" style="display:inline"
@@ -1977,10 +1977,10 @@ def create_app():
         try:
             found = _bs.accept_candidate(item_id, item_type)
         except ValueError as e:
-            return redirect(url_for("brief_state_page", flash=str(e), ft="err"))
+            return redirect(url_for("brief_state_page", flash=str(e), ft="err") + "#inbox")
         msg = f"Accepted as {item_type}" if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft) + "#inbox")
 
     @app.post("/brief-state/dismiss-all-candidates")
     def brief_state_dismiss_all_candidates():
@@ -1990,7 +1990,7 @@ def create_app():
             _bs.dismiss_candidate(item["id"])
         n = len(candidates)
         msg = f"Dismissed {n} candidate{'s' if n != 1 else ''}" if n else "No candidates to dismiss"
-        return redirect(url_for("brief_state_page", flash=msg, ft="ok"))
+        return redirect(url_for("brief_state_page", flash=msg, ft="ok") + "#inbox")
 
     @app.post("/brief-state/dismiss-candidate/<item_id>")
     def brief_state_dismiss_candidate(item_id):
@@ -1998,7 +1998,7 @@ def create_app():
         found = _bs.dismiss_candidate(item_id)
         msg = "Dismissed" if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft) + "#inbox")
 
     @app.post("/brief-state/close/<item_id>")
     def brief_state_close(item_id):

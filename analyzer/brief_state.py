@@ -44,7 +44,8 @@ _STOPWORDS = {
     "if", "about", "whether", "need", "needs", "before", "already", "still",
     "brad", "item", "meeting", "notes", "call", "today",
 }
-_SIMILARITY_THRESHOLD = 3  # shared significant tokens to flag as probable duplicate
+_SIMILARITY_THRESHOLD = 3   # shared tokens to flag as possible duplicate (warn)
+_BLOCK_THRESHOLD = 5        # shared tokens to treat as definite duplicate (skip insert)
 
 # Business-day expiry thresholds by type (calendar days used as approximation)
 _EXPIRY_BUSINESS_DAYS = {
@@ -137,11 +138,22 @@ def upsert(item: dict) -> None:
     if item["id"] in existing_ids:
         items[existing_ids[item["id"]]].update(item)
     else:
-        # Warn if a similar pending item already exists — likely a duplicate
+        # Block or warn if a similar pending item already exists
         similar = find_similar_pending(item.get("text", ""), items)
         if similar:
             import sys
+            tokens = _significant_tokens(item.get("text", ""))
             for s in similar:
+                overlap = tokens & _significant_tokens(s.get("text", "") + " " + s.get("notes", ""))
+                if len(overlap) >= _BLOCK_THRESHOLD:
+                    print(
+                        f"  [brief_state] DUPLICATE BLOCKED: new item ({len(overlap)} shared tokens) "
+                        f"matches existing pending {s['id'][:8]}.\n"
+                        f"    existing: {s['text'][:100]}\n"
+                        f"    new:      {item.get('text', '')[:100]}",
+                        file=sys.stderr,
+                    )
+                    return
                 print(
                     f"  [brief_state] POSSIBLE DUPLICATE: new item shares keywords with "
                     f"existing pending {s['id'][:8]}.\n"

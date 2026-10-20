@@ -287,6 +287,7 @@ _PAGE_TITLES = {
     "home": "Files — Transcript Analyzer",
     "prep": "Meeting Prep — Transcript Analyzer",
     "slack-paste": "Slack Paste — Transcript Analyzer",
+    "run": "Run — Transcript Analyzer",
     "settings": "Settings — Transcript Analyzer",
 }
 
@@ -610,6 +611,7 @@ _HTML = """\
     <a href="/files" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
     <a href="/prep" class="{{ 'active' if page == 'prep' else '' }}">Meeting Prep</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
+    <a href="/run" class="{{ 'active' if page == 'run' else '' }}">Run</a>
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
   {% if page == 'brief-state' %}
@@ -1006,6 +1008,92 @@ _SETTINGS_BODY = """\
 """
 
 
+_RUN_BODY = """\
+{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if job_running %}
+<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
+  <span class="spinner"></span>
+  <strong>Running {{ job_label }}…</strong> The page will refresh when done.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="action-tier">
+    <span class="action-tier-label">Daily</span>
+    <div class="action-group">
+      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
+        <button type="submit">⚡ Run Analysis</button>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="daily">
+        <button type="submit" class="btn-daily-pulse">▶ Daily Pulse</button>
+        <label class="sr-only" for="daily-date">Back-date (optional)</label>
+        <input type="date" id="daily-date" name="date" title="Leave blank for today; pick a past date to back-date">
+      </form>
+    </div>
+  </div>
+  <div class="action-tier">
+    <span class="action-tier-label">Periodic</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="weekly">
+        <button type="submit" class="btn-periodic">▶ {% if last_weekly and last_weekly.bdays and last_weekly.bdays > 8 %}Weekly Delta ({{ last_weekly.bdays }}d catch-up){% else %}Weekly Delta{% endif %}</button>
+        <label class="sr-only" for="weekly-date">Week anchor date (optional)</label>
+        <input type="date" id="weekly-date" name="date" title="Leave blank for this week">
+        {% if last_weekly %}
+          {% if last_weekly.label and last_weekly.bdays and last_weekly.bdays > 5 %}
+          <span class="weekly-nudge weekly-nudge-orange" title="Last weekly was {{ last_weekly.label }}">Last: {{ last_weekly.label }}</span>
+          {% elif not last_weekly.label %}
+          <span class="weekly-nudge weekly-nudge-muted">Not yet run</span>
+          {% endif %}
+        {% endif %}
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="catch-up">
+        <button type="submit" class="btn-periodic">▶ Catch Up</button>
+        <label class="sr-only" for="catchup-since">Since date (optional)</label>
+        <input type="date" id="catchup-since" name="since" title="Start from this date (leave blank for full backlog)">
+      </form>
+    </div>
+  </div>
+  <div class="action-tier">
+    <span class="action-tier-label">Rare</span>
+    <div class="action-group">
+      <form method="post" action="/synthesize" id="career-form"
+            onsubmit="return careerSubmit(this, startPoll)" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="career">
+        <button type="submit" id="career-btn" class="btn-rare">▶ Career</button>
+        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
+               title="Re-read ALL analyses to re-baseline. Off = incremental.">
+          <input type="checkbox" name="full" value="1" id="career-full"
+                 onchange="document.getElementById('career-btn').classList.toggle('career-full-active',this.checked)"> full
+        </label>
+      </form>
+    </div>
+    <div class="action-group">
+      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="mode" value="timecard">
+        <button type="submit" class="btn-rare">▶ Timecard</button>
+        <label class="sr-only" for="timecard-date">Week date (optional)</label>
+        <input type="date" id="timecard-date" name="date" title="Leave blank for current week">
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
+  <h3>
+    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-done" style="display:none">Done — refreshing…</span>
+  </h3>
+  <div id="job-output" role="log" aria-live="polite" aria-label="Job output">{{ job_output }}</div>
+</div>
+"""
+
 _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
@@ -1166,86 +1254,6 @@ _BRIEF_STATE_BODY = """\
   {% endif %}
 </div>
 {% endif %}
-
-{# ── OPERATIONS ── #}
-<div class="card">
-  <details class="ops-drawer">
-    <summary><span class="ops-chevron">▶</span> Run synthesis</summary>
-  <div class="action-tier">
-    <span class="action-tier-label">Daily</span>
-    <div class="action-group">
-      <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
-        <button type="submit">⚡ Run Analysis</button>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="daily">
-        <button type="submit" class="btn-daily-pulse">▶ Daily Pulse</button>
-        <label class="sr-only" for="daily-date">Back-date (optional)</label>
-        <input type="date" id="daily-date" name="date" title="Leave blank for today; pick a past date to back-date">
-      </form>
-    </div>
-  </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Periodic</span>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-periodic">▶ {% if last_weekly and last_weekly.bdays and last_weekly.bdays > 8 %}Weekly Delta ({{ last_weekly.bdays }}d catch-up){% else %}Weekly Delta{% endif %}</button>
-        <label class="sr-only" for="weekly-date">Week anchor date (optional)</label>
-        <input type="date" id="weekly-date" name="date" title="Leave blank for this week">
-        {% if last_weekly %}
-          {% if last_weekly.label and last_weekly.bdays and last_weekly.bdays > 5 %}
-          <span class="weekly-nudge weekly-nudge-orange" title="Last weekly was {{ last_weekly.label }}">Last: {{ last_weekly.label }}</span>
-          {% elif not last_weekly.label %}
-          <span class="weekly-nudge weekly-nudge-muted">Not yet run</span>
-          {% endif %}
-        {% endif %}
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="catch-up">
-        <button type="submit" class="btn-periodic">▶ Catch Up</button>
-        <label class="sr-only" for="catchup-since">Since date (optional)</label>
-        <input type="date" id="catchup-since" name="since" title="Start from this date (leave blank for full backlog)">
-      </form>
-    </div>
-  </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Rare</span>
-    <div class="action-group">
-      <form method="post" action="/synthesize" id="career-form"
-            onsubmit="return careerSubmit(this, startPoll)" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="career">
-        <button type="submit" id="career-btn" class="btn-rare">▶ Career</button>
-        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
-               title="Re-read ALL analyses to re-baseline. Off = incremental.">
-          <input type="checkbox" name="full" value="1" id="career-full"
-                 onchange="document.getElementById('career-btn').classList.toggle('career-full-active',this.checked)"> full
-        </label>
-      </form>
-    </div>
-    <div class="action-group">
-      <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
-        <input type="hidden" name="mode" value="timecard">
-        <button type="submit" class="btn-rare">▶ Timecard</button>
-        <label class="sr-only" for="timecard-date">Week date (optional)</label>
-        <input type="date" id="timecard-date" name="date" title="Leave blank for current week">
-      </form>
-    </div>
-  </div>
-  </details>
-</div>
-
-<div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
-  <h3>
-    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
-    <span id="job-done" style="display:none">Done — refreshing…</span>
-  </h3>
-  <div id="job-output" role="log" aria-live="polite" aria-label="Job output">{{ job_output }}</div>
-</div>
 
 {% if watch_items %}
 <div class="card">
@@ -1733,7 +1741,7 @@ def create_app():
         from datetime import datetime as _dt
         mode = request.form.get("mode", "daily")
         if mode not in ("daily", "weekly", "career", "catch-up", "timecard", "program-pulse"):
-            return redirect(url_for("brief_state_page", flash="Invalid mode", ft="err"))
+            return redirect(url_for("run_page", flash="Invalid mode", ft="err"))
 
         # Optional back-date for daily/weekly/timecard (recover a missed run). Ignored for career.
         date_arg = request.form.get("date", "").strip()
@@ -1741,7 +1749,7 @@ def create_app():
             try:
                 _dt.strptime(date_arg, "%Y-%m-%d")
             except ValueError:
-                return redirect(url_for("brief_state_page", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
+                return redirect(url_for("run_page", flash=f"Invalid date {date_arg!r} (need YYYY-MM-DD)", ft="err"))
         else:
             date_arg = ""
 
@@ -1751,7 +1759,7 @@ def create_app():
             try:
                 _dt.strptime(since_arg, "%Y-%m-%d")
             except ValueError:
-                return redirect(url_for("brief_state_page", flash=f"Invalid since-date {since_arg!r} (need YYYY-MM-DD)", ft="err"))
+                return redirect(url_for("run_page", flash=f"Invalid since-date {since_arg!r} (need YYYY-MM-DD)", ft="err"))
         else:
             since_arg = ""
 
@@ -1760,7 +1768,7 @@ def create_app():
 
         with _job_lock:
             if _job and not _job["done"]:
-                return redirect(url_for("brief_state_page", flash="A synthesis job is already running", ft="err"))
+                return redirect(url_for("run_page", flash="A synthesis job is already running", ft="err"))
             _job = {"mode": mode, "output": "", "done": False, "returncode": None, "new_count": 0}
 
         cmd = [sys.executable, "-u", "-m", "analyzer", "synthesize", "--mode", mode]
@@ -1771,19 +1779,19 @@ def create_app():
         if full:
             cmd.append("--full")
         threading.Thread(target=_run_job, args=(cmd, mode), daemon=True).start()
-        return redirect(url_for("brief_state_page"))
+        return redirect(url_for("run_page"))
 
     @app.post("/run-analysis")
     def run_analysis():
         global _job
         with _job_lock:
             if _job and not _job["done"]:
-                return redirect(url_for("brief_state_page", flash="A job is already running", ft="err"))
+                return redirect(url_for("run_page", flash="A job is already running", ft="err"))
             _job = {"mode": "analysis", "output": "", "done": False, "returncode": None, "new_count": 0}
 
         cmd = [sys.executable, "-u", "-m", "analyzer"]
         threading.Thread(target=_run_job, args=(cmd, "analysis"), daemon=True).start()
-        return redirect(url_for("brief_state_page"))
+        return redirect(url_for("run_page"))
 
     @app.get("/job-status")
     def job_status():
@@ -1897,6 +1905,23 @@ def create_app():
             flash=f"Saved to inbox: {safe_name}",
             ft="ok",
         ))
+
+    @app.get("/run")
+    def run_page():
+        with _job_lock:
+            job_running = bool(_job and not _job["done"])
+            job_label = _MODE_LABELS.get(_job["mode"], "job") if _job else ""
+            job_output = _job["output"] if _job else ""
+        return _render(
+            _RUN_BODY,
+            page="run",
+            flash=request.args.get("flash", ""),
+            flash_type=request.args.get("ft", "ok"),
+            job_running=job_running,
+            job_label=job_label,
+            job_output=job_output,
+            last_weekly=_last_weekly_info(),
+        )
 
     @app.get("/brief-state")
     def brief_state_page():

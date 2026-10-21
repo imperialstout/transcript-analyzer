@@ -149,6 +149,111 @@ def run_claude_p(
     return data
 
 
+def run_claude_p_images(
+    page_images: list[bytes],
+    trailing_text: str,
+    *,
+    model: str,
+    system: str | None = None,
+    timeout: int = _TIMEOUT_SECONDS,
+) -> dict:
+    """Run `claude -p` with image content via --input-format stream-json.
+
+    Sends each page as a base64 image block followed by a text prompt, all
+    on one user turn. Uses --output-format stream-json --verbose and extracts
+    the single `type=result` line. This keeps image analysis on the Claude Code
+    seat — no ANTHROPIC_API_KEY required.
+    """
+    import base64
+
+    def _media_type(data: bytes) -> str:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if data[:2] == b"\xff\xd8":
+            return "image/jpeg"
+        return "image/png"
+
+    content: list[dict] = []
+    for i, img_bytes in enumerate(page_images, 1):
+        content.append({"type": "text", "text": f"Page {i} of {len(page_images)}:"})
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": _media_type(img_bytes),
+                "data": base64.standard_b64encode(img_bytes).decode("ascii"),
+            },
+        })
+    content.append({"type": "text", "text": trailing_text})
+
+    stream_msg = json.dumps({
+        "type": "user",
+        "message": {"role": "user", "content": content},
+    })
+
+    cmd = [
+        CONFIG.claude_bin, "-p",
+        "--model", model,
+        "--input-format", "stream-json",
+        "--output-format", "stream-json",
+        "--verbose",
+    ]
+    cmd.extend(CONFIG.claude_extra_args)
+    if system:
+        cmd.extend(["--append-system-prompt", system])
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=stream_msg,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            env=_seat_env(),
+        )
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"claude CLI not found ({CONFIG.claude_bin!r})"
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise ClaudeCliError(
+            f"claude -p (images) timed out after {timeout}s (model={model})"
+        ) from e
+
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        last = stderr.splitlines()[-1] if stderr else "<no stderr>"
+        raise ClaudeCliError(
+            f"claude -p (images) exited {proc.returncode} (model={model}): {last}"
+        )
+
+    # stream-json output: one JSON object per line; find the result line.
+    result_line = None
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            if obj.get("type") == "result":
+                result_line = obj
+                break
+        except json.JSONDecodeError:
+            continue
+
+    if result_line is None:
+        preview = (proc.stdout or "")[:200].replace("\n", "\\n")
+        raise ClaudeCliError(
+            f"claude -p (images) returned no result line (model={model}): {preview!r}"
+        )
+
+    if result_line.get("is_error"):
+        subtype = result_line.get("subtype") or "unknown error"
+        raise ClaudeCliError(f"claude -p (images) reported error (subtype={subtype})")
+
+    return result_line
+
+
 def result_text(data: dict) -> str:
     """Pull the assistant's text out of the `--output-format json` envelope.
 

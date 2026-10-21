@@ -261,8 +261,25 @@ def _main_locked(cfg, force: bool) -> int:
         print(f"Found {len(pending_docs)} pending document(s) in {cfg.docs_path}.")
         for i, doc in enumerate(pending_docs, 1):
             try:
-                doc_text = fs.read_document(doc)
+                # Image files go straight to vision; PDFs try text first.
+                if fs.is_image_document(doc):
+                    use_vision = True
+                    page_images = fs.read_image_as_pages(doc)
+                else:
+                    try:
+                        doc_text = fs.read_document(doc)
+                        use_vision = False
+                    except RuntimeError as read_err:
+                        if "no extractable text" in str(read_err) and doc.suffix.lower() == ".pdf":
+                            print(
+                                f"  [doc {i}/{len(pending_docs)}] no text layer — "
+                                f"falling back to vision (image PDF)"
+                            )
+                            use_vision = True
+                        else:
+                            raise
 
+                t0 = time.monotonic()
                 system = ac.system_prompt_text(
                     context_brief,
                     doc_prompt_body,
@@ -270,16 +287,26 @@ def _main_locked(cfg, force: bool) -> int:
                     rolodex,
                     vocabulary,
                 )
-                t0 = time.monotonic()
-                data = claude_cli.run_claude_p(
-                    f"Document to analyze:\n\n{doc_text}",
-                    model=doc_model,
-                    system=system,
-                )
+                if use_vision:
+                    if not fs.is_image_document(doc):
+                        page_images = fs.read_pdf_as_images(doc)
+                    data = claude_cli.run_claude_p_images(
+                        page_images,
+                        f"Document to analyze ({doc.name}) — {len(page_images)} page(s) shown above.",
+                        model=doc_model,
+                        system=system,
+                    )
+                    analysis_text = data.get("result", "")
+                else:
+                    data = claude_cli.run_claude_p(
+                        f"Document to analyze:\n\n{doc_text}",
+                        model=doc_model,
+                        system=system,
+                    )
+                    analysis_text = claude_cli.result_text(data)
                 duration = time.monotonic() - t0
-                analysis_text = claude_cli.result_text(data)
                 if not analysis_text.strip():
-                    raise RuntimeError("claude -p returned empty result for document")
+                    raise RuntimeError("empty result for document")
 
                 output_filename, doc_date = filing.build_output_filename(
                     doc.name, extension=".md"

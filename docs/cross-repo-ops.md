@@ -159,9 +159,12 @@ Used in `program` field of brief-state items, and as the `program:` frontmatter 
 | `presales-energy` | Siemens Energy CPQ→RCA opportunity | `presales/Energy/STATUS.md` |
 | `presales-healthineers` | Siemens Healthineers opportunity | `presales/Healthineers/STATUS.md` |
 | `presales-financial-services` | Siemens Financial Services opportunity | `presales/Financial-Services/STATUS.md` |
+| `presales-sx-prd` | SherpaX Product — Subscription Management / Honeycomb opportunity; Madalina | `presales/SX-PRD/STATUS.md` |
+| `presales-disw-spm` | DI-SW SPM PoC — territory planning; Jeff Nercesian, Bill Schermer | `presales/DISW-SPM/STATUS.md` |
+| `presales-siesales-cpqplus` | SieSales SI CPQ+ → RCA migration (Grid Software / GSW); si-cpqdev2 source org | `presales/SieSales-CPQplus/STATUS.md` |
 | `_admin` | Internal Salesforce, practice team, non-project — **not written to any STATUS.md** | — |
 
-Classification priority (first match wins): presales signals → DISW-RCA → DISW-CPQ → siemens-general → SI-RCA catch-all.
+Classification priority (first match wins): SX-PRD → DISW-SPM → SieSales → Energy → Healthineers → Financial-Services → DISW-RCA → DISW-CPQ → siemens-general → SI-RCA catch-all.
 
 ---
 

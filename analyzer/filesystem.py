@@ -31,9 +31,20 @@ try:
 except ImportError:
     _PPTX_AVAILABLE = False
 
+try:
+    import pymupdf as _fitz
+    _PYMUPDF_AVAILABLE = True
+except ImportError:
+    try:
+        import fitz as _fitz  # pymupdf legacy import name
+        _PYMUPDF_AVAILABLE = True
+    except ImportError:
+        _PYMUPDF_AVAILABLE = False
+
 _PROGRAM_REFERENCE_FILENAME = "[PROGRAM REFERENCE].md"
-_DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".pptx", ".html", ".htm"}
-_UNSUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".zip", ".csv"}
+_DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".pptx", ".html", ".htm", ".png", ".jpg", ".jpeg"}
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+_UNSUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".gif", ".svg", ".zip", ".csv"}
 
 _DATE_TOKEN = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -299,6 +310,23 @@ def move_to_unsupported(path: Path) -> None:
     path.rename(target)
 
 
+def is_image_document(path: Path) -> bool:
+    """True for file types that must go through the vision path (no text layer)."""
+    return path.suffix.lower() in _IMAGE_EXTENSIONS
+
+
+def read_image_as_pages(path: Path) -> list[bytes]:
+    """Return a single-element list with the raw image bytes for a PNG/JPEG.
+
+    Wraps a standalone image in the same list[bytes] interface as
+    read_pdf_as_images() so main.py can use one code path for both.
+    """
+    data = path.read_bytes()
+    if not data:
+        raise RuntimeError(f"empty image file: {path.name}")
+    return [data]
+
+
 def read_document(path: Path) -> str:
     """Extract text from a document file in docs/.
 
@@ -357,6 +385,33 @@ def _read_pdf(path: Path) -> str:
     # pypdf can yield lone surrogates from malformed PDF encodings; strip them
     # so the text can be passed to subprocess (text=True / UTF-8).
     return raw.encode("utf-8", errors="replace").decode("utf-8")
+
+
+def read_pdf_as_images(path: Path, dpi: int = 150) -> list[bytes]:
+    """Rasterize each PDF page to a PNG and return the raw bytes list.
+
+    Used as a fallback when _read_pdf() finds no text layer (scanned /
+    image-only PDFs). Requires pymupdf (`pip install pymupdf`).
+    150 DPI is sufficient for Claude to read slide text; higher costs more tokens.
+    """
+    if not _PYMUPDF_AVAILABLE:
+        raise ImportError(
+            "pymupdf is not installed — run: pip install pymupdf  "
+            "(needed for image-only PDFs)"
+        )
+    try:
+        doc = _fitz.open(str(path))
+    except Exception as e:
+        raise RuntimeError(f"pymupdf could not open {path.name}: {e}") from e
+    matrix = _fitz.Matrix(dpi / 72, dpi / 72)
+    pages = []
+    for page in doc:
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
+        pages.append(pix.tobytes("png"))
+    doc.close()
+    if not pages:
+        raise RuntimeError(f"PDF has no pages: {path.name}")
+    return pages
 
 
 def _read_docx(path: Path) -> str:

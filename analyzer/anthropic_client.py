@@ -1,3 +1,4 @@
+import base64
 from dataclasses import dataclass
 
 import anthropic
@@ -119,5 +120,82 @@ def analyze(
         or 0,
         cache_read_input_tokens=getattr(message.usage, "cache_read_input_tokens", 0)
         or 0,
+    )
+    return AnalysisResult(text=text, usage=usage)
+
+
+def _image_media_type(data: bytes) -> str:
+    """Detect PNG vs JPEG from magic bytes."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    return "image/png"  # safe default for unknown
+
+
+def analyze_document_images(
+    *,
+    page_images: list[bytes],
+    prompt_body: str,
+    context_brief: str,
+    frontmatter_instruction: str,
+    model: str,
+    filename: str = "",
+    rolodex: str = "",
+    vocabulary: str = "",
+) -> AnalysisResult:
+    """Analyze an image-only PDF by sending each page as a vision block.
+
+    Used when pypdf finds no text layer. Sends all pages in a single API call
+    so Claude sees the full document as a coherent unit. Falls back to the
+    direct API (requires ANTHROPIC_API_KEY) since claude-cli only accepts stdin
+    text.
+    """
+    client = anthropic.Anthropic(api_key=CONFIG.anthropic_api_key)
+    system = _build_system(
+        context_brief, prompt_body, frontmatter_instruction, rolodex, vocabulary
+    )
+
+    content: list[dict] = []
+    for i, png_bytes in enumerate(page_images, 1):
+        content.append({
+            "type": "text",
+            "text": f"Page {i} of {len(page_images)}:",
+        })
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": _image_media_type(png_bytes),
+                "data": base64.standard_b64encode(png_bytes).decode("ascii"),
+            },
+        })
+    label = f" ({filename})" if filename else ""
+    content.append({
+        "type": "text",
+        "text": f"Document to analyze{label} — {len(page_images)} page(s) shown above.",
+    })
+
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": 64000,
+        "system": system,
+        "messages": [{"role": "user", "content": content}],
+    }
+    if supports_thinking(model):
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": CONFIG.effort}
+
+    with client.messages.stream(**kwargs) as stream:
+        message = stream.get_final_message()
+
+    text = "".join(b.text for b in message.content if b.type == "text")
+    usage = Usage(
+        input_tokens=message.usage.input_tokens,
+        output_tokens=message.usage.output_tokens,
+        cache_creation_input_tokens=getattr(
+            message.usage, "cache_creation_input_tokens", 0
+        ) or 0,
+        cache_read_input_tokens=getattr(message.usage, "cache_read_input_tokens", 0) or 0,
     )
     return AnalysisResult(text=text, usage=usage)

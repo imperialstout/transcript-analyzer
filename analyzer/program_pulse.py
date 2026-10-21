@@ -66,6 +66,18 @@ _SX_PRD_TITLE_KW = re.compile(
     re.IGNORECASE,
 )
 
+_PRESALES_DISW_SPM_KW = re.compile(
+    r"\bspm\b|subscription\s+management|territory\s+planning|jeff\s+nercesian|\bdisw.spm\b",
+    re.IGNORECASE,
+)
+_PRESALES_DISW_SPM_WS = re.compile(r"disw.spm|di.sw\s+spm|spm", re.IGNORECASE)
+
+_PRESALES_SIESALES_KW = re.compile(
+    r"siesales|sie.sales|grid\s+software|\bgsw\b|si.cpqdev2|\bsi\s+cpq\+",
+    re.IGNORECASE,
+)
+_PRESALES_SIESALES_WS = re.compile(r"siesales|sie.sales|grid\s+software|\(siesales\)", re.IGNORECASE)
+
 _SIEMENS_GENERAL_WS = {"siemens all", "cross-stream", "cross-division", "executive"}
 _SIEMENS_GENERAL_KW = re.compile(r"\b(hana|eike|tara|gunnar)\b", re.IGNORECASE)
 
@@ -77,6 +89,8 @@ _ADMIN_TITLE_KW = re.compile(
 
 # Programs that write to STATUS.md (in match priority order)
 PROGRAMS = [
+    "presales-disw-spm",
+    "presales-siesales-cpqplus",
     "presales-energy",
     "presales-healthineers",
     "presales-financial-services",
@@ -140,6 +154,10 @@ def classify_program(path: Path) -> str:
     # SX-PRD must come before Healthineers — StarQuote/SubMgmt meetings overlap
     if _SX_PRD_KW.search(ws) or _SX_PRD_TITLE_KW.search(title):
         return "presales-sx-prd"
+    if _PRESALES_DISW_SPM_WS.search(ws) or _PRESALES_DISW_SPM_KW.search(title):
+        return "presales-disw-spm"
+    if _PRESALES_SIESALES_WS.search(ws) or _PRESALES_SIESALES_KW.search(title):
+        return "presales-siesales-cpqplus"
     if _PRESALES_ENERGY_KW.search(ws) or _PRESALES_ENERGY_KW.search(title):
         return "presales-energy"
     if _PRESALES_HEALTHINEERS_KW.search(ws) or _PRESALES_HEALTHINEERS_KW.search(title):
@@ -409,6 +427,8 @@ def _status_paths(gov_repo: Path) -> dict[str, Path]:
         "presales-healthineers": gov_repo / "presales" / "Healthineers" / "STATUS.md",
         "presales-financial-services": gov_repo / "presales" / "Financial-Services" / "STATUS.md",
         "presales-sx-prd": gov_repo / "presales" / "SX-PRD" / "STATUS.md",
+        "presales-disw-spm": gov_repo / "presales" / "DISW-SPM" / "STATUS.md",
+        "presales-siesales-cpqplus": gov_repo / "presales" / "SieSales-CPQplus" / "STATUS.md",
     }
 
 

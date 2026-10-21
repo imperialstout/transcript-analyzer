@@ -533,7 +533,17 @@ _HTML = """\
   .render-warn-chip { display: inline-flex; align-items: center; gap: 5px;
                       background: var(--bg-danger); color: var(--orange); border: 1px solid var(--bg-deferred-deep);
                       border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700;
-                      text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+                      text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+                      cursor: pointer; position: relative; }
+  .render-warn-chip:focus { outline: 2px solid var(--orange); outline-offset: 2px; }
+  .render-warn-popover { display: none; position: absolute; top: calc(100% + 6px); right: 0;
+                         background: var(--bg-card); border: 1px solid var(--bg-deferred-deep);
+                         border-radius: 8px; padding: 10px 14px; min-width: 220px; z-index: 100;
+                         box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .render-warn-chip.open .render-warn-popover { display: block; }
+  .render-warn-popover ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .render-warn-popover li { font-size: 12px; color: var(--text); font-weight: 400;
+                             text-transform: none; letter-spacing: 0; line-height: 1.4; }
 
   /* ── Brief-state briefing banner (overdue-aware) ── */
   .bs-brief-banner { background: var(--bg-alert); border: 1px solid var(--border-alert);
@@ -657,7 +667,15 @@ _HTML = """\
   <div class="header-spacer" style="flex:1"></div>
   <div class="header-right" style="display:flex;gap:8px;align-items:center">
     {% if render_warnings %}
-    <span class="render-warn-chip" title="{{ render_warnings | join('; ') }}">⚠ {{ render_warnings | length }} warning{{ 's' if render_warnings | length != 1 else '' }}</span>
+    <span class="render-warn-chip" tabindex="0" role="button"
+          onclick="this.classList.toggle('open')"
+          onkeydown="if(event.key==='Enter'||event.key===' ')this.classList.toggle('open')"
+          onblur="setTimeout(()=>this.classList.remove('open'),150)">
+      ⚠ {{ render_warnings | length }} warning{{ 's' if render_warnings | length != 1 else '' }}
+      <span class="render-warn-popover" onclick="event.stopPropagation()">
+        <ul>{% for w in render_warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+      </span>
+    </span>
     {% endif %}
     {% if shared_url %}
     <a class="btn{% if render_warnings %} btn-secondary{% endif %}" href="{{ shared_url }}" target="_blank" rel="noopener">
@@ -2021,6 +2039,31 @@ def _pending_act_count() -> int:
         return 0
 
 
+def _last_pipeline_run_hours() -> float | None:
+    """Return hours since the last pipeline run, parsed from the log's ----- timestamps.
+
+    Returns None if the log is absent or has no timestamp lines.
+    """
+    from datetime import datetime, timezone
+    import re
+    if not _LOG_PATH.exists():
+        return None
+    try:
+        # Read the tail of the log efficiently — timestamps are on ----- lines.
+        text = _LOG_PATH.read_text(errors="replace")
+        # Match lines like: ----- 2026-10-21T10:59:47-04:00 -----
+        matches = re.findall(r"^----- (\S+) -----", text, re.MULTILINE)
+        if not matches:
+            return None
+        last_ts = matches[-1]
+        dt = datetime.fromisoformat(last_ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+    except Exception:
+        return None
+
+
 def _collect_pipeline_warnings() -> list[str]:
     """Return a list of short warning strings about pipeline health.
 
@@ -2031,13 +2074,20 @@ def _collect_pipeline_warnings() -> list[str]:
     global _last_render_warnings
     warnings: list[str] = []
     try:
-        # Surface staleness if last analysis is > 8 h old.
-        rows = _analyzed_files()
-        _, stale = _last_analyzed_at(rows)
-        if stale == "danger":
-            warnings.append("pipeline stale (>24 h)")
-        elif stale == "warn":
-            warnings.append("pipeline stale (>8 h)")
+        hours = _last_pipeline_run_hours()
+        if hours is None:
+            # Can't determine last run — fall back to last-analyzed-file age.
+            rows = _analyzed_files()
+            _, stale = _last_analyzed_at(rows)
+            if stale == "danger":
+                warnings.append("pipeline stale (>24 h since last analysis)")
+            elif stale == "warn":
+                warnings.append("pipeline stale (>8 h since last analysis)")
+        elif hours > 24:
+            warnings.append(f"pipeline stale — last run {hours:.0f} h ago")
+        elif hours > 8:
+            warnings.append(f"pipeline stale — last run {hours:.0f} h ago")
+        # hours <= 8: pipeline is healthy, no warning
     except Exception:
         pass
     _last_render_warnings = warnings

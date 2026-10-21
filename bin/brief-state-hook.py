@@ -64,6 +64,7 @@ def main() -> None:
     pending_acts = [
         i for i in items
         if i.get("type") == "act" and i.get("status") == "pending"
+        and not i.get("source_analyzed")  # exclude inbox candidates
     ]
     overdue_they_owe = [
         i for i in items

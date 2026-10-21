@@ -217,9 +217,17 @@ def upsert(item: dict) -> None:
 
 
 def pending_acts() -> list[dict]:
-    """Return act items with status=pending, newest first."""
+    """Return promoted act items with status=pending, newest first.
+
+    Excludes candidates (source_analyzed set) — those live in the inbox
+    until explicitly accepted.
+    """
     items = _load()
-    result = [i for i in items if i.get("type") == "act" and i.get("status") == "pending"]
+    result = [
+        i for i in items
+        if i.get("type") == "act" and i.get("status") == "pending"
+        and not i.get("source_analyzed")
+    ]
     result.sort(key=lambda i: i.get("created_at", ""), reverse=True)
     return result
 
@@ -299,6 +307,27 @@ def unpin(item_id: str) -> bool:
             _save(items)
             return True
     return False
+
+
+def set_program(item_id: str, program: str | None) -> bool:
+    """Set or clear the program key on an item. Returns True if found."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["program"] = program or None
+            _save(items)
+            return True
+    return False
+
+
+def reorder_acts(ordered_ids: list[str]) -> None:
+    """Persist a new position order for act items. IDs not in ordered_ids are unchanged."""
+    items = _load()
+    pos_map = {id_: idx for idx, id_ in enumerate(ordered_ids)}
+    for item in items:
+        if item["id"] in pos_map:
+            item["position"] = pos_map[item["id"]]
+    _save(items)
 
 
 def set_loe(item_id: str, loe: str | None) -> bool:
@@ -479,6 +508,39 @@ def pending_candidates() -> list[dict]:
     result.sort(key=lambda i: i.get("created_at", ""), reverse=True)   # newest first
     result.sort(key=lambda i: 0 if i.get("urgency") == "high" else 1)  # urgent tier first (stable)
     return result
+
+
+def dedupe_candidates(threshold: int = 5) -> int:
+    """Auto-dismiss inbox candidates that duplicate already-promoted pending items.
+
+    A candidate is dismissed if it shares >= threshold significant tokens with
+    any promoted pending item (act/watch/delegate/they-owe with source_analyzed=None).
+    Returns the number of items dismissed.
+    """
+    items = _load()
+    promoted = [
+        i for i in items
+        if i.get("status") == "pending"
+        and not i.get("source_analyzed")
+        and i.get("type") in ("act", "watch", "delegate", "they-owe")
+    ]
+    promoted_tokens = [_significant_tokens(i.get("text", "") + " " + (i.get("notes") or "")) for i in promoted]
+    dismissed = 0
+    changed = False
+    for item in items:
+        if item.get("status") != "pending" or not item.get("source_analyzed"):
+            continue
+        ct = _significant_tokens(item.get("text", ""))
+        for pt in promoted_tokens:
+            if len(ct & pt) >= threshold:
+                item["status"] = "dismissed"
+                item["closed_at"] = _now_iso()
+                dismissed += 1
+                changed = True
+                break
+    if changed:
+        _save(items)
+    return dismissed
 
 
 def accept_candidate(item_id: str, item_type: str) -> bool:

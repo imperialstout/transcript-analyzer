@@ -11,6 +11,7 @@ Routes:
     POST /settings   → save settings to ~/.config/transcript-analyzer/.env
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -338,7 +339,7 @@ _HTML = """\
   nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 6px; transition: color .15s, background .15s; }
   nav a:hover, nav a.active { color: var(--text); background: var(--border); }
 
-  .content { padding: 24px; max-width: 1100px; }
+  .content { padding: 24px; max-width: 1400px; }
 
   /* ── Button system: 3 variants + sm modifier ── */
   .btn, button { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px;
@@ -350,7 +351,7 @@ _HTML = """\
   .btn-secondary:hover, button.secondary:hover { background: var(--border); opacity: 1; }
   .btn-destructive, button.danger { background: var(--bg-danger); color: var(--red); border: 1px solid var(--border-danger); }
   .btn-destructive:hover, button.danger:hover { background: var(--bg-exec-deep); opacity: 1; }
-  .btn-sm { padding: 3px 10px; font-size: 11px; border-radius: 4px; }
+  .btn-sm { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
 
   /* ── Focus rings (keyboard navigation) ── */
   .btn:focus-visible, button:focus-visible,
@@ -486,8 +487,8 @@ _HTML = """\
   .bs-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
   .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
-  .bs-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap; }
-  .bs-defer-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+  .bs-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; flex-wrap: nowrap; }
+  .bs-defer-sep { width: 1px; height: 16px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
   .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .bs-item-overdue { background: rgba(247,111,111,0.07); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
   .bs-item-due-soon { background: rgba(247,162,79,0.06); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
@@ -495,11 +496,26 @@ _HTML = """\
                        color: var(--muted); padding: 10px 0 4px; margin-top: 6px;
                        border-top: 1px solid var(--border); }
   .bs-program-header:first-child { border-top: none; margin-top: 0; }
+  .bs-program-header-toggle { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+                               user-select: none; }
+  .bs-program-header-toggle::-webkit-details-marker { display: none; }
+  details.bs-group-section { margin-top: 6px; }
+  details.bs-group-section > summary { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 0; }
+  details.bs-group-section:first-child > summary { border-top: none; padding-top: 4px; }
+  details.bs-group-section[open] summary .bs-section-chevron { transform: rotate(90deg); }
+  details.bs-group-section .bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
   details.bs-section summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
                                 padding: 10px 0; color: var(--muted); font-size: 13px; user-select: none; }
   details.bs-section summary::-webkit-details-marker { display: none; }
   details.bs-section summary .bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
   details.bs-section[open] summary .bs-section-chevron { transform: rotate(90deg); }
+  /* ── Drag-to-reorder ── */
+  .drag-handle { cursor: grab; color: var(--border); font-size: 14px; padding: 0 6px 0 0;
+                 flex-shrink: 0; line-height: 1; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .bs-item.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  .bs-item.dragging { opacity: 0.4; }
+  .inline-program-form { margin-top: 4px; }
 
   /* ── Inbox card (candidates) ── */
   .card-inbox { background: var(--bg-inbox); border-color: var(--border-inbox); }
@@ -760,8 +776,10 @@ function startPoll(label) {
     if (e.key === '3') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,3); return; }
     if (e.key === 'm') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,0); return; }
   });
-  // Auto-focus first item on page load if on brief-state
-  if (document.querySelector('[data-act-id]')) { setTimeout(function(){_setFocus(0);}, 50); }
+  // Auto-focus first item on page load unless URL hash targets the inbox
+  if (document.querySelector('[data-act-id]') && window.location.hash !== '#inbox') {
+    setTimeout(function(){_setFocus(0);}, 50);
+  }
 })();
 
 // Source drawer
@@ -863,6 +881,106 @@ document.addEventListener('submit', function(e) {
   {% if job_running %}
   startPoll({{ job_label | tojson }} + '…');
   {% endif %}
+})();
+
+// ── Program order drag-to-reorder ──
+(function() {
+  var list = document.getElementById('prog-order-list');
+  if (!list) return;
+  var dragItem = null;
+  list.addEventListener('dragstart', function(e) {
+    dragItem = e.target.closest('.prog-order-item');
+    if (dragItem) { dragItem.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; }
+  });
+  list.addEventListener('dragend', function() {
+    if (dragItem) { dragItem.style.opacity = ''; dragItem = null; }
+    list.querySelectorAll('.prog-order-item').forEach(function(el) { el.style.outline = ''; });
+  });
+  list.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    var target = e.target.closest('.prog-order-item');
+    if (target && target !== dragItem) target.style.outline = '2px dashed var(--accent)';
+  });
+  list.addEventListener('dragleave', function(e) {
+    var target = e.target.closest('.prog-order-item');
+    if (target) target.style.outline = '';
+  });
+  list.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var target = e.target.closest('.prog-order-item');
+    if (!target || target === dragItem || !dragItem) return;
+    target.style.outline = '';
+    var items = Array.from(list.querySelectorAll('.prog-order-item'));
+    var di = items.indexOf(dragItem), ti = items.indexOf(target);
+    if (di < ti) list.insertBefore(dragItem, target.nextSibling);
+    else list.insertBefore(dragItem, target);
+    var order = Array.from(list.querySelectorAll('.prog-order-item')).map(function(el) { return el.dataset.key; });
+    fetch('/brief-state/prog-order', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({order: order})
+    });
+  });
+})();
+
+// ── Drag-to-reorder act items within a group ──
+(function() {
+  var dragged = null;
+
+  function initDragGroup(container) {
+    container.addEventListener('dragstart', function(e) {
+      var item = e.target.closest('.bs-item[data-act-id]');
+      if (!item || !item.parentElement.classList.contains('bs-group-items') &&
+          item.parentElement.id !== 'focus-group') return;
+      dragged = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    container.addEventListener('dragend', function(e) {
+      if (dragged) { dragged.classList.remove('dragging'); dragged = null; }
+      container.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+    });
+    container.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      var target = e.target.closest('.bs-item[data-act-id]');
+      if (!target || target === dragged) return;
+      target.classList.add('drag-over');
+    });
+    container.addEventListener('dragleave', function(e) {
+      var target = e.target.closest('.bs-item[data-act-id]');
+      if (target) target.classList.remove('drag-over');
+    });
+    container.addEventListener('drop', function(e) {
+      e.preventDefault();
+      var target = e.target.closest('.bs-item[data-act-id]');
+      if (!target || target === dragged || !dragged) return;
+      target.classList.remove('drag-over');
+      var parent = target.parentElement;
+      var items = Array.from(parent.querySelectorAll(':scope > .bs-item[data-act-id]'));
+      var draggedIdx = items.indexOf(dragged);
+      var targetIdx = items.indexOf(target);
+      if (draggedIdx < targetIdx) {
+        parent.insertBefore(dragged, target.nextSibling);
+      } else {
+        parent.insertBefore(dragged, target);
+      }
+      // Persist new order
+      var ids = Array.from(parent.querySelectorAll(':scope > .bs-item[data-act-id]')).map(function(el) { return el.dataset.actId; });
+      fetch('/brief-state/reorder', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+      });
+    });
+  }
+
+  document.querySelectorAll('.bs-group-items').forEach(function(grp) {
+    // Make items draggable
+    grp.querySelectorAll('.bs-item[data-act-id]').forEach(function(item) {
+      item.setAttribute('draggable', 'true');
+    });
+    initDragGroup(grp);
+  });
 })();
 </script>
 </body>
@@ -1126,6 +1244,7 @@ _BRIEF_STATE_BODY = """\
 {# ── MACRO: render one act item row (used in both Focus and grouped sections) ── #}
 {% macro act_row(item, show_pin=true) %}
 <div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
+  <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
   <div class="bs-body">
     <div class="bs-text">
       {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
@@ -1138,6 +1257,16 @@ _BRIEF_STATE_BODY = """\
       From {{ item.source_brief[:10] if item.source_brief else '—' }}
       {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
     </div>
+    {% if not item.program %}
+    <form method="post" action="/brief-state/assign-program/{{ item.id }}" class="inline-program-form">
+      <select name="program" class="btn-secondary btn-sm" style="padding:2px 5px;font-size:11px;max-width:160px" onchange="this.form.submit()">
+        <option value="">assign program…</option>
+        {% for p in programs %}
+        <option value="{{ p.key }}">{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
     {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
   </div>
   <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
@@ -1155,9 +1284,9 @@ _BRIEF_STATE_BODY = """\
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
-      <details style="display:inline-block">
+      <details style="display:inline-block;position:relative">
         <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-        <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0">
+        <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
           <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
             <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
             <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
@@ -1171,6 +1300,15 @@ _BRIEF_STATE_BODY = """\
               <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L — large (multi-day)</option>
             </select>
             <button type="submit" class="btn-secondary btn-sm">Set</button>
+          </form>
+          <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+            <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+              <option value="">Clear program</option>
+              {% for p in programs %}
+              <option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn-secondary btn-sm">Assign</button>
           </form>
           {% if show_pin %}
           {% if item.pinned %}
@@ -1203,17 +1341,31 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{# ── ACT ITEMS — grouped by program ── #}
+{# ── ACT ITEMS — grouped by program, each group collapsible ── #}
 <div class="card" style="{% if overdue_acts %}border-color:var(--border-alert){% endif %}">
   <h2>Act items — Brad owns</h2>
   {% if act_groups %}
   {% for group in act_groups %}
   {% if act_groups|length > 1 %}
-  <div class="bs-program-header">{{ group.label }}</div>
-  {% endif %}
+  <details class="bs-group-section" open>
+    <summary class="bs-program-header bs-program-header-toggle">
+      <span class="bs-section-chevron">▶</span>
+      {{ group.label }}
+      <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.acts|length }}</span>
+    </summary>
+    <div class="bs-group-items" data-group-key="{{ group.key }}">
+    {% for item in group.acts %}
+    {{ act_row(item, show_pin=true) }}
+    {% endfor %}
+    </div>
+  </details>
+  {% else %}
+  <div class="bs-group-items" data-group-key="{{ group.key }}">
   {% for item in group.acts %}
   {{ act_row(item, show_pin=true) }}
   {% endfor %}
+  </div>
+  {% endif %}
   {% endfor %}
   {% if act_items|length >= 2 %}
   <div class="kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
@@ -1253,9 +1405,13 @@ _BRIEF_STATE_BODY = """\
         {% if item.program %} · {{ item.program }}{% endif %}
       </div>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/accept/{{ item.id }}">
+    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
         <input type="hidden" name="type" value="act">
+        <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
+          <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
+          {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
+        </select>
         <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--red);color:var(--red)">Accept</button>
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
@@ -1282,14 +1438,18 @@ _BRIEF_STATE_BODY = """\
         {% if item.program %} · {{ item.program }}{% endif %}
       </div>
     </div>
-    <div class="bs-actions">
-      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
         <select name="type" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
           <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
           <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
           <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
           <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
           <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
+        </select>
+        <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
+          <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
+          {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
         </select>
         <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)">Accept</button>
       </form>
@@ -1304,137 +1464,296 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{% if watch_items %}
-<div class="card">
+{# ── MACRO: render a grouped collapsible section with per-group mass-close ── #}
+{% macro grouped_section(section_id, title, badge_class, groups, item_key, mass_close_label, mass_close_status) %}
+{% set total = namespace(n=0) %}
+{% for g in groups %}{% set total.n = total.n + g[item_key]|length %}{% endfor %}
+{% if total.n > 0 %}
+<div class="card" id="{{ section_id }}">
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      {{ title }}
+      <span class="badge {{ badge_class }}" style="margin-left:4px">{{ total.n }}</span>
+    </summary>
+    {% for group in groups %}
+    <details class="bs-group-section" open>
+      <summary class="bs-program-header bs-program-header-toggle">
+        <span class="bs-section-chevron">▶</span>
+        {{ group.label }}
+        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group[item_key]|length }}</span>
+        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
+          {% for item in group[item_key] %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
+          <input type="hidden" name="status" value="{{ mass_close_status }}">
+          <input type="hidden" name="anchor" value="{{ section_id }}">
+          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+                  onclick="return confirm('Mark all {{ group[item_key]|length }} {{ group.label }} items as {{ mass_close_status }}?')">
+            ✓ All {{ mass_close_label }}
+          </button>
+        </form>
+      </summary>
+      {{ caller(group[item_key]) }}
+    </details>
+    {% endfor %}
+  </details>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── WATCH ── #}
+{% if watch_groups %}
+<div class="card" id="watch-section">
   <details class="bs-section">
     <summary>
       <span class="bs-section-chevron">▶</span>
       Watch
       <span class="badge badge-watch" style="margin-left:4px">{{ watch_items|length }}</span>
     </summary>
-    {% for item in watch_items %}
-    <div class="bs-item">
-      <div class="bs-body">
-        <div class="bs-text">{{ item.text }}</div>
-        <div class="bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
-        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
-      </div>
-      <div class="bs-actions">
-        <form method="post" action="/brief-state/close/{{ item.id }}">
+    {% for group in watch_groups %}
+    <details class="bs-group-section" open>
+      <summary class="bs-program-header bs-program-header-toggle">
+        <span class="bs-section-chevron">▶</span>
+        {{ group.label }}
+        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
+          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
-          <button type="submit" class="btn-secondary btn-sm">Done</button>
+          <input type="hidden" name="anchor" value="watch-section">
+          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+                  onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} watch items as done?')">✓ All done</button>
         </form>
-        <form method="post" action="/brief-state/close/{{ item.id }}"
-              onsubmit="return confirm('Drop this watch item? It will be marked dropped.');">
-          <input type="hidden" name="status" value="dropped">
-          <button type="submit" class="btn-destructive btn-sm">Drop</button>
-        </form>
+      </summary>
+      {% for item in group.rows %}
+      <div class="bs-item" data-act-id="{{ item.id }}">
+        <div class="bs-body">
+          <div class="bs-text">{{ item.text }}</div>
+          <div class="bs-meta">
+            From {{ item.source_brief[:10] if item.source_brief else '—' }}
+            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
+          </div>
+          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+        </div>
+        <div class="bs-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}">
+            <input type="hidden" name="status" value="complete">
+            <button type="submit" class="btn-secondary btn-sm">Done</button>
+          </form>
+          <form method="post" action="/brief-state/close/{{ item.id }}"
+                onsubmit="return confirm('Drop this watch item?');">
+            <input type="hidden" name="status" value="dropped">
+            <button type="submit" class="btn-destructive btn-sm">Drop</button>
+          </form>
+          <details style="display:inline-block;position:relative">
+            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">Clear program</option>
+                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+              </form>
+            </div>
+          </details>
+        </div>
       </div>
-    </div>
+      {% endfor %}
+    </details>
     {% endfor %}
   </details>
 </div>
 {% endif %}
 
+{# ── DELEGATED ── #}
 {% if delegate_items %}
-<div class="card">
+<div class="card" id="delegate-section">
   <details class="bs-section">
     <summary>
       <span class="bs-section-chevron">▶</span>
       Delegated
       <span class="badge badge-delegate" style="margin-left:4px">{{ delegate_items|length }}</span>
     </summary>
-    {% for item in delegate_items %}
-    <div class="bs-item">
-      <div class="bs-body">
-        <div class="bs-text">{{ item.text }}</div>
-        <div class="bs-meta">
-          Owner: <strong>{{ item.owner }}</strong>
-          {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
-          {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
-        </div>
-        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
-      </div>
-      <div class="bs-actions">
-        <form method="post" action="/brief-state/close/{{ item.id }}">
+    {% for group in delegate_groups %}
+    <details class="bs-group-section" open>
+      <summary class="bs-program-header bs-program-header-toggle">
+        <span class="bs-section-chevron">▶</span>
+        {{ group.label }}
+        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
+          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
-          <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
+          <input type="hidden" name="anchor" value="delegate-section">
+          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+                  onclick="return confirm('Confirm all {{ group.rows|length }} {{ group.label }} delegated items done?')">✓ All confirmed</button>
         </form>
-        <form method="post" action="/brief-state/re-own/{{ item.id }}">
-          <button type="submit" class="btn-destructive btn-sm">Re-own</button>
-        </form>
+      </summary>
+      {% for item in group.rows %}
+      <div class="bs-item" data-act-id="{{ item.id }}">
+        <div class="bs-body">
+          <div class="bs-text">{{ item.text }}</div>
+          <div class="bs-meta">
+            Owner: <strong>{{ item.owner }}</strong>
+            {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
+            {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
+            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
+          </div>
+          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+        </div>
+        <div class="bs-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}">
+            <input type="hidden" name="status" value="complete">
+            <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
+          </form>
+          <form method="post" action="/brief-state/re-own/{{ item.id }}">
+            <button type="submit" class="btn-destructive btn-sm">Re-own</button>
+          </form>
+          <details style="display:inline-block;position:relative">
+            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">Clear program</option>
+                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+              </form>
+            </div>
+          </details>
+        </div>
       </div>
-    </div>
+      {% endfor %}
+    </details>
     {% endfor %}
   </details>
 </div>
 {% endif %}
 
+{# ── THEY OWE YOU ── #}
 {% if they_owe_items %}
-<div class="card">
+<div class="card" id="they-owe-section">
   <details class="bs-section">
     <summary>
       <span class="bs-section-chevron">▶</span>
       They owe you
       <span class="badge badge-they-owe" style="margin-left:4px">{{ they_owe_items|length }}</span>
     </summary>
-    {% for item in they_owe_items %}
-    <div class="bs-item">
-      <div class="bs-body">
-        <div class="bs-text">{{ item.text }}</div>
-        <div class="bs-meta">
-          <strong>{{ item.owner }}</strong>
-          {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
-        </div>
-        {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
-      </div>
-      <div class="bs-actions">
-        <form method="post" action="/brief-state/close/{{ item.id }}">
+    {% for group in they_owe_groups %}
+    <details class="bs-group-section" open>
+      <summary class="bs-program-header bs-program-header-toggle">
+        <span class="bs-section-chevron">▶</span>
+        {{ group.label }}
+        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
+          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
-          <button type="submit" class="btn-secondary btn-sm">Received</button>
+          <input type="hidden" name="anchor" value="they-owe-section">
+          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+                  onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} items as received?')">✓ All received</button>
         </form>
-        <form method="post" action="/brief-state/close/{{ item.id }}">
-          <input type="hidden" name="status" value="dropped">
-          <button type="submit" class="btn-destructive btn-sm">Drop</button>
-        </form>
+      </summary>
+      {% for item in group.rows %}
+      <div class="bs-item" data-act-id="{{ item.id }}">
+        <div class="bs-body">
+          <div class="bs-text">{{ item.text }}</div>
+          <div class="bs-meta">
+            <strong>{{ item.owner }}</strong>
+            {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
+            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
+          </div>
+          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+        </div>
+        <div class="bs-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}">
+            <input type="hidden" name="status" value="complete">
+            <button type="submit" class="btn-secondary btn-sm">Received</button>
+          </form>
+          <form method="post" action="/brief-state/close/{{ item.id }}">
+            <input type="hidden" name="status" value="dropped">
+            <button type="submit" class="btn-destructive btn-sm">Drop</button>
+          </form>
+          <details style="display:inline-block;position:relative">
+            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">Clear program</option>
+                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+              </form>
+            </div>
+          </details>
+        </div>
       </div>
-    </div>
+      {% endfor %}
+    </details>
     {% endfor %}
   </details>
 </div>
 {% endif %}
 
+{# ── CLOSED ── #}
 {% if recent_closed %}
-<div class="card">
+<div class="card" id="closed-section">
   <details class="bs-section">
     <summary>
       <span class="bs-section-chevron">▶</span>
       Closed (last 7 days)
       <span class="badge badge-complete" style="margin-left:4px">{{ recent_closed|length }}</span>
     </summary>
-  <table>
-    <thead>
-      <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr>
-    </thead>
-    <tbody>
-    {% for item in recent_closed %}
-    <tr>
-      <td>{{ item.text }}</td>
-      <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
-      <td><span class="badge badge-{{ item.status }}">{{ item.status }}</span></td>
-      <td class="muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
-      <td>
-        <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
-          <button type="submit" class="btn-secondary btn-sm">Reopen</button>
-        </form>
-      </td>
-    </tr>
+    {% for group in closed_groups %}
+    <details class="bs-group-section" open>
+      <summary class="bs-program-header bs-program-header-toggle">
+        <span class="bs-section-chevron">▶</span>
+        {{ group.label }}
+        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+      </summary>
+      <table style="margin-top:4px">
+        <thead>
+          <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for item in group.rows %}
+        <tr>
+          <td>{{ item.text }}</td>
+          <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
+          <td><span class="badge badge-{{ item.status }}">{{ item.status }}</span></td>
+          <td class="muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+          <td>
+            <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
+              <button type="submit" class="btn-secondary btn-sm">Reopen</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </details>
     {% endfor %}
-    </tbody>
-  </table>
   </details>
 </div>
 {% endif %}
+
+{# ── PROGRAM ORDER ── #}
+<div class="card" style="margin-top:8px">
+  <details class="bs-section">
+    <summary>
+      <span class="bs-section-chevron">▶</span>
+      Program order
+      <span style="font-size:11px;color:var(--muted);margin-left:6px">drag to reorder</span>
+    </summary>
+    <div id="prog-order-list" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+      {% for key in prog_order %}
+      <div class="prog-order-item" data-key="{{ key }}" draggable="true"
+           style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;cursor:grab;font-size:12px;user-select:none">
+        <span style="color:var(--muted);font-size:14px">⠿</span>
+        <span>{{ key }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted)">Reorder takes effect on next page load. New programs not in this list appear at the bottom.</div>
+  </details>
+</div>
 
 {# ── SOURCE DRAWER ── #}
 <div id="source-drawer">
@@ -1641,6 +1960,28 @@ def _get_programs() -> list[dict]:
     _GROUP_ORDER = {"projects": 0, "presales": 1, "watch": 2}
     programs.sort(key=lambda p: (_GROUP_ORDER.get(p["group"], 9), p["label"]))
     return programs
+
+
+_PROG_ORDER_PATH = Path("~/.config/transcript-analyzer/prog_order.json").expanduser()
+_DEFAULT_PROG_ORDER = [
+    "SI-RCA", "DISW-RCA", "DISW-CPQ", "siemens-general",
+    "presales-sx-prd", "presales-energy", "presales-healthineers",
+    "presales-financial-services", "_unassigned",
+]
+
+
+def _load_prog_order() -> list[str]:
+    try:
+        if _PROG_ORDER_PATH.exists():
+            return json.loads(_PROG_ORDER_PATH.read_text())
+    except Exception:
+        pass
+    return list(_DEFAULT_PROG_ORDER)
+
+
+def _save_prog_order(order: list[str]) -> None:
+    _PROG_ORDER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _PROG_ORDER_PATH.write_text(json.dumps(order))
 
 
 def _pending_act_count() -> int:
@@ -2002,6 +2343,9 @@ def create_app():
                 item["days_overdue"] = 0
             return item
 
+        # Auto-dismiss inbox candidates that duplicate already-promoted items
+        _bs.dedupe_candidates()
+
         all_items = _bs.all_items()
         from datetime import timedelta
         week_ago = (today - timedelta(days=7)).isoformat()
@@ -2021,7 +2365,8 @@ def create_app():
             def _key(i):
                 overdue = i.get("overdue", False)
                 dl = i.get("deadline") or ""
-                return (0 if overdue else 1, dl or "9999-99-99")
+                pos = i.get("position") if i.get("position") is not None else 9999
+                return (0 if overdue else 1, dl or "9999-99-99", pos)
             return sorted(items, key=_key)
 
         raw_acts = [_enrich_act(i) for i in _bs.pending_acts()]
@@ -2030,21 +2375,29 @@ def create_app():
         unpinned_acts = [i for i in _sort_acts(raw_acts) if i["id"] not in pinned_ids]
 
         # Group unpinned acts by program; null → "_unassigned"
-        _PROG_ORDER = ["SI-RCA", "DISW-RCA", "DISW-CPQ", "siemens-general",
-                       "presales-sx-prd", "presales-energy", "presales-healthineers",
-                       "presales-financial-services", "_unassigned"]
-        acts_by_program: dict[str, list] = {}
-        for item in unpinned_acts:
-            key = item.get("program") or "_unassigned"
-            acts_by_program.setdefault(key, []).append(item)
-        act_groups = [
-            {"key": k, "label": k if k != "_unassigned" else "Unassigned", "acts": acts_by_program[k]}
-            for k in _PROG_ORDER if k in acts_by_program
-        ]
-        # Any program not in _PROG_ORDER goes at the end
-        for k, prog_acts in acts_by_program.items():
-            if k not in _PROG_ORDER:
-                act_groups.append({"key": k, "label": k, "acts": prog_acts})
+        prog_order = _load_prog_order()
+
+        def _group_by_program(items, row_key="rows"):
+            by_prog: dict[str, list] = {}
+            for item in items:
+                k = item.get("program") or "_unassigned"
+                by_prog.setdefault(k, []).append(item)
+            groups = [
+                {"key": k, "label": k if k != "_unassigned" else "Unassigned", row_key: by_prog[k]}
+                for k in prog_order if k in by_prog
+            ]
+            for k, grp_items in by_prog.items():
+                if k not in prog_order:
+                    groups.append({"key": k, "label": k, row_key: grp_items})
+            return groups
+
+        act_groups = _group_by_program(unpinned_acts, "acts")
+        watch_groups = _group_by_program(_bs.pending_watches(), "rows")
+        delegate_items = [i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"]
+        delegate_groups = _group_by_program(delegate_items, "rows")
+        they_owe_list = [_enrich_they_owe(i) for i in _bs.pending_they_owe()]
+        they_owe_groups = _group_by_program(they_owe_list, "rows")
+        closed_groups = _group_by_program(recent_closed, "rows")
 
         return _render(
             _BRIEF_STATE_BODY,
@@ -2055,9 +2408,15 @@ def create_app():
             act_groups=act_groups,
             pinned_acts=pinned,
             watch_items=_bs.pending_watches(),
-            delegate_items=[i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"],
-            they_owe_items=[_enrich_they_owe(i) for i in _bs.pending_they_owe()],
+            watch_groups=watch_groups,
+            delegate_items=delegate_items,
+            delegate_groups=delegate_groups,
+            they_owe_items=they_owe_list,
+            they_owe_groups=they_owe_groups,
             recent_closed=recent_closed,
+            closed_groups=closed_groups,
+            programs=_get_programs(),
+            prog_order=prog_order,
             flash=request.args.get("flash", ""),
             flash_type=request.args.get("ft", "ok"),
             job_running=job_running,
@@ -2071,10 +2430,13 @@ def create_app():
     def brief_state_accept(item_id):
         from . import brief_state as _bs
         item_type = request.form.get("type", "act")
+        program = request.form.get("program") or None
         try:
             found = _bs.accept_candidate(item_id, item_type)
         except ValueError as e:
             return redirect(url_for("brief_state_page", flash=str(e), ft="err") + "#inbox")
+        if found and program:
+            _bs.set_program(item_id, program)
         msg = f"Accepted as {item_type}" if found else "Item not found"
         ft = "ok" if found else "err"
         return redirect(url_for("brief_state_page", flash=msg, ft=ft) + "#inbox")
@@ -2171,6 +2533,55 @@ def create_app():
         updated["notes"] = ((updated.get("notes") or "") + "; re-owned via UI").lstrip("; ")
         _bs.upsert(updated)
         return redirect(url_for("brief_state_page", flash="Re-owned", ft="ok"))
+
+    @app.post("/brief-state/close-group")
+    def brief_state_close_group():
+        from . import brief_state as _bs
+        from flask import jsonify
+        ids = request.form.getlist("ids")
+        status = request.form.get("status", "complete")
+        if status not in ("complete", "dropped"):
+            return redirect(url_for("brief_state_page", flash="Invalid status", ft="err"))
+        count = 0
+        for item_id in ids:
+            if _bs.close(item_id, status):
+                count += 1
+        anchor = request.form.get("anchor", "")
+        msg = f"{count} item{'s' if count != 1 else ''} marked {status}"
+        dest = url_for("brief_state_page", flash=msg, ft="ok")
+        if anchor:
+            dest += f"#{anchor}"
+        return redirect(dest)
+
+    @app.post("/brief-state/prog-order")
+    def brief_state_prog_order():
+        from flask import jsonify
+        data = request.get_json(silent=True) or {}
+        order = data.get("order", [])
+        if not isinstance(order, list):
+            return jsonify({"ok": False}), 400
+        _save_prog_order(order)
+        return jsonify({"ok": True})
+
+    @app.post("/brief-state/assign-program/<item_id>")
+    def brief_state_assign_program(item_id):
+        from . import brief_state as _bs
+        program = request.form.get("program") or None
+        found = _bs.set_program(item_id, program)
+        msg = f"Program set to {program}" if (found and program) else ("Program cleared" if found else "Item not found")
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/reorder")
+    def brief_state_reorder():
+        from . import brief_state as _bs
+        from flask import jsonify
+        data = request.get_json(silent=True) or {}
+        ordered_ids = data.get("ids", [])
+        if not isinstance(ordered_ids, list):
+            return jsonify({"ok": False, "error": "ids must be a list"}), 400
+        _bs.reorder_acts(ordered_ids)
+        return jsonify({"ok": True})
 
     @app.get("/source/<item_id>")
     def source_view(item_id):

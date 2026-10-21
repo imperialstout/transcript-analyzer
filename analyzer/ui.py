@@ -715,8 +715,11 @@ function startPoll(label) {
   if (_pollTimer) return;
   const indicator = document.getElementById('job-indicator');
   if (indicator && label) indicator.innerHTML = '<span class="spinner"></span> ' + label;
-  document.getElementById('job-status').style.display = 'block';
-  document.getElementById('job-done').style.display = 'none';
+  const jobStatus = document.getElementById('job-status');
+  const jobDone = document.getElementById('job-done');
+  const jobOutput = document.getElementById('job-output');
+  if (jobStatus) jobStatus.style.display = 'block';
+  if (jobDone) jobDone.style.display = 'none';
   if (indicator) indicator.style.display = 'inline';
   _pollTimer = setInterval(async () => {
     let d;
@@ -724,9 +727,7 @@ function startPoll(label) {
       const r = await fetch('/job-status');
       d = await r.json();
     } catch (_) { return; } // network blip — retry next tick
-    document.getElementById('job-output').textContent = d.output || '';
-    const el = document.getElementById('job-output');
-    el.scrollTop = el.scrollHeight;
+    if (jobOutput) { jobOutput.textContent = d.output || ''; jobOutput.scrollTop = jobOutput.scrollHeight; }
     if (d.done) {
       clearInterval(_pollTimer); _pollTimer = null;
       if (indicator) indicator.style.display = 'none';
@@ -736,13 +737,10 @@ function startPoll(label) {
         // Job failed (non-zero exit). Keep the panel up with the captured output
         // so the error is visible — do NOT reload it away. (returncode 2 is a
         // soft warning: synthesis written but archive skipped — still surface it.)
-        const done = document.getElementById('job-done');
-        done.style.display = 'inline';
-        done.style.color = 'var(--red)';
-        done.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.';
+        if (jobDone) { jobDone.style.display = 'inline'; jobDone.style.color = 'var(--red)'; jobDone.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.'; }
         document.title = '⚠ Job failed — Transcript Analyzer';
       } else {
-        document.getElementById('job-done').style.display = 'inline';
+        if (jobDone) jobDone.style.display = 'inline';
         document.title = '✓ Done — Transcript Analyzer';
         // Reload page so new files appear; pass a flash if analysis found new files
         let reloadUrl = location.pathname;
@@ -1024,6 +1022,11 @@ document.addEventListener('submit', function(e) {
       item.setAttribute('draggable', 'true');
     });
     initDragGroup(grp);
+  });
+
+  // Always start closed — browser restore can re-open these after form submissions
+  document.querySelectorAll('details.ops-overflow').forEach(function(d) {
+    d.removeAttribute('open');
   });
 })();
 </script>
@@ -1345,15 +1348,17 @@ _BRIEF_STATE_BODY = """\
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
       <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
-      <details style="display:inline-block;position:relative">
+      <details class="ops-overflow" style="display:inline-block;position:relative">
         <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
         <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
           <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
             <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
+            <input type="hidden" name="return_to" value="inbox">
             <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
             <button type="submit" class="btn-secondary btn-sm">Defer</button>
           </form>
           <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+            <input type="hidden" name="return_to" value="inbox">
             <select name="loe" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
               <option value="">LoE…</option>
               <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S — small (&lt;2h)</option>
@@ -1363,6 +1368,7 @@ _BRIEF_STATE_BODY = """\
             <button type="submit" class="btn-secondary btn-sm">Set</button>
           </form>
           <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+            <input type="hidden" name="return_to" value="inbox">
             <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
               <option value="">Clear program</option>
               {% for p in programs %}
@@ -1374,10 +1380,12 @@ _BRIEF_STATE_BODY = """\
           {% if show_pin %}
           {% if item.pinned %}
           <form method="post" action="/brief-state/unpin/{{ item.id }}">
+            <input type="hidden" name="return_to" value="inbox">
             <button type="submit" class="btn-secondary btn-sm" style="width:100%">☆ Unpin from Focus</button>
           </form>
           {% else %}
           <form method="post" action="/brief-state/pin/{{ item.id }}">
+            <input type="hidden" name="return_to" value="inbox">
             <button type="submit" class="btn-secondary btn-sm" style="width:100%">★ Pin to Today's Focus</button>
           </form>
           {% endif %}
@@ -1606,10 +1614,11 @@ _BRIEF_STATE_BODY = """\
             <input type="hidden" name="return_to" value="watch-section">
             <button type="submit" class="btn-destructive btn-sm">Drop</button>
           </form>
-          <details style="display:inline-block;position:relative">
+          <details class="ops-overflow" style="display:inline-block;position:relative">
             <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
             <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <input type="hidden" name="return_to" value="watch-section">
                 <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
@@ -1672,10 +1681,11 @@ _BRIEF_STATE_BODY = """\
             <input type="hidden" name="return_to" value="delegate-section">
             <button type="submit" class="btn-destructive btn-sm">Re-own</button>
           </form>
-          <details style="display:inline-block;position:relative">
+          <details class="ops-overflow" style="display:inline-block;position:relative">
             <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
             <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <input type="hidden" name="return_to" value="delegate-section">
                 <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
@@ -1738,10 +1748,11 @@ _BRIEF_STATE_BODY = """\
             <input type="hidden" name="return_to" value="they-owe-section">
             <button type="submit" class="btn-destructive btn-sm">Drop</button>
           </form>
-          <details style="display:inline-block;position:relative">
+          <details class="ops-overflow" style="display:inline-block;position:relative">
             <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
             <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+                <input type="hidden" name="return_to" value="they-owe-section">
                 <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
@@ -2003,8 +2014,9 @@ def _get_programs() -> list[dict]:
                 })
         except Exception:
             continue
-    _GROUP_ORDER = {"projects": 0, "presales": 1, "watch": 2}
-    programs.sort(key=lambda p: (_GROUP_ORDER.get(p["group"], 9), p["label"]))
+    prog_order = _load_prog_order()
+    order_index = {key: i for i, key in enumerate(prog_order)}
+    programs.sort(key=lambda p: order_index.get(p["key"], len(prog_order)))
     return programs
 
 
@@ -2574,7 +2586,9 @@ def create_app():
         found = _bs.defer(item_id, target)
         msg = f"Deferred to {target}" if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/pin/<item_id>")
     def brief_state_pin(item_id):
@@ -2582,7 +2596,9 @@ def create_app():
         found = _bs.pin(item_id)
         msg = "Pinned to Today's Focus" if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/unpin/<item_id>")
     def brief_state_unpin(item_id):
@@ -2590,7 +2606,9 @@ def create_app():
         found = _bs.unpin(item_id)
         msg = "Unpinned" if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/loe/<item_id>")
     def brief_state_loe(item_id):
@@ -2602,7 +2620,9 @@ def create_app():
             return redirect(url_for("brief_state_page", flash=str(e), ft="err"))
         msg = f"LoE set to {loe}" if (found and loe) else ("LoE cleared" if found else "Item not found")
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/re-own/<item_id>")
     def brief_state_re_own(item_id):
@@ -2656,7 +2676,9 @@ def create_app():
         found = _bs.set_program(item_id, program)
         msg = f"Program set to {program}" if (found and program) else ("Program cleared" if found else "Item not found")
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/reorder")
     def brief_state_reorder():

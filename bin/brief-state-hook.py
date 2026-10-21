@@ -61,10 +61,16 @@ def main() -> None:
         if _business_days_since(most_recent) > _STALE_DAYS:
             sys.exit(0)
 
+    pinned_acts = [
+        i for i in items
+        if i.get("pinned") and i.get("type") == "act" and i.get("status") == "pending"
+    ]
+    pinned_ids = {i["id"] for i in pinned_acts}
     pending_acts = [
         i for i in items
         if i.get("type") == "act" and i.get("status") == "pending"
         and not i.get("source_analyzed")  # exclude inbox candidates
+        and i["id"] not in pinned_ids
     ]
     overdue_they_owe = [
         i for i in items
@@ -79,25 +85,35 @@ def main() -> None:
         and date.fromisoformat(i["deadline"]) < date.today()
     ]
 
-    if not pending_acts and not overdue_they_owe:
+    if not pinned_acts and not pending_acts and not overdue_they_owe:
         sys.exit(0)
 
     lines = ["---", "**Open from morning brief**"]
+
+    def _fmt(item, show_deadline=True):
+        loe = f" [{item['loe']}]" if item.get("loe") else ""
+        deadline = f" [due {item['deadline']}]" if (show_deadline and item.get("deadline")) else ""
+        note = f" — {item['notes']}" if item.get("notes") else ""
+        return f"  • {item['text']}{loe}{deadline}{note}"
+
+    if pinned_acts:
+        lines.append(f"\n📌 Pinned ({len(pinned_acts)}):")
+        for item in pinned_acts:
+            lines.append(_fmt(item))
 
     if overdue_acts:
         lines.append(f"\n⚠ OVERDUE ({len(overdue_acts)} item{'s' if len(overdue_acts) != 1 else ''}):")
         for item in overdue_acts:
             deadline = item.get("deadline", "")
+            loe = f" [{item['loe']}]" if item.get("loe") else ""
             note = f" — {item['notes']}" if item.get("notes") else ""
-            lines.append(f"  • [{deadline}] {item['text']}{note}")
+            lines.append(f"  • [{deadline}] {item['text']}{loe}{note}")
 
     still_pending = [i for i in pending_acts if i not in overdue_acts]
     if still_pending:
         lines.append(f"\nPending act items ({len(still_pending)}):")
         for item in still_pending:
-            deadline = f" [due {item['deadline']}]" if item.get("deadline") else ""
-            note = f" — {item['notes']}" if item.get("notes") else ""
-            lines.append(f"  • {item['text']}{deadline}{note}")
+            lines.append(_fmt(item))
 
     if overdue_they_owe:
         lines.append(f"\nThey owe you — past deadline ({len(overdue_they_owe)}):")

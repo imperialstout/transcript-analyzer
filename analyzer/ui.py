@@ -883,6 +883,32 @@ document.addEventListener('submit', function(e) {
   {% endif %}
 })();
 
+// ── Persist <details> open/closed state across page reloads ──
+(function() {
+  if (typeof sessionStorage === 'undefined') return;
+  var KEY = 'bs-details-state';
+  function stateKey(el) {
+    // Use id of closest card ancestor + local index among all details on page
+    var card = el.closest('[id]');
+    var cardId = card ? card.id : 'root';
+    var all = Array.from(document.querySelectorAll('details'));
+    return KEY + ':' + cardId + ':' + all.indexOf(el);
+  }
+  // Restore on load
+  document.querySelectorAll('details').forEach(function(el) {
+    var k = stateKey(el);
+    var saved = sessionStorage.getItem(k);
+    if (saved === 'open') el.open = true;
+    else if (saved === 'closed') el.open = false;
+  });
+  // Save on toggle
+  document.addEventListener('toggle', function(e) {
+    var el = e.target;
+    if (el.tagName !== 'DETAILS') return;
+    sessionStorage.setItem(stateKey(el), el.open ? 'open' : 'closed');
+  }, true);
+})();
+
 // ── Program order drag-to-reorder ──
 (function() {
   var list = document.getElementById('prog-order-list');
@@ -1125,6 +1151,23 @@ _SETTINGS_BODY = """\
   </div>
 </div>
 
+<div class="card">
+  <h2>Program order</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+    Drag to reorder. Controls grouping order across Brief State sections. Takes effect immediately.
+  </p>
+  <div id="prog-order-list" style="display:flex;flex-direction:column;gap:4px">
+    {% for key in prog_order %}
+    <div class="prog-order-item" data-key="{{ key }}" draggable="true"
+         style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;cursor:grab;font-size:12px;user-select:none">
+      <span style="color:var(--muted);font-size:14px">⠿</span>
+      <span>{{ key }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:var(--muted)">New programs not in this list appear at the bottom.</p>
+</div>
+
 </div><!-- right column -->
 </div><!-- grid -->
 """
@@ -1269,8 +1312,8 @@ _BRIEF_STATE_BODY = """\
     {% endif %}
     {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
   </div>
-  <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+  <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+    <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
         <button type="submit" class="btn-secondary btn-sm" data-act-action="done">Done</button>
@@ -1439,7 +1482,7 @@ _BRIEF_STATE_BODY = """\
       </div>
     </div>
     <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
-      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
         <select name="type" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
           <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
           <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
@@ -1536,11 +1579,13 @@ _BRIEF_STATE_BODY = """\
         <div class="bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
+            <input type="hidden" name="return_to" value="watch-section">
             <button type="submit" class="btn-secondary btn-sm">Done</button>
           </form>
           <form method="post" action="/brief-state/close/{{ item.id }}"
                 onsubmit="return confirm('Drop this watch item?');">
             <input type="hidden" name="status" value="dropped">
+            <input type="hidden" name="return_to" value="watch-section">
             <button type="submit" class="btn-destructive btn-sm">Drop</button>
           </form>
           <details style="display:inline-block;position:relative">
@@ -1602,9 +1647,11 @@ _BRIEF_STATE_BODY = """\
         <div class="bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
+            <input type="hidden" name="return_to" value="delegate-section">
             <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
           </form>
           <form method="post" action="/brief-state/re-own/{{ item.id }}">
+            <input type="hidden" name="return_to" value="delegate-section">
             <button type="submit" class="btn-destructive btn-sm">Re-own</button>
           </form>
           <details style="display:inline-block;position:relative">
@@ -1665,10 +1712,12 @@ _BRIEF_STATE_BODY = """\
         <div class="bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
+            <input type="hidden" name="return_to" value="they-owe-section">
             <button type="submit" class="btn-secondary btn-sm">Received</button>
           </form>
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="dropped">
+            <input type="hidden" name="return_to" value="they-owe-section">
             <button type="submit" class="btn-destructive btn-sm">Drop</button>
           </form>
           <details style="display:inline-block;position:relative">
@@ -1733,27 +1782,6 @@ _BRIEF_STATE_BODY = """\
   </details>
 </div>
 {% endif %}
-
-{# ── PROGRAM ORDER ── #}
-<div class="card" style="margin-top:8px">
-  <details class="bs-section">
-    <summary>
-      <span class="bs-section-chevron">▶</span>
-      Program order
-      <span style="font-size:11px;color:var(--muted);margin-left:6px">drag to reorder</span>
-    </summary>
-    <div id="prog-order-list" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
-      {% for key in prog_order %}
-      <div class="prog-order-item" data-key="{{ key }}" draggable="true"
-           style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;cursor:grab;font-size:12px;user-select:none">
-        <span style="color:var(--muted);font-size:14px">⠿</span>
-        <span>{{ key }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    <div style="margin-top:8px;font-size:11px;color:var(--muted)">Reorder takes effect on next page load. New programs not in this list appear at the bottom.</div>
-  </details>
-</div>
 
 {# ── SOURCE DRAWER ── #}
 <div id="source-drawer">
@@ -2213,6 +2241,7 @@ def create_app():
             vals=vals,
             drive_files=drive_files,
             log_path=str(_LOG_PATH),
+            prog_order=_load_prog_order(),
             flash=request.args.get("flash", ""),
             flash_type=request.args.get("ft", "ok"),
         )
@@ -2468,7 +2497,11 @@ def create_app():
         found = _bs.close(item_id, status)
         msg = "Marked " + status if found else "Item not found"
         ft = "ok" if found else "err"
-        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=msg, ft=ft)
+        if anchor:
+            dest += f"#{anchor}"
+        return redirect(dest)
 
     @app.post("/brief-state/reopen/<item_id>")
     def brief_state_reopen(item_id):
@@ -2532,7 +2565,9 @@ def create_app():
         updated["owner"] = "Brad"
         updated["notes"] = ((updated.get("notes") or "") + "; re-owned via UI").lstrip("; ")
         _bs.upsert(updated)
-        return redirect(url_for("brief_state_page", flash="Re-owned", ft="ok"))
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash="Re-owned", ft="ok")
+        return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/close-group")
     def brief_state_close_group():

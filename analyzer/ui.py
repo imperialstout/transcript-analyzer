@@ -776,8 +776,8 @@ function startPoll(label) {
     if (e.key === '3') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,3); return; }
     if (e.key === 'm') { e.preventDefault(); var id = el.dataset.actId; if(id) deferQuick(id,0); return; }
   });
-  // Auto-focus first item on page load unless URL hash targets the inbox
-  if (document.querySelector('[data-act-id]') && window.location.hash !== '#inbox') {
+  // Auto-focus first item on page load unless URL hash targets a specific section
+  if (document.querySelector('[data-act-id]') && !window.location.hash) {
     setTimeout(function(){_setFocus(0);}, 50);
   }
 })();
@@ -1993,8 +1993,9 @@ def _get_programs() -> list[dict]:
 _PROG_ORDER_PATH = Path("~/.config/transcript-analyzer/prog_order.json").expanduser()
 _DEFAULT_PROG_ORDER = [
     "SI-RCA", "DISW-RCA", "DISW-CPQ", "siemens-general",
-    "presales-sx-prd", "presales-energy", "presales-healthineers",
-    "presales-financial-services", "_unassigned",
+    "presales-sx-prd", "presales-disw-spm", "presales-siesales-cpqplus",
+    "presales-energy", "presales-healthineers", "presales-financial-services",
+    "_unassigned",
 ]
 
 

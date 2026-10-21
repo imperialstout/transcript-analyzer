@@ -1996,7 +1996,7 @@ def _get_programs() -> list[dict]:
                         stale_warn = bdays_old > 3
                     except Exception:
                         pass
-                _WATCH_KEYS = {"siemens-general", "presales"}
+                _WATCH_KEYS = {"siemens-general", "presales", "DISW-Billing", "SI-Agentforce", "SI-CLM", "SX-PRD", "XMP"}
                 _PRESALES_PREFIX = "presales-"
                 if key in _WATCH_KEYS:
                     group = "watch"
@@ -2027,6 +2027,14 @@ _DEFAULT_PROG_ORDER = [
     "presales-energy", "presales-healthineers", "presales-financial-services",
     "_unassigned",
 ]
+
+
+def _merged_prog_order() -> list[str]:
+    """Return prog_order pruned to only known programs, with any new ones appended."""
+    discovered = {p["key"] for p in _get_programs()}
+    saved = [k for k in _load_prog_order() if k in discovered or k == "_unassigned"]
+    new = [k for k in discovered if k not in set(saved)]
+    return saved + new
 
 
 def _load_prog_order() -> list[str]:
@@ -2304,7 +2312,7 @@ def create_app():
             vals=vals,
             drive_files=drive_files,
             log_path=str(_LOG_PATH),
-            prog_order=_load_prog_order(),
+            prog_order=_merged_prog_order(),
             flash=request.args.get("flash", ""),
             flash_type=request.args.get("ft", "ok"),
         )

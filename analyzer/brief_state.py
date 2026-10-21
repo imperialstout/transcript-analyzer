@@ -23,6 +23,8 @@ Schema per item:
   resurfaced_count  int
   program        str|null  program key matching STATUS.md frontmatter (e.g. "SI-RCA",
                             "presales-energy", "siemens-general"); None = unassigned
+  pinned         bool  true = shown in Today's Focus section at top of UI
+  loe            str|null  level of effort: "S" | "M" | "L" | null (user-set, optional)
 """
 
 import hashlib
@@ -35,6 +37,30 @@ _STATE_PATH = Path("~/.cache/transcript-analyzer/brief-state.json").expanduser()
 
 _VALID_TYPES = {"act", "watch", "delegate", "they-owe", "insight"}
 _VALID_STATUSES = {"pending", "complete", "deferred", "expired", "dropped", "dismissed"}
+_VALID_LOE = {"S", "M", "L"}
+
+# Map source filename keywords → program key (longest match wins)
+_SOURCE_PROGRAM_MAP = [
+    ("presales-sx-prd",        ["sx-prd", "presales-sx", "subscription management"]),
+    ("presales-energy",        ["energy", "siemens energy"]),
+    ("presales-healthineers",  ["healthineers", "shs"]),
+    ("DISW-RCA",               ["disw rca", "disw-rca", "di-sw rca", "rca poc", "rca p0c"]),
+    ("DISW-CPQ",               ["disw cpq", "disw-cpq", "di-sw cpq", "tequila", "neeraj"]),
+    ("siemens-general",        ["slack canvas", "account review", "cross-stream", "siemens all",
+                                 "gunnar", "claudia", "hana", "eike", "tara"]),
+    ("SI-RCA",                 ["si rca", "si-rca", "rca daily", "rca planning", "rca arch"]),
+]
+
+
+def _infer_program(source_analyzed: str) -> str | None:
+    """Infer program key from an analyzed filename. Returns None if no match."""
+    if not source_analyzed:
+        return None
+    low = source_analyzed.lower()
+    for prog_key, keywords in _SOURCE_PROGRAM_MAP:
+        if any(kw in low for kw in keywords):
+            return prog_key
+    return None
 
 # Words that carry no discriminating signal for duplicate detection
 _STOPWORDS = {
@@ -176,8 +202,15 @@ def upsert(item: dict) -> None:
             "notes": "",
             "resurfaced_count": 0,
             "program": None,
+            "pinned": False,
+            "loe": None,
         }
         defaults.update(item)
+        # Auto-infer program from source if still null
+        if not defaults.get("program"):
+            defaults["program"] = _infer_program(
+                defaults.get("source_analyzed") or defaults.get("source_pulse") or ""
+            )
         items.append(defaults)
 
     _save(items)
@@ -230,6 +263,52 @@ def close(item_id: str, status: str, notes: str = "") -> bool:
             if notes:
                 existing_notes = item.get("notes", "")
                 item["notes"] = f"{existing_notes}; {notes}".lstrip("; ") if existing_notes else notes
+            _save(items)
+            return True
+    return False
+
+
+def pinned_acts() -> list[dict]:
+    """Return act items that are pinned (Today's Focus), sorted by deadline."""
+    items = _load()
+    result = [
+        i for i in items
+        if i.get("pinned") and i.get("type") == "act" and i.get("status") == "pending"
+    ]
+    result.sort(key=lambda i: (i.get("deadline") or "9999-99-99"))
+    return result
+
+
+def pin(item_id: str) -> bool:
+    """Pin an item to Today's Focus. Returns True if found."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["pinned"] = True
+            _save(items)
+            return True
+    return False
+
+
+def unpin(item_id: str) -> bool:
+    """Unpin an item from Today's Focus. Returns True if found."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["pinned"] = False
+            _save(items)
+            return True
+    return False
+
+
+def set_loe(item_id: str, loe: str | None) -> bool:
+    """Set level-of-effort tag (S/M/L or None to clear). Returns True if found."""
+    if loe is not None and loe not in _VALID_LOE:
+        raise ValueError(f"Invalid loe: {loe!r}. Use S, M, or L.")
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["loe"] = loe
             _save(items)
             return True
     return False

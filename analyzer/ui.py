@@ -491,6 +491,10 @@ _HTML = """\
   .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .bs-item-overdue { background: rgba(247,111,111,0.07); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
   .bs-item-due-soon { background: rgba(247,162,79,0.06); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+  .bs-program-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+                       color: var(--muted); padding: 10px 0 4px; margin-top: 6px;
+                       border-top: 1px solid var(--border); }
+  .bs-program-header:first-child { border-top: none; margin-top: 0; }
   details.bs-section summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
                                 padding: 10px 0; color: var(--muted); font-size: 13px; user-select: none; }
   details.bs-section summary::-webkit-details-marker { display: none; }
@@ -1119,52 +1123,97 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{# ── ACT ITEMS ── #}
-<div class="card" style="{% if overdue_acts %}border-color:var(--border-alert){% endif %}">
-  <h2>Act items — Brad owns</h2>
-  {% if act_items %}
-  {% for item in act_items %}
-  <div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
-    <div class="bs-body">
-      <div class="bs-text">
-        {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
-        {{ item.text }}
-        {% if item.source_pulse %}<a href="#" class="quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
-      </div>
-      <div class="bs-meta">
-        {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
-        From {{ item.source_brief[:10] if item.source_brief else '—' }}
-      </div>
-      {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+{# ── MACRO: render one act item row (used in both Focus and grouped sections) ── #}
+{% macro act_row(item, show_pin=true) %}
+<div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
+  <div class="bs-body">
+    <div class="bs-text">
+      {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
+      {% if item.loe %}<span class="badge" style="background:var(--bg-alt);color:var(--fg-muted);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span> {% endif %}
+      {{ item.text }}
+      {% if item.source_pulse %}<a href="#" class="quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
     </div>
-    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <form method="post" action="/brief-state/close/{{ item.id }}">
-          <input type="hidden" name="status" value="complete">
-          <button type="submit" class="btn-secondary btn-sm" data-act-action="done">Done</button>
-        </form>
-        <form method="post" action="/brief-state/close/{{ item.id }}"
-              onsubmit="return confirm('Drop this item? It will be marked dropped.');">
-          <input type="hidden" name="status" value="dropped">
-          <button type="submit" class="btn-destructive btn-sm" data-act-action="drop">Drop</button>
-        </form>
-        <span class="bs-defer-sep"></span>
-        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
-        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
-        <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
-        <details style="display:inline-block">
-          <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-          <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:180px">
-            <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-              <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
-              <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
-              <button type="submit" class="btn-secondary btn-sm">Defer</button>
-            </form>
-          </div>
-        </details>
-      </div>
+    <div class="bs-meta">
+      {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
+      From {{ item.source_brief[:10] if item.source_brief else '—' }}
+      {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
+    </div>
+    {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+  </div>
+  <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <form method="post" action="/brief-state/close/{{ item.id }}">
+        <input type="hidden" name="status" value="complete">
+        <button type="submit" class="btn-secondary btn-sm" data-act-action="done">Done</button>
+      </form>
+      <form method="post" action="/brief-state/close/{{ item.id }}"
+            onsubmit="return confirm('Drop this item? It will be marked dropped.');">
+        <input type="hidden" name="status" value="dropped">
+        <button type="submit" class="btn-destructive btn-sm" data-act-action="drop">Drop</button>
+      </form>
+      <span class="bs-defer-sep"></span>
+      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
+      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
+      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
+      <details style="display:inline-block">
+        <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+        <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0">
+          <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+            <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
+            <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
+            <button type="submit" class="btn-secondary btn-sm">Defer</button>
+          </form>
+          <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+            <select name="loe" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+              <option value="">LoE…</option>
+              <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S — small (&lt;2h)</option>
+              <option value="M" {% if item.loe == 'M' %}selected{% endif %}>M — medium (half day)</option>
+              <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L — large (multi-day)</option>
+            </select>
+            <button type="submit" class="btn-secondary btn-sm">Set</button>
+          </form>
+          {% if show_pin %}
+          {% if item.pinned %}
+          <form method="post" action="/brief-state/unpin/{{ item.id }}">
+            <button type="submit" class="btn-secondary btn-sm" style="width:100%">☆ Unpin from Focus</button>
+          </form>
+          {% else %}
+          <form method="post" action="/brief-state/pin/{{ item.id }}">
+            <button type="submit" class="btn-secondary btn-sm" style="width:100%">★ Pin to Today's Focus</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </div>
+      </details>
     </div>
   </div>
+</div>
+{% endmacro %}
+
+{# ── TODAY'S FOCUS ── #}
+{% if pinned_acts %}
+<div class="card" style="border-color:var(--accent);border-width:2px">
+  <h2 style="display:flex;align-items:center;gap:8px">
+    <span style="color:var(--accent)">★</span> Today's Focus
+    <span class="badge" style="background:var(--accent);color:#000;font-size:10px">{{ pinned_acts|length }}</span>
+  </h2>
+  {% for item in pinned_acts %}
+  {{ act_row(item, show_pin=true) }}
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── ACT ITEMS — grouped by program ── #}
+<div class="card" style="{% if overdue_acts %}border-color:var(--border-alert){% endif %}">
+  <h2>Act items — Brad owns</h2>
+  {% if act_groups %}
+  {% for group in act_groups %}
+  {% if act_groups|length > 1 %}
+  <div class="bs-program-header">{{ group.label }}</div>
+  {% endif %}
+  {% for item in group.acts %}
+  {{ act_row(item, show_pin=true) }}
+  {% endfor %}
   {% endfor %}
   {% if act_items|length >= 2 %}
   <div class="kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
@@ -1976,12 +2025,35 @@ def create_app():
             return sorted(items, key=_key)
 
         raw_acts = [_enrich_act(i) for i in _bs.pending_acts()]
+        pinned = [_enrich_act(i) for i in _bs.pinned_acts()]
+        pinned_ids = {i["id"] for i in pinned}
+        unpinned_acts = [i for i in _sort_acts(raw_acts) if i["id"] not in pinned_ids]
+
+        # Group unpinned acts by program; null → "_unassigned"
+        _PROG_ORDER = ["SI-RCA", "DISW-RCA", "DISW-CPQ", "siemens-general",
+                       "presales-sx-prd", "presales-energy", "presales-healthineers",
+                       "presales-financial-services", "_unassigned"]
+        acts_by_program: dict[str, list] = {}
+        for item in unpinned_acts:
+            key = item.get("program") or "_unassigned"
+            acts_by_program.setdefault(key, []).append(item)
+        act_groups = [
+            {"key": k, "label": k if k != "_unassigned" else "Unassigned", "acts": acts_by_program[k]}
+            for k in _PROG_ORDER if k in acts_by_program
+        ]
+        # Any program not in _PROG_ORDER goes at the end
+        for k, prog_acts in acts_by_program.items():
+            if k not in _PROG_ORDER:
+                act_groups.append({"key": k, "label": k, "acts": prog_acts})
+
         return _render(
             _BRIEF_STATE_BODY,
             page="brief-state",
             today_iso=today.isoformat(),
             candidate_items=_bs.pending_candidates(),
-            act_items=_sort_acts(raw_acts),
+            act_items=_sort_acts(raw_acts),       # kept for overdue banner
+            act_groups=act_groups,
+            pinned_acts=pinned,
             watch_items=_bs.pending_watches(),
             delegate_items=[i for i in all_items if i.get("type") == "delegate" and i.get("status") == "pending"],
             they_owe_items=[_enrich_they_owe(i) for i in _bs.pending_they_owe()],
@@ -2055,6 +2127,34 @@ def create_app():
             return redirect(url_for("brief_state_page", flash="Invalid defer date", ft="err"))
         found = _bs.defer(item_id, target)
         msg = f"Deferred to {target}" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/pin/<item_id>")
+    def brief_state_pin(item_id):
+        from . import brief_state as _bs
+        found = _bs.pin(item_id)
+        msg = "Pinned to Today's Focus" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/unpin/<item_id>")
+    def brief_state_unpin(item_id):
+        from . import brief_state as _bs
+        found = _bs.unpin(item_id)
+        msg = "Unpinned" if found else "Item not found"
+        ft = "ok" if found else "err"
+        return redirect(url_for("brief_state_page", flash=msg, ft=ft))
+
+    @app.post("/brief-state/loe/<item_id>")
+    def brief_state_loe(item_id):
+        from . import brief_state as _bs
+        loe = request.form.get("loe") or None
+        try:
+            found = _bs.set_loe(item_id, loe)
+        except ValueError as e:
+            return redirect(url_for("brief_state_page", flash=str(e), ft="err"))
+        msg = f"LoE set to {loe}" if (found and loe) else ("LoE cleared" if found else "Item not found")
         ft = "ok" if found else "err"
         return redirect(url_for("brief_state_page", flash=msg, ft=ft))
 

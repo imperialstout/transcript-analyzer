@@ -1735,7 +1735,8 @@ _BRIEF_STATE_BODY = """\
         {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
       </td>
       <td class="ta-muted">{{ item.program or '—' }}</td>
-      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
+      {% set _from = item.source_brief or item.source_analyzed or '' %}
+      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}
         <span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>
@@ -1815,7 +1816,8 @@ _BRIEF_STATE_BODY = """\
         {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
-      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
+      {% set _from = item.source_brief or item.source_analyzed or '' %}
+      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}<span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>{% else %}—{% endif %}
       </td>
@@ -1904,7 +1906,8 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.program or '—' }}</td>
-      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
+      {% set _from = item.source_brief or item.source_analyzed or '' %}
+      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td>
         <div class="ta-rl-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
@@ -1949,7 +1952,8 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.owner or '—' }}</td>
-      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
+      {% set _from = item.source_brief or item.source_analyzed or '' %}
+      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">{{ item.deadline or '—' }}</td>
       <td>
         <div class="ta-rl-actions">
@@ -1984,7 +1988,8 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.owner or '—' }}</td>
-      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
+      {% set _from = item.source_brief or item.source_analyzed or '' %}
+      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}<span style="{% if item.they_overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% endif %}">{{ item.deadline }}{% if item.they_overdue %} ({{ item.days_overdue }}d){% endif %}</span>
         {% else %}—{% endif %}
@@ -2841,6 +2846,7 @@ def create_app():
             job_output=job_output,
             last_pulse=_last_pulse_info(),
             last_weekly=_last_weekly_info(),
+            analyzed_path=str(CONFIG.analyzed_path),
         )
 
     @app.post("/brief-state/accept/<item_id>")

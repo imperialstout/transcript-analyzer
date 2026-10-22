@@ -299,345 +299,556 @@ _HTML = """\
 <meta charset="utf-8">
 <title>{{ page_title }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@salesforce-ux/design-system-2@2.0.0/dist/css/bundled/slds2.cosmos.css">
+<script>
+  (function() {
+    var mode = localStorage.getItem('slds-ui-color-mode');
+    if (mode === 'dark') document.documentElement.classList.add('slds-color-scheme_dark');
+  })();
+</script>
 <style>
-  :root {
-    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
-    --text: #e2e4ec; --muted: #7a7f96; --accent: #4f8ef7;
-    --green: #3ecf8e; --orange: #f7a24f; --red: #f76f6f;
-    --purple: #b08ef7; --cyan: #3ecfcf; --gold: #cfaf3e;
-    /* badge backgrounds — tokenized so no raw hex bleeds into rules */
-    --bg-exec:     #3a2020; --bg-solution: #1e2c3a; --bg-daily:   #1e3a2c;
-    --bg-standup:  #2a2c1e; --bg-notes:    #2a1e3a; --bg-pulse:   #1e3020;
-    --bg-act:      #3a2020; --bg-watch:    #2a2c1e; --bg-delegate:#1e2c3a;
-    --bg-they-owe: #2a1e3a; --bg-insight:  #1e2c2c; --bg-overdue: #4a1010;
-    --bg-deferred: #2a2010; --bg-complete: #1e3a1e; --bg-expired: #2a1010;
-    --bg-alert:    #2a1a1a; --border-alert: #6b2f2f; --bg-alert-item: #3a2020;
-    --bg-danger:   #3a1f1f; --border-danger: #5a2e2e;
-    --bg-inbox:    #1e1c10; --border-inbox: #3a3010;
-    --bg-job-run:  #1a2540;
-    /* deep tints — dark variants for hover states and specialty surfaces */
-    --bg-exec-deep:     #4a2828;
-    --bg-daily-deep:    #1b3628;
-    --bg-void-deep:     #1e1e1e;
-    --bg-deferred-deep: #5a3e1f;
-    --bg-watch-deep:    #1a3030;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font: 14px/1.5 "SF Pro Text", system-ui, sans-serif; }
-  /* scrollbar */
+  /* ── App-level reset on top of SLDS ── */
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  /* ── Scrollbar ── */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-  /* selection */
-  ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); }
+  ::-webkit-scrollbar-track { background: var(--slds-g-color-surface-1, #f3f3f3); }
+  ::-webkit-scrollbar-thumb { background: var(--slds-g-color-border-2, #c9c7c5); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--slds-g-color-border-3, #aeacab); }
 
-  header { background: var(--surface); border-bottom: 1px solid var(--border);
-           padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
-  header h1 { font-size: 14px; font-weight: 600; }
-  nav { display: flex; gap: 4px; }
-  nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 6px; transition: color .15s, background .15s; }
-  nav a:hover, nav a.active { color: var(--text); background: var(--border); }
+  /* ── Global chrome ── */
+  header.ta-header {
+    background: var(--slds-g-color-surface-1, #fff);
+    border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    padding: 10px 24px; display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header.ta-header h1 {
+    font-size: var(--slds-g-font-scale-2, 0.875rem);
+    font-weight: 700;
+    color: var(--slds-g-color-on-surface-2, #181818);
+    white-space: nowrap;
+  }
+  nav.ta-nav { display: flex; gap: 2px; }
+  nav.ta-nav a {
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    text-decoration: none;
+    font-size: var(--slds-g-font-scale-2, 0.875rem);
+    padding: 6px 10px;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    transition: color .15s, background .15s;
+  }
+  nav.ta-nav a:hover, nav.ta-nav a.active {
+    color: var(--slds-g-color-on-surface-2, #181818);
+    background: var(--slds-g-color-surface-2, #f3f3f3);
+  }
+  nav.ta-nav a:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }
 
-  .content { padding: 24px; max-width: 1400px; }
+  .ta-content { padding: 24px; max-width: 1400px; }
 
-  /* ── Button system: 3 variants + sm modifier ── */
-  .btn, button { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px;
-                 padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-                 text-decoration: none; border: none; transition: opacity .15s; white-space: nowrap; }
-  .btn, button { background: var(--accent); color: #fff; }
-  .btn:hover, button:hover { opacity: .85; }
-  .btn-secondary, button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover, button.secondary:hover { background: var(--border); opacity: 1; }
-  .btn-destructive, button.danger { background: var(--bg-danger); color: var(--red); border: 1px solid var(--border-danger); }
-  .btn-destructive:hover, button.danger:hover { background: var(--bg-exec-deep); opacity: 1; }
-  .btn-sm { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
+  /* ── Buttons (ta-* prefix, layered on slds-button) ── */
+  .ta-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    padding: 8px 16px;
+    font-size: var(--slds-g-font-scale-2, 0.875rem);
+    font-weight: 600; cursor: pointer; text-decoration: none;
+    border: none; transition: opacity .15s; white-space: nowrap;
+    background: var(--slds-g-color-brand-2, #0176d3); color: #fff;
+  }
+  .ta-btn:hover { opacity: .85; }
+  .ta-btn-secondary {
+    background: var(--slds-g-color-surface-1, #fff);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+  }
+  .ta-btn-secondary:hover { background: var(--slds-g-color-surface-2, #f3f3f3); opacity: 1; }
+  .ta-btn-destructive {
+    background: var(--slds-g-color-error-1, #fef1f1);
+    color: var(--slds-g-color-error-2, #c23934);
+    border: 1px solid var(--slds-g-color-error-2, #c23934);
+  }
+  .ta-btn-destructive:hover { background: var(--slds-g-color-error-1, #fdd8d8); opacity: 1; }
+  .ta-btn-sm { padding: 3px 8px; font-size: 11px; border-radius: var(--slds-g-radius-border-1, 0.125rem); }
+  .ta-btn:focus-visible, .ta-btn-secondary:focus-visible, .ta-btn-destructive:focus-visible {
+    outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px;
+  }
 
-  /* ── Focus rings (keyboard navigation) ── */
-  .btn:focus-visible, button:focus-visible,
-  nav a:focus-visible,
-  .quick-link:focus-visible,
-  details.bs-section summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  input[type=date]:focus-visible, input[type=text]:focus-visible,
-  input[type=url]:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); }
+  /* Keep native <button> elements styled consistently */
+  button:not([class]) {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    padding: 8px 16px; font-size: var(--slds-g-font-scale-2, 0.875rem);
+    font-weight: 600; cursor: pointer; border: none; white-space: nowrap;
+    background: var(--slds-g-color-brand-2, #0176d3); color: #fff; transition: opacity .15s;
+  }
+  button:not([class]):hover { opacity: .85; }
 
-  /* ── Shared form chrome ── */
-  input[type=date] { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
-                     color: var(--text); font-size: 11px; padding: 3px 6px; }
-  input[type=date]:focus { outline: none; border-color: var(--accent); }
+  /* ── Date input ── */
+  input[type=date] {
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: var(--slds-g-radius-border-1, 0.125rem);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    font-size: 11px; padding: 3px 6px;
+  }
+  input[type=date]:focus { outline: none; border-color: var(--slds-g-color-brand-2, #0176d3); }
 
-  .flash { padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-  .flash-ok  { background: var(--bg-daily-deep); color: var(--green); }
-  .flash-err { background: var(--bg-danger); color: var(--red); }
+  /* ── Flash messages ── */
+  .ta-flash {
+    padding: 10px 16px; border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    margin-bottom: 16px; font-size: var(--slds-g-font-scale-2, 0.875rem);
+  }
+  .ta-flash-ok  { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); border: 1px solid #c2e0c6; }
+  .ta-flash-err { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); border: 1px solid #fac9c9; }
 
-  /* ── Stats ── */
-  .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-          padding: 14px 20px; min-width: 140px; }
-  .stat .val { font-size: 22px; font-weight: 700; }
-  .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  /* ── Stats strip ── */
+  .ta-stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .ta-stat {
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    padding: 14px 20px; min-width: 140px;
+  }
+  .ta-stat .val { font-size: 22px; font-weight: 700; color: var(--slds-g-color-on-surface-2, #181818); }
+  .ta-stat .lbl {
+    font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b);
+    text-transform: uppercase; letter-spacing: .05em; margin-top: 2px;
+  }
 
   /* ── Card ── */
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-          padding: 20px; margin-bottom: 20px; }
-  .card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
-             letter-spacing: .06em; color: var(--muted); margin-bottom: 14px; }
+  .ta-card {
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    padding: 20px; margin-bottom: 20px;
+  }
+  .ta-card h2 {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--slds-g-color-on-surface-4, #706e6b); margin-bottom: 14px;
+  }
+  .ta-card-inbox {
+    background: #fffdf0;
+    border-color: var(--slds-g-color-warning-2, #dd7a01);
+  }
+  .ta-card-inbox h2 { color: var(--slds-g-color-warning-2, #dd7a01); }
 
   /* ── Action tiers ── */
-  .action-tier { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .action-tier + .action-tier { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-  .action-tier-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                       letter-spacing: .07em; color: var(--muted); margin-right: 4px; }
-  .action-group { display: flex; align-items: center; gap: 6px; }
-  .action-date-hint { font-size: 11px; color: var(--muted); }
+  .ta-action-tier { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ta-action-tier + .ta-action-tier {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+  }
+  .ta-action-tier-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--slds-g-color-on-surface-4, #706e6b); margin-right: 4px;
+  }
+  .ta-action-group { display: flex; align-items: center; gap: 6px; }
+  .ta-action-date-hint { font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b); }
 
   /* ── Table ── */
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase;
-       letter-spacing: .05em; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-  td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; font-size: var(--slds-g-font-scale-2, 0.875rem); }
+  th {
+    text-align: left; color: var(--slds-g-color-on-surface-4, #706e6b);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    padding: 6px 10px; border-bottom: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5); vertical-align: top; }
   .td-source { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
 
-  /* ── Badges ── */
-  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px;
-           font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .badge-exec      { background: var(--bg-exec);     color: var(--red); }
-  .badge-solution  { background: var(--bg-solution); color: var(--accent); }
-  .badge-daily     { background: var(--bg-daily);    color: var(--green); }
-  .badge-standup   { background: var(--bg-standup);  color: var(--orange); }
-  .badge-notes     { background: var(--bg-notes);    color: var(--purple); }
-  .badge-pulse     { background: var(--bg-pulse);    color: var(--green); }
-  .badge-delta     { background: var(--bg-watch-deep); color: var(--cyan); }
-  .badge-synthesis { background: var(--bg-notes);     color: var(--purple); }
-  .badge-act       { background: var(--bg-act);      color: var(--red); }
-  .badge-watch     { background: var(--bg-watch);    color: var(--orange); }
-  .badge-delegate  { background: var(--bg-delegate); color: var(--accent); }
-  .badge-they-owe  { background: var(--bg-they-owe); color: var(--purple); }
-  .badge-insight   { background: var(--bg-insight);  color: var(--cyan); }
-  .badge-pending   { background: var(--bg-daily);    color: var(--green); }
-  .badge-complete  { background: var(--bg-complete); color: var(--green); }
-  .badge-deferred  { background: var(--bg-deferred); color: var(--gold); }
-  .badge-expired   { background: var(--bg-expired);  color: var(--red); }
-  .badge-dropped   { background: var(--bg-void-deep); color: var(--muted); }
-  .badge-overdue   { background: var(--bg-overdue);  color: var(--red); font-weight: 700; }
+  /* ── Badges (ta-badge-* namespace to avoid overriding .slds-badge) ── */
+  .ta-badge {
+    display: inline-block; padding: 2px 7px;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .ta-badge-exec      { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); }
+  .ta-badge-solution  { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); }
+  .ta-badge-daily     { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); }
+  .ta-badge-standup   { background: #fff3e0; color: var(--slds-g-color-warning-2, #dd7a01); }
+  .ta-badge-notes     { background: #f5eafb; color: #6b3fa0; }
+  .ta-badge-pulse     { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); }
+  .ta-badge-delta     { background: #eaf5f5; color: #0d7377; }
+  .ta-badge-synthesis { background: #f5eafb; color: #6b3fa0; }
+  .ta-badge-act       { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); }
+  .ta-badge-watch     { background: #fff3e0; color: var(--slds-g-color-warning-2, #dd7a01); }
+  .ta-badge-delegate  { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); }
+  .ta-badge-they-owe  { background: #f5eafb; color: #6b3fa0; }
+  .ta-badge-insight   { background: #eaf5f5; color: #0d7377; }
+  .ta-badge-pending   { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); }
+  .ta-badge-complete  { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); }
+  .ta-badge-deferred  { background: #fff8e1; color: #8a6000; }
+  .ta-badge-expired   { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); }
+  .ta-badge-dropped   { background: var(--slds-g-color-surface-2, #f3f3f3); color: var(--slds-g-color-on-surface-4, #706e6b); }
+  .ta-badge-overdue   { background: var(--slds-g-color-error-2, #c23934); color: #fff; font-weight: 700; }
 
   /* ── Job panel ── */
-  #job-status { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-                padding: 16px; margin-top: 16px; display: none; }
-  #job-status h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
-                   color: var(--muted); margin-bottom: 10px; }
-  #job-output { font: 12px/1.6 "SF Mono", "Menlo", monospace; color: var(--text);
-                white-space: pre-wrap; max-height: 320px; overflow-y: auto;
-                overflow-wrap: break-word; }
-  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border);
-             border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  #job-status {
+    background: var(--slds-g-color-surface-2, #f3f3f3);
+    border: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    padding: 16px; margin-top: 16px; display: none;
+  }
+  #job-status h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--slds-g-color-on-surface-4, #706e6b); margin-bottom: 10px;
+  }
+  #job-output {
+    font: 12px/1.6 "SF Mono", "Menlo", monospace;
+    color: var(--slds-g-color-on-surface-2, #181818);
+    white-space: pre-wrap; max-height: 320px; overflow-y: auto; overflow-wrap: break-word;
+  }
+  .ta-spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-top-color: var(--slds-g-color-brand-2, #0176d3);
+    border-radius: 50%; animation: ta-spin .7s linear infinite;
+  }
+  @keyframes ta-spin { to { transform: rotate(360deg); } }
 
-  /* ── Settings ── */
-  .field { margin-bottom: 18px; }
-  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted);
-                 text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
-  .field input[type=text], .field input[type=url] {
-    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-size: 13px; padding: 7px 10px; width: 100%; }
-  .field input[type=text]:focus, .field input[type=url]:focus { outline: none; border-color: var(--accent); }
-  .field .desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .toggle-row { display: flex; align-items: center; gap: 10px; }
-  .toggle { position: relative; width: 36px; height: 20px; }
-  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-  .toggle input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border);
-            border-radius: 20px; transition: .2s; }
-  .slider:before { content: ""; position: absolute; height: 14px; width: 14px;
-                   left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
-  input:checked + .slider { background: var(--accent); }
-  input:checked + .slider:before { transform: translateX(16px); }
+  /* ── Form fields ── */
+  .ta-field { margin-bottom: 18px; }
+  .ta-field label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px;
+  }
+  .ta-field input[type=text], .ta-field input[type=url] {
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    font-size: var(--slds-g-font-scale-2, 0.875rem); padding: 7px 10px; width: 100%;
+  }
+  .ta-field input[type=text]:focus, .ta-field input[type=url]:focus {
+    outline: none; border-color: var(--slds-g-color-brand-2, #0176d3);
+  }
+  .ta-field .desc { font-size: 12px; color: var(--slds-g-color-on-surface-4, #706e6b); margin-top: 4px; }
+  .ta-toggle-row { display: flex; align-items: center; gap: 10px; }
+  .ta-toggle { position: relative; width: 36px; height: 20px; }
+  .ta-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .ta-toggle input:focus-visible + .ta-slider {
+    outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px;
+  }
+  .ta-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: 20px; transition: .2s;
+  }
+  .ta-slider:before {
+    content: ""; position: absolute; height: 14px; width: 14px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s;
+  }
+  input:checked + .ta-slider { background: var(--slds-g-color-brand-2, #0176d3); }
+  input:checked + .ta-slider:before { transform: translateX(16px); }
 
   /* ── Quick links ── */
-  .quick-link { display: inline-flex; align-items: center; gap: 6px; color: var(--accent);
-                text-decoration: none; font-size: 12px; padding: 5px 0; }
-  .quick-link:hover { text-decoration: underline; }
-  hr.sep { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
-  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                   letter-spacing: .07em; color: var(--muted); margin-bottom: 14px; }
-  .muted { color: var(--muted); }
+  .ta-quick-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--slds-g-color-brand-2, #0176d3);
+    text-decoration: none; font-size: 12px; padding: 5px 0;
+  }
+  .ta-quick-link:hover { text-decoration: underline; }
+  .ta-quick-link:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }
+  hr.ta-sep { border: none; border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5); margin: 24px 0; }
+  .ta-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--slds-g-color-on-surface-4, #706e6b); margin-bottom: 14px;
+  }
+  .ta-muted { color: var(--slds-g-color-on-surface-4, #706e6b); }
 
   /* ── Slack paste ── */
-  textarea.paste-area { width: 100%; height: 360px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font: 13px/1.5 "SF Mono", "Menlo", monospace;
-    padding: 10px; resize: vertical; }
-  textarea.paste-area:focus { outline: none; border-color: var(--accent); }
+  textarea.ta-paste-area {
+    width: 100%; height: 360px;
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    font: 13px/1.5 "SF Mono", "Menlo", monospace;
+    padding: 10px; resize: vertical;
+  }
+  textarea.ta-paste-area:focus { outline: none; border-color: var(--slds-g-color-brand-2, #0176d3); }
 
-  /* ── Inbox urgency tier ── */
-  .inbox-urgent-header { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                         letter-spacing: .06em; color: var(--red); padding: 6px 0 8px;
-                         border-bottom: 1px solid var(--border-alert); margin-bottom: 4px; }
-  .inbox-normal-header { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                         letter-spacing: .06em; color: var(--gold); padding: 10px 0 8px;
-                         border-bottom: 1px solid var(--border-inbox); margin-bottom: 4px; }
-  .bs-item-urgent { background: var(--bg-alert); border-left: 3px solid var(--red); padding-left: 10px; }
+  /* ── Inbox urgency headers ── */
+  .ta-inbox-urgent-header {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--slds-g-color-error-2, #c23934); padding: 6px 0 8px;
+    border-bottom: 1px solid #fac9c9; margin-bottom: 4px;
+  }
+  .ta-inbox-normal-header {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--slds-g-color-warning-2, #dd7a01); padding: 10px 0 8px;
+    border-bottom: 1px solid #ffe0a0; margin-bottom: 4px;
+  }
+  .ta-bs-item-urgent {
+    background: #fff5f5;
+    border-left: 3px solid var(--slds-g-color-error-2, #c23934); padding-left: 10px;
+  }
 
-  /* ── Brief state ── */
-  .bs-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
-             border-top: 1px solid var(--border); }
-  .bs-item:first-of-type { border-top: none; }
-  .bs-body { flex: 1; min-width: 0; }
-  .bs-text { font-size: 13px; line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
-  .bs-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .bs-notes { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px;
-              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
-  .bs-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; flex-wrap: nowrap; }
-  .bs-defer-sep { width: 1px; height: 16px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
-  .bs-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
-  .bs-item-overdue { background: rgba(247,111,111,0.07); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
-  .bs-item-due-soon { background: rgba(247,162,79,0.06); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
-  .bs-program-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
-                       color: var(--muted); padding: 10px 0 4px; margin-top: 6px;
-                       border-top: 1px solid var(--border); }
-  .bs-program-header:first-child { border-top: none; margin-top: 0; }
-  .bs-program-header-toggle { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
-                               user-select: none; }
-  .bs-program-header-toggle::-webkit-details-marker { display: none; }
-  details.bs-group-section { margin-top: 6px; }
-  details.bs-group-section > summary { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 0; }
-  details.bs-group-section:first-child > summary { border-top: none; padding-top: 4px; }
-  details.bs-group-section[open] summary .bs-section-chevron { transform: rotate(90deg); }
-  details.bs-group-section .bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
-  details.bs-section summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
-                                padding: 10px 0; color: var(--muted); font-size: 13px; user-select: none; }
-  details.bs-section summary::-webkit-details-marker { display: none; }
-  details.bs-section summary .bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
-  details.bs-section[open] summary .bs-section-chevron { transform: rotate(90deg); }
+  /* ── Brief State items ── */
+  .ta-bs-item {
+    display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
+    border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+  }
+  .ta-bs-item:first-of-type { border-top: none; }
+  .ta-bs-body { flex: 1; min-width: 0; }
+  .ta-bs-text { font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
+  .ta-bs-meta { font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b); margin-top: 3px; }
+  .ta-bs-notes {
+    font-size: 12px; color: var(--slds-g-color-on-surface-4, #706e6b); font-style: italic; margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px;
+  }
+  .ta-bs-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; flex-wrap: nowrap; }
+  .ta-bs-defer-sep {
+    width: 1px; height: 16px;
+    background: var(--slds-g-color-border-1, #e5e5e5); margin: 0 1px; flex-shrink: 0;
+  }
+  .ta-bs-empty { color: var(--slds-g-color-on-surface-4, #706e6b); font-size: var(--slds-g-font-scale-2, 0.875rem); padding: 12px 0; }
+  .ta-bs-item-overdue {
+    background: rgba(194,57,52,0.05); margin: 0 -20px; padding-left: 20px; padding-right: 20px;
+  }
+  .ta-bs-item-due-soon {
+    background: rgba(221,122,1,0.05); margin: 0 -20px; padding-left: 20px; padding-right: 20px;
+  }
+
+  /* ── Program group headers ── */
+  .ta-bs-program-header {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--slds-g-color-on-surface-4, #706e6b); padding: 10px 0 4px; margin-top: 6px;
+    border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+  }
+  .ta-bs-program-header:first-child { border-top: none; margin-top: 0; }
+  .ta-bs-program-header-toggle { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+  .ta-bs-program-header-toggle::-webkit-details-marker { display: none; }
+  details.ta-bs-group-section { margin-top: 6px; }
+  details.ta-bs-group-section > summary {
+    border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5); padding-top: 10px; margin-top: 0;
+  }
+  details.ta-bs-group-section:first-child > summary { border-top: none; padding-top: 4px; }
+  details.ta-bs-group-section[open] summary .ta-bs-section-chevron { transform: rotate(90deg); }
+  details.ta-bs-group-section .ta-bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.ta-bs-section summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+    padding: 10px 0; color: var(--slds-g-color-on-surface-4, #706e6b);
+    font-size: var(--slds-g-font-scale-2, 0.875rem); user-select: none;
+  }
+  details.ta-bs-section summary::-webkit-details-marker { display: none; }
+  details.ta-bs-section summary .ta-bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.ta-bs-section[open] summary .ta-bs-section-chevron { transform: rotate(90deg); }
+  details.ta-bs-section summary:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }
+
   /* ── Drag-to-reorder ── */
-  .drag-handle { cursor: grab; color: var(--border); font-size: 14px; padding: 0 6px 0 0;
-                 flex-shrink: 0; line-height: 1; user-select: none; }
-  .drag-handle:active { cursor: grabbing; }
-  .bs-item.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
-  .bs-item.dragging { opacity: 0.4; }
-  .inline-program-form { margin-top: 4px; }
+  .ta-drag-handle {
+    cursor: grab; color: var(--slds-g-color-border-2, #c9c7c5);
+    font-size: 14px; padding: 0 6px 0 0; flex-shrink: 0; line-height: 1; user-select: none;
+  }
+  .ta-drag-handle:active { cursor: grabbing; }
+  .ta-bs-item.drag-over { outline: 2px dashed var(--slds-g-color-brand-2, #0176d3); outline-offset: -2px; }
+  .ta-bs-item.dragging { opacity: 0.4; }
+  .ta-inline-program-form { margin-top: 4px; }
 
-  /* ── Inbox card (candidates) ── */
-  .card-inbox { background: var(--bg-inbox); border-color: var(--border-inbox); }
-  .card-inbox h2 { color: var(--gold); }
-
-  /* ── Nav badge (pending count) ── */
-  .nav-badge { background: var(--red); color: #fff; border-radius: 10px;
-               padding: 0 6px; font-size: 12px; font-weight: 700; line-height: 18px;
-               display: inline-block; vertical-align: middle; margin-left: 4px; }
+  /* ── Nav badge ── */
+  .ta-nav-badge {
+    background: var(--slds-g-color-error-2, #c23934); color: #fff;
+    border-radius: 10px; padding: 0 6px; font-size: 12px; font-weight: 700;
+    line-height: 18px; display: inline-block; vertical-align: middle; margin-left: 4px;
+  }
 
   /* ── Inline code token ── */
-  .code-inline { color: var(--text); font-family: "SF Mono", "Menlo", monospace; font-size: 11px; }
+  .ta-code-inline {
+    color: var(--slds-g-color-on-surface-2, #181818);
+    font-family: "SF Mono", "Menlo", monospace; font-size: 11px;
+  }
 
-  /* ── Render-warnings ambient chip in header ── */
-  .render-warn-chip { display: inline-flex; align-items: center; gap: 5px;
-                      background: var(--bg-danger); color: var(--orange); border: 1px solid var(--bg-deferred-deep);
-                      border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700;
-                      text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
-                      cursor: pointer; position: relative; }
-  .render-warn-chip:focus { outline: 2px solid var(--orange); outline-offset: 2px; }
-  .render-warn-popover { display: none; position: absolute; top: calc(100% + 6px); right: 0;
-                         background: var(--bg-card); border: 1px solid var(--bg-deferred-deep);
-                         border-radius: 8px; padding: 10px 14px; min-width: 220px; z-index: 100;
-                         box-shadow: 0 4px 16px rgba(0,0,0,.4); }
-  .render-warn-chip.open .render-warn-popover { display: block; }
-  .render-warn-popover ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .render-warn-popover li { font-size: 12px; color: var(--text); font-weight: 400;
-                             text-transform: none; letter-spacing: 0; line-height: 1.4; }
+  /* ── Render-warnings chip ── */
+  .ta-render-warn-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #fff3e0; color: var(--slds-g-color-warning-2, #dd7a01);
+    border: 1px solid #f5c26b;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem); padding: 3px 10px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    white-space: nowrap; cursor: pointer; position: relative;
+  }
+  .ta-render-warn-chip:focus { outline: 2px solid var(--slds-g-color-warning-2, #dd7a01); outline-offset: 2px; }
+  .ta-render-warn-popover {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0;
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    border-radius: var(--slds-g-radius-border-3, 0.5rem); padding: 10px 14px;
+    min-width: 220px; z-index: 100;
+    box-shadow: var(--slds-g-shadow-2, 0 4px 16px rgba(0,0,0,.12));
+  }
+  .ta-render-warn-chip.open .ta-render-warn-popover { display: block; }
+  .ta-render-warn-popover ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .ta-render-warn-popover li {
+    font-size: 12px; color: var(--slds-g-color-on-surface-2, #181818);
+    font-weight: 400; text-transform: none; letter-spacing: 0; line-height: 1.4;
+  }
 
-  /* ── Brief-state briefing banner (overdue-aware) ── */
-  .bs-brief-banner { background: var(--bg-alert); border: 1px solid var(--border-alert);
-                     border-radius: 8px; padding: 14px 20px; margin-bottom: 20px;
-                     display: flex; align-items: flex-start; gap: 12px; }
-  .bs-brief-banner-icon { font-size: 16px; flex-shrink: 0; padding-top: 1px; }
-  .bs-brief-banner-body { flex: 1; }
-  .bs-brief-banner-title { font-size: 13px; font-weight: 700; color: var(--red);
-                           text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
-  .bs-brief-banner-items { list-style: none; display: flex; flex-direction: column; gap: 4px; }
-  .bs-brief-banner-items li { font-size: 13px; line-height: 1.5;
-                               overflow-wrap: break-word; word-break: break-word; }
+  /* ── Brief state overdue banner ── */
+  .ta-bs-brief-banner {
+    background: #fff5f5; border: 1px solid #fac9c9;
+    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px;
+  }
+  .ta-bs-brief-banner-icon { font-size: 16px; flex-shrink: 0; padding-top: 1px; }
+  .ta-bs-brief-banner-body { flex: 1; }
+  .ta-bs-brief-banner-title {
+    font-size: var(--slds-g-font-scale-2, 0.875rem); font-weight: 700;
+    color: var(--slds-g-color-error-2, #c23934);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+  }
+  .ta-bs-brief-banner-items { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .ta-bs-brief-banner-items li {
+    font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.5;
+    overflow-wrap: break-word; word-break: break-word;
+  }
 
   /* ── Defer toggle ── */
-  .defer-wrap { display: none; flex-wrap: wrap; gap: 6px; align-items: center;
-                margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
-  .defer-wrap.open { display: flex; }
-  .btn-defer-toggle { background: none; border: 1px solid var(--border); color: var(--muted);
-                      border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;
-                      cursor: pointer; }
-  .btn-defer-toggle:hover { color: var(--text); border-color: var(--muted); opacity: 1; }
+  .ta-defer-wrap {
+    display: none; flex-wrap: wrap; gap: 6px; align-items: center;
+    margin-top: 6px; padding-top: 6px;
+    border-top: 1px dashed var(--slds-g-color-border-1, #e5e5e5);
+  }
+  .ta-defer-wrap.open { display: flex; }
+  .ta-btn-defer-toggle {
+    background: none; border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border-radius: var(--slds-g-radius-border-1, 0.125rem); padding: 2px 8px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .ta-btn-defer-toggle:hover {
+    color: var(--slds-g-color-on-surface-2, #181818);
+    border-color: var(--slds-g-color-border-3, #aeacab);
+  }
 
   /* ── Screen-reader only ── */
-  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-             overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .ta-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+               overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
-  /* ── Header quick-run strip (Brief State only) ── */
-  .header-quick-run { display: flex; gap: 6px; align-items: center; margin-left: 8px;
-                      padding-left: 12px; border-left: 1px solid var(--border); }
+  /* ── Header quick-run strip ── */
+  .ta-header-quick-run {
+    display: flex; gap: 6px; align-items: center; margin-left: 8px;
+    padding-left: 12px;
+    border-left: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+  }
 
-  /* ── Synthesis button frequency tiers ── */
-  .btn-daily-pulse { background: var(--accent); color: #fff; border: none; }
-  .btn-daily-pulse:hover { opacity: .85; }
-  .btn-periodic { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  .btn-periodic:hover { background: var(--border); opacity: 1; }
-  .btn-rare { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
-  .btn-rare:hover { color: var(--text); background: var(--border); opacity: 1; }
+  /* ── Synthesis button tiers ── */
+  .ta-btn-daily-pulse { background: var(--slds-g-color-brand-2, #0176d3); color: #fff; border: none; }
+  .ta-btn-daily-pulse:hover { opacity: .85; }
+  .ta-btn-periodic {
+    background: var(--slds-g-color-surface-1, #fff);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+  }
+  .ta-btn-periodic:hover { background: var(--slds-g-color-surface-2, #f3f3f3); opacity: 1; }
+  .ta-btn-rare {
+    background: var(--slds-g-color-surface-1, #fff);
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+  }
+  .ta-btn-rare:hover { color: var(--slds-g-color-on-surface-2, #181818); background: var(--slds-g-color-surface-2, #f3f3f3); opacity: 1; }
 
-  /* ── Operations drawer (collapsible) ── */
-  details.ops-drawer > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center;
+  /* ── Operations drawer ── */
+  details.ta-ops-drawer > summary {
+    cursor: pointer; list-style: none; display: inline-flex; align-items: center;
     gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
-    color: var(--muted); padding: 2px 0 14px; user-select: none; }
-  details.ops-drawer > summary::-webkit-details-marker { display: none; }
-  details.ops-drawer > summary .ops-chevron { font-size: 10px; transition: transform 0.15s; }
-  details.ops-drawer[open] > summary .ops-chevron { transform: rotate(90deg); }
+    color: var(--slds-g-color-on-surface-4, #706e6b); padding: 2px 0 14px; user-select: none;
+  }
+  details.ta-ops-drawer > summary::-webkit-details-marker { display: none; }
+  details.ta-ops-drawer > summary .ta-ops-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.ta-ops-drawer[open] > summary .ta-ops-chevron { transform: rotate(90deg); }
 
-  /* ── Pulse freshness chip ── */
-  .pulse-freshness { font-size: 11px; white-space: nowrap; }
-  .pulse-green  { color: var(--green); }
-  .pulse-orange { color: var(--orange); }
-  .pulse-red    { color: var(--red); }
-  .pulse-gray   { color: var(--muted); }
+  /* ── Pulse freshness ── */
+  .ta-pulse-freshness { font-size: 11px; white-space: nowrap; }
+  .ta-pulse-green  { color: var(--slds-g-color-success-2, #2e844a); }
+  .ta-pulse-orange { color: var(--slds-g-color-warning-2, #dd7a01); }
+  .ta-pulse-red    { color: var(--slds-g-color-error-2, #c23934); }
+  .ta-pulse-gray   { color: var(--slds-g-color-on-surface-4, #706e6b); }
 
-  /* ── Weekly Delta staleness nudge ── */
-  .weekly-nudge { font-size: 11px; white-space: nowrap; }
-  .weekly-nudge-orange { color: var(--orange); }
-  .weekly-nudge-muted  { color: var(--muted); }
+  /* ── Weekly Delta nudge ── */
+  .ta-weekly-nudge { font-size: 11px; white-space: nowrap; }
+  .ta-weekly-nudge-orange { color: var(--slds-g-color-warning-2, #dd7a01); }
+  .ta-weekly-nudge-muted  { color: var(--slds-g-color-on-surface-4, #706e6b); }
 
-  /* ── Career full-active border hint ── */
-  .career-full-active { border-color: var(--orange) !important; }
+  /* ── Career full-reread active hint ── */
+  .ta-career-full-active { border-color: var(--slds-g-color-warning-2, #dd7a01); }
 
-  /* ── Meeting Prep card ── */
-  .prep-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-  .prep-controls select, .prep-controls input[type=text] {
-    flex: 1; min-width: 180px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font-size: 13px; padding: 7px 10px; }
-  .prep-controls select:focus, .prep-controls input[type=text]:focus { outline: none; border-color: var(--accent); }
-  .prep-bullet { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
-  .prep-bullet:last-child { border-bottom: none; }
+  /* ── Meeting Prep ── */
+  .ta-prep-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .ta-prep-controls select, .ta-prep-controls input[type=text] {
+    flex: 1; min-width: 180px;
+    background: var(--slds-g-color-surface-1, #fff);
+    border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    color: var(--slds-g-color-on-surface-2, #181818);
+    font-size: var(--slds-g-font-scale-2, 0.875rem); padding: 7px 10px;
+  }
+  .ta-prep-controls select:focus, .ta-prep-controls input[type=text]:focus {
+    outline: none; border-color: var(--slds-g-color-brand-2, #0176d3);
+  }
+  .ta-prep-bullet {
+    padding: 8px 0; border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.5;
+  }
+  .ta-prep-bullet:last-child { border-bottom: none; }
 
   /* ── Source drawer ── */
-  #source-drawer { position: fixed; top: 0; right: 0; width: 540px; max-width: 95vw; height: 100vh;
-    background: var(--surface); border-left: 1px solid var(--border); z-index: 100;
-    display: flex; flex-direction: column; transform: translateX(100%); transition: transform .2s ease; }
+  #source-drawer {
+    position: fixed; top: 0; right: 0; width: 540px; max-width: 95vw; height: 100vh;
+    background: var(--slds-g-color-surface-1, #fff);
+    border-left: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    z-index: 100; display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .2s ease;
+    box-shadow: var(--slds-g-shadow-2, -4px 0 16px rgba(0,0,0,.1));
+  }
   #source-drawer.open { transform: translateX(0); }
-  #source-drawer-header { display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  #source-drawer-title { font-size: 12px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #source-drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5); flex-shrink: 0;
+  }
+  #source-drawer-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   #source-drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
-  #source-drawer-content { font: 12px/1.6 "SF Mono", "Menlo", monospace; color: var(--text);
-    white-space: pre-wrap; overflow-wrap: break-word; }
+  #source-drawer-content {
+    font: 12px/1.6 "SF Mono", "Menlo", monospace;
+    color: var(--slds-g-color-on-surface-2, #181818);
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
 
-  /* ── Keyboard focus act item ── */
-  .bs-item-focused { border-left: 2px solid var(--accent); padding-left: 18px; margin-left: -20px;
-    padding-right: 20px; margin-right: -20px; background: rgba(79,142,247,.06); }
-  .kb-hint { font-size: 11px; color: var(--muted); padding: 8px 0 2px; border-top: 1px solid var(--border); margin-top: 8px; }
+  /* ── Keyboard focus ring for act items ── */
+  .ta-bs-item-focused {
+    border-left: 2px solid var(--slds-g-color-brand-2, #0176d3);
+    padding-left: 18px; margin-left: -20px;
+    padding-right: 20px; margin-right: -20px;
+    background: rgba(1,118,211,0.05);
+  }
+  .ta-kb-hint {
+    font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b);
+    padding: 8px 0 2px; border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5); margin-top: 8px;
+  }
+
+  /* ── Theme toggle button in header ── */
+  .ta-theme-toggle {
+    background: none; border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    font-size: 11px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
+  }
+  .ta-theme-toggle:hover { color: var(--slds-g-color-on-surface-2, #181818); }
 </style>
 </head>
 <body>
-<header>
+<header class="ta-header">
   <h1>Transcript Analyzer</h1>
-  <nav>
-    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %}<span class="nav-badge" aria-label="{{ pending_act_count }} pending">{{ pending_act_count }}</span>{% endif %}</a>
+  <nav class="ta-nav">
+    <a href="/brief-state" class="{{ 'active' if page == 'brief-state' else '' }}">Brief State{% if pending_act_count %}<span class="ta-nav-badge" aria-label="{{ pending_act_count }} pending">{{ pending_act_count }}</span>{% endif %}</a>
     <a href="/files" class="{{ 'active' if page == 'home' else '' }}">Analyzed Files</a>
     <a href="/prep" class="{{ 'active' if page == 'prep' else '' }}">Meeting Prep</a>
     <a href="/slack-paste" class="{{ 'active' if page == 'slack-paste' else '' }}">Slack Paste</a>
@@ -645,49 +856,56 @@ _HTML = """\
     <a href="/settings" class="{{ 'active' if page == 'settings' else '' }}">Settings</a>
   </nav>
   {% if page == 'brief-state' %}
-  <div class="header-quick-run">
+  <div class="ta-header-quick-run">
     <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
-      <button type="submit" class="btn-sm" title="Pick up new transcripts from the inbox">⚡ Run Analysis</button>
+      <button type="submit" class="ta-btn ta-btn-sm" title="Pick up new transcripts from the inbox">⚡ Run Analysis</button>
     </form>
     <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:5px;align-items:center" id="daily-pulse-quick-form">
       <input type="hidden" name="mode" value="daily">
-      <button type="submit" class="btn-daily-pulse btn-sm" title="Synthesize today's analyses into a Daily Pulse">▶ Daily Pulse</button>
+      <button type="submit" class="ta-btn ta-btn-daily-pulse ta-btn-sm" title="Synthesize today's analyses into a Daily Pulse">▶ Daily Pulse</button>
     </form>
     {% if last_pulse %}
       {% if last_pulse.analyses_since > 0 %}
-      <span class="pulse-freshness pulse-{{ last_pulse.status }}">
+      <span class="ta-pulse-freshness ta-pulse-{{ last_pulse.status }}">
         {{ last_pulse.analyses_since }} new — <a href="#" onclick="document.getElementById('daily-pulse-quick-form').submit();return false;" style="color:inherit;text-decoration:underline">run now?</a>
       </span>
       {% else %}
-      <span class="pulse-freshness pulse-{{ last_pulse.status }}">Last pulse: {{ last_pulse.label }}</span>
+      <span class="ta-pulse-freshness ta-pulse-{{ last_pulse.status }}">Last pulse: {{ last_pulse.label }}</span>
       {% endif %}
     {% endif %}
   </div>
   {% endif %}
-  <div class="header-spacer" style="flex:1"></div>
-  <div class="header-right" style="display:flex;gap:8px;align-items:center">
+  <div style="flex:1"></div>
+  <div style="display:flex;gap:8px;align-items:center">
     {% if render_warnings %}
-    <span class="render-warn-chip" tabindex="0" role="button"
+    <span class="ta-render-warn-chip" tabindex="0" role="button"
           onclick="this.classList.toggle('open')"
           onkeydown="if(event.key==='Enter'||event.key===' ')this.classList.toggle('open')"
           onblur="setTimeout(()=>this.classList.remove('open'),150)">
       ⚠ {{ render_warnings | length }} warning{{ 's' if render_warnings | length != 1 else '' }}
-      <span class="render-warn-popover" onclick="event.stopPropagation()">
+      <span class="ta-render-warn-popover" onclick="event.stopPropagation()">
         <ul>{% for w in render_warnings %}<li>{{ w }}</li>{% endfor %}</ul>
       </span>
     </span>
     {% endif %}
     {% if shared_url %}
-    <a class="btn{% if render_warnings %} btn-secondary{% endif %}" href="{{ shared_url }}" target="_blank" rel="noopener">
+    <a class="ta-btn{% if render_warnings %} ta-btn-secondary{% endif %}" href="{{ shared_url }}" target="_blank" rel="noopener">
       ↗ Shared Meeting Files
     </a>
     {% endif %}
+    <button class="ta-theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀ / ☾</button>
   </div>
 </header>
-<div class="content">
+<div class="ta-content">
 {{ body | safe }}
 </div>
 <script>
+// Theme toggle (light / dark via slds-color-scheme_dark on <html>)
+function toggleTheme() {
+  const dark = document.documentElement.classList.toggle('slds-color-scheme_dark');
+  localStorage.setItem('slds-ui-color-mode', dark ? 'dark' : 'light');
+}
+
 // Quick-defer: daysOffset=0 → next Monday; >0 → N days from today
 function deferQuick(itemId, daysOffset) {
   const d = new Date();
@@ -714,7 +932,7 @@ let _pollTimer = null;
 function startPoll(label) {
   if (_pollTimer) return;
   const indicator = document.getElementById('job-indicator');
-  if (indicator && label) indicator.innerHTML = '<span class="spinner"></span> ' + label;
+  if (indicator && label) indicator.innerHTML = '<span class="ta-spinner"></span> ' + label;
   const jobStatus = document.getElementById('job-status');
   const jobDone = document.getElementById('job-done');
   const jobOutput = document.getElementById('job-output');
@@ -737,7 +955,7 @@ function startPoll(label) {
         // Job failed (non-zero exit). Keep the panel up with the captured output
         // so the error is visible — do NOT reload it away. (returncode 2 is a
         // soft warning: synthesis written but archive skipped — still surface it.)
-        if (jobDone) { jobDone.style.display = 'inline'; jobDone.style.color = 'var(--red)'; jobDone.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.'; }
+        if (jobDone) { jobDone.style.display = 'inline'; jobDone.style.color = 'var(--slds-g-color-error-2,#c23934)'; jobDone.textContent = 'Failed (exit ' + d.returncode + ') — output below, not refreshing.'; }
         document.title = '⚠ Job failed — Transcript Analyzer';
       } else {
         if (jobDone) jobDone.style.display = 'inline';
@@ -760,9 +978,9 @@ function startPoll(label) {
   function _setFocus(idx) {
     var items = _actItems();
     if (!items.length) return;
-    items.forEach(function(el) { el.classList.remove('bs-item-focused'); });
+    items.forEach(function(el) { el.classList.remove('ta-bs-item-focused'); });
     _focusedIdx = Math.max(0, Math.min(idx, items.length - 1));
-    items[_focusedIdx].classList.add('bs-item-focused');
+    items[_focusedIdx].classList.add('ta-bs-item-focused');
     items[_focusedIdx].scrollIntoView({block:'nearest'});
   }
   function _submitAction(el, selector) {
@@ -837,14 +1055,14 @@ async function runMeetingPrep() {
     const data = await resp.json();
     const out = document.getElementById('prep-output');
     if (data.bullets && data.bullets.length) {
-      out.innerHTML = data.bullets.map(b => '<div class="prep-bullet">' + b.replace(/[*][*]([^*]+)[*][*]/g, '<strong>$1</strong>') + '</div>').join('');
+      out.innerHTML = data.bullets.map(b => '<div class="ta-prep-bullet">' + b.replace(/[*][*]([^*]+)[*][*]/g, '<strong>$1</strong>') + '</div>').join('');
     } else {
-      out.innerHTML = '<div class="prep-bullet muted">No bullets returned.</div>';
+      out.innerHTML = '<div class="ta-prep-bullet ta-muted">No bullets returned.</div>';
     }
     out.style.display = 'block';
   } catch(e) {
     const out = document.getElementById('prep-output');
-    out.innerHTML = '<div class="prep-bullet" style="color:var(--red)">Request failed: ' + e + '</div>';
+    out.innerHTML = '<div class="ta-prep-bullet" style="color:var(--slds-g-color-error-2,#c23934)">Request failed: ' + e + '</div>';
     out.style.display = 'block';
   }
   btn.disabled = false; btn.textContent = 'Prep';
@@ -949,7 +1167,7 @@ document.addEventListener('submit', function(e) {
   list.addEventListener('dragover', function(e) {
     e.preventDefault();
     var target = e.target.closest('.prog-order-item');
-    if (target && target !== dragItem) target.style.outline = '2px dashed var(--accent)';
+    if (target && target !== dragItem) target.style.outline = '2px dashed var(--slds-g-color-brand-2, #0176d3)';
   });
   list.addEventListener('dragleave', function(e) {
     var target = e.target.closest('.prog-order-item');
@@ -979,8 +1197,8 @@ document.addEventListener('submit', function(e) {
 
   function initDragGroup(container) {
     container.addEventListener('dragstart', function(e) {
-      var item = e.target.closest('.bs-item[data-act-id]');
-      if (!item || !item.parentElement.classList.contains('bs-group-items') &&
+      var item = e.target.closest('.ta-bs-item[data-act-id]');
+      if (!item || !item.parentElement.classList.contains('ta-bs-group-items') &&
           item.parentElement.id !== 'focus-group') return;
       dragged = item;
       item.classList.add('dragging');
@@ -992,21 +1210,21 @@ document.addEventListener('submit', function(e) {
     });
     container.addEventListener('dragover', function(e) {
       e.preventDefault();
-      var target = e.target.closest('.bs-item[data-act-id]');
+      var target = e.target.closest('.ta-bs-item[data-act-id]');
       if (!target || target === dragged) return;
       target.classList.add('drag-over');
     });
     container.addEventListener('dragleave', function(e) {
-      var target = e.target.closest('.bs-item[data-act-id]');
+      var target = e.target.closest('.ta-bs-item[data-act-id]');
       if (target) target.classList.remove('drag-over');
     });
     container.addEventListener('drop', function(e) {
       e.preventDefault();
-      var target = e.target.closest('.bs-item[data-act-id]');
+      var target = e.target.closest('.ta-bs-item[data-act-id]');
       if (!target || target === dragged || !dragged) return;
       target.classList.remove('drag-over');
       var parent = target.parentElement;
-      var items = Array.from(parent.querySelectorAll(':scope > .bs-item[data-act-id]'));
+      var items = Array.from(parent.querySelectorAll(':scope > .ta-bs-item[data-act-id]'));
       var draggedIdx = items.indexOf(dragged);
       var targetIdx = items.indexOf(target);
       if (draggedIdx < targetIdx) {
@@ -1015,7 +1233,7 @@ document.addEventListener('submit', function(e) {
         parent.insertBefore(dragged, target);
       }
       // Persist new order
-      var ids = Array.from(parent.querySelectorAll(':scope > .bs-item[data-act-id]')).map(function(el) { return el.dataset.actId; });
+      var ids = Array.from(parent.querySelectorAll(':scope > .ta-bs-item[data-act-id]')).map(function(el) { return el.dataset.actId; });
       fetch('/brief-state/reorder', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -1024,16 +1242,16 @@ document.addEventListener('submit', function(e) {
     });
   }
 
-  document.querySelectorAll('.bs-group-items').forEach(function(grp) {
+  document.querySelectorAll('.ta-bs-group-items').forEach(function(grp) {
     // Make items draggable
-    grp.querySelectorAll('.bs-item[data-act-id]').forEach(function(item) {
+    grp.querySelectorAll('.ta-bs-item[data-act-id]').forEach(function(item) {
       item.setAttribute('draggable', 'true');
     });
     initDragGroup(grp);
   });
 
   // Always start closed — browser restore can re-open these after form submissions
-  document.querySelectorAll('details.ops-overflow').forEach(function(d) {
+  document.querySelectorAll('details.ta-ops-drawer').forEach(function(d) {
     d.removeAttribute('open');
   });
 })();
@@ -1043,26 +1261,26 @@ document.addEventListener('submit', function(e) {
 """
 
 _HOME_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
-  <span class="spinner"></span>
+<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+  <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
 </div>
 {% endif %}
 
-<div class="stats">
-  <div class="stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
-  <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","transcript")|list|length }}</div><div class="lbl">Transcripts</div></div>
-  <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","notes")|list|length }}</div><div class="lbl">Notes filed</div></div>
-  <div class="stat"><div class="val">{{ rows|selectattr("mode","eq","synthesis")|list|length }}</div><div class="lbl">Syntheses</div></div>
-  <div class="stat"><div class="val">${{ "%.2f"|format(total_cost) }}</div><div class="lbl">Total cost</div></div>
+<div class="ta-stats">
+  <div class="ta-stat"><div class="val">{{ rows|selectattr("mode","ne","synthesis")|list|length }}</div><div class="lbl">Total analyzed</div></div>
+  <div class="ta-stat"><div class="val">{{ rows|selectattr("mode","eq","transcript")|list|length }}</div><div class="lbl">Transcripts</div></div>
+  <div class="ta-stat"><div class="val">{{ rows|selectattr("mode","eq","notes")|list|length }}</div><div class="lbl">Notes filed</div></div>
+  <div class="ta-stat"><div class="val">{{ rows|selectattr("mode","eq","synthesis")|list|length }}</div><div class="lbl">Syntheses</div></div>
+  <div class="ta-stat"><div class="val">${{ "%.2f"|format(total_cost) }}</div><div class="lbl">Total cost</div></div>
   {% if last_analyzed %}
-  <div class="stat"><div class="val" style="font-size:13px{% if last_analyzed_stale == 'danger' %};color:var(--red){% elif last_analyzed_stale == 'warn' %};color:var(--orange){% endif %}">{{ last_analyzed }}</div><div class="lbl">Last analyzed</div></div>
+  <div class="ta-stat"><div class="val" style="font-size:13px{% if last_analyzed_stale == 'danger' %};color:var(--slds-g-color-error-2,#c23934){% elif last_analyzed_stale == 'warn' %};color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ last_analyzed }}</div><div class="lbl">Last analyzed</div></div>
   {% endif %}
 </div>
 
-<div class="card">
+<div class="ta-card">
   <h2>Analyzed files — most recent 25 of {{ rows|length }}</h2>
   {% if rows %}
   <table>
@@ -1074,127 +1292,127 @@ _HOME_BODY = """\
     <tbody>
     {% for r in rows[:25] %}
     <tr>
-      <td class="muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
       <td class="td-source">
         {% if r.mode == "synthesis" %}
-          <a class="quick-link" href="/open-file?path={{ analyzed_path }}/{{ r.output }}" title="{{ r.source }}">{{ r.output }}</a>
+          <a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ r.output }}" title="{{ r.source }}">{{ r.output }}</a>
         {% else %}
           <span title="{{ r.source }}">{{ r.output or r.source }}</span>
         {% endif %}
       </td>
       <td>
         {% if r.mode == "notes" %}
-          <span class="badge badge-notes">notes</span>
+          <span class="ta-badge ta-badge-notes">notes</span>
         {% elif r.category %}
-          <span class="badge badge-{{ r.category|lower }}">{{ r.category }}</span>
+          <span class="ta-badge ta-badge-{{ r.category|lower }}">{{ r.category }}</span>
         {% endif %}
       </td>
-      <td class="muted">{{ r.model or "—" }}</td>
-      <td class="muted">${{ "%.3f"|format(r.cost) }}</td>
-      <td>{% if r.shareable %}<span style="color:var(--green)">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="ta-muted">{{ r.model or "—" }}</td>
+      <td class="ta-muted">${{ "%.3f"|format(r.cost) }}</td>
+      <td>{% if r.shareable %}<span style="color:var(--slds-g-color-success-2,#2e844a)">✓</span>{% else %}<span class="ta-muted">—</span>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
   {% if rows|length > 25 %}
-  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
-    Showing 25 of {{ rows|length }} files — open <a class="quick-link" style="font-size:12px" href="{{ analyzed_path_url }}">Analyzed/</a> in Finder for the full history.
+  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--slds-g-color-border-1,#e5e5e5);font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b)">
+    Showing 25 of {{ rows|length }} files — open <a class="ta-quick-link" style="font-size:12px" href="{{ analyzed_path_url }}">Analyzed/</a> in Finder for the full history.
   </div>
   {% endif %}
   {% else %}
-  <div style="padding:24px 0;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted)">
+  <div style="padding:24px 0;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--slds-g-color-on-surface-4,#706e6b)">
     <span style="font-size:28px;opacity:0.4">⏳</span>
     <span style="font-size:13px">No analyzed files yet</span>
-    <span style="font-size:12px;max-width:340px;text-align:center;opacity:0.7">Drop transcripts into the Call Transcripts inbox and hit <strong style="color:var(--text)">Run Analysis</strong> on Brief State.</span>
+    <span style="font-size:12px;max-width:340px;text-align:center;opacity:0.7">Drop transcripts into the Call Transcripts inbox and hit <strong style="color:var(--slds-g-color-on-surface-2,#181818)">Run Analysis</strong> on Brief State.</span>
   </div>
   {% endif %}
 </div>
 """
 
 _SETTINGS_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
 
 <form method="post" action="/settings">
-<div class="card" style="height:100%">
+<div class="ta-card" style="height:100%">
   <h2>Configuration</h2>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6">
-    Saved to <code class="code-inline">~/.config/transcript-analyzer/.env</code>.
+  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:20px;line-height:1.6">
+    Saved to <code class="ta-code-inline">~/.config/transcript-analyzer/.env</code>.
     Restart server for changes to take effect.
   </p>
 
   {% for key, label, kind, desc in fields %}
-  <div class="field">
+  <div class="ta-field">
     <label>{{ label }}</label>
     {% if kind == "toggle" %}
-    <div class="toggle-row">
-      <label class="toggle">
+    <div class="ta-toggle-row">
+      <label class="ta-toggle">
         <input type="checkbox" name="{{ key }}" {% if vals.get(key,'').lower() in ('1','true','yes','on') %}checked{% endif %}>
-        <span class="slider"></span>
+        <span class="ta-slider"></span>
       </label>
-      <span class="desc" style="margin:0">{{ desc }}</span>
+      <span style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin:0">{{ desc }}</span>
     </div>
     {% else %}
     <input type="{{ kind }}" name="{{ key }}" value="{{ vals.get(key,'') }}" placeholder="{{ desc[:60] }}">
-    <div class="desc">{{ desc }}</div>
+    <div class="ta-field .desc">{{ desc }}</div>
     {% endif %}
   </div>
   {% endfor %}
 
   <div style="padding-top:4px">
-    <button type="submit">Save settings</button>
+    <button type="submit" class="ta-btn">Save settings</button>
   </div>
 </div>
 </form>
 
 <div style="display:flex;flex-direction:column;gap:20px">
 
-<div class="card">
+<div class="ta-card">
   <h2>Content files</h2>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Drive files — opens in your default editor.</p>
+  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:16px">Drive files — opens in your default editor.</p>
   {% for label, path in drive_files %}
-  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-    <a class="quick-link" href="/open-file?path={{ path }}" style="display:flex;flex-direction:column;gap:2px">
+  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--slds-g-color-border-1,#e5e5e5)">
+    <a class="ta-quick-link" href="/open-file?path={{ path }}" style="display:flex;flex-direction:column;gap:2px">
       <span style="font-weight:600;font-size:13px">{{ label }}</span>
-      <span class="muted" style="font-size:11px;font-family:'SF Mono',monospace">{{ path }}</span>
+      <span class="ta-muted" style="font-size:11px;font-family:'SF Mono',monospace">{{ path }}</span>
     </a>
   </div>
   {% endfor %}
   <div style="margin-top:-2px;padding-top:0;border-top:none"></div>
 </div>
 
-<div class="card">
+<div class="ta-card">
   <h2>Diagnostics</h2>
   <div style="margin-bottom:16px">
-    <a class="quick-link" href="/open-log" style="font-size:13px;font-weight:600">Open run log</a>
-    <div style="font-size:11px;color:var(--muted);font-family:'SF Mono',monospace;margin-top:3px">{{ log_path }}</div>
+    <a class="ta-quick-link" href="/open-log" style="font-size:13px;font-weight:600">Open run log</a>
+    <div style="font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b);font-family:'SF Mono',monospace;margin-top:3px">{{ log_path }}</div>
   </div>
-  <div style="padding-top:14px;border-top:1px solid var(--border)">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px">Server</div>
+  <div style="padding-top:14px;border-top:1px solid var(--slds-g-color-border-1,#e5e5e5)">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:10px">Server</div>
     <form method="post" action="/restart" style="display:inline"
           onsubmit="return confirm('Restart the dashboard server? This reloads code and .env changes. Any in-progress job will block the restart.');">
-      <button type="submit" class="btn-secondary">↻ Restart server</button>
+      <button type="submit" class="ta-btn ta-btn-secondary">↻ Restart server</button>
     </form>
-    <div class="desc" style="margin-top:8px">Re-execs in place to pick up code or <code class="code-inline">.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
+    <div style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-top:8px">Re-execs in place to pick up code or <code class="ta-code-inline">.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
   </div>
 </div>
 
-<div class="card">
+<div class="ta-card">
   <h2>Program order</h2>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:12px;line-height:1.5">
     Drag to reorder. Controls grouping order across Brief State sections. Takes effect immediately.
   </p>
   <div id="prog-order-list" style="display:flex;flex-direction:column;gap:4px">
     {% for key in prog_order %}
     <div class="prog-order-item" data-key="{{ key }}" draggable="true"
-         style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;cursor:grab;font-size:12px;user-select:none">
-      <span style="color:var(--muted);font-size:14px">⠿</span>
+         style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--slds-g-color-surface-2,#f3f3f3);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:var(--slds-g-radius-border-2,0.25rem);cursor:grab;font-size:12px;user-select:none">
+      <span style="color:var(--slds-g-color-border-2,#c9c7c5);font-size:14px">⠿</span>
       <span>{{ key }}</span>
     </div>
     {% endfor %}
   </div>
-  <p style="margin-top:10px;font-size:11px;color:var(--muted)">New programs not in this list appear at the bottom.</p>
+  <p style="margin-top:10px;font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b)">New programs not in this list appear at the bottom.</p>
 </div>
 
 </div><!-- right column -->
@@ -1203,76 +1421,76 @@ _SETTINGS_BODY = """\
 
 
 _RUN_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
-  <span class="spinner"></span>
+<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+  <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> The page will refresh when done.
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="action-tier">
-    <span class="action-tier-label">Daily</span>
-    <div class="action-group">
+<div class="ta-card">
+  <div class="ta-action-tier">
+    <span class="ta-action-tier-label">Daily</span>
+    <div class="ta-action-group">
       <form method="post" action="/run-analysis" onsubmit="startPoll('Running transcript analysis…')">
-        <button type="submit">⚡ Run Analysis</button>
+        <button type="submit" class="ta-btn">⚡ Run Analysis</button>
       </form>
     </div>
-    <div class="action-group">
+    <div class="ta-action-group">
       <form method="post" action="/synthesize" onsubmit="startPoll('Running Daily Pulse synthesis…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="daily">
-        <button type="submit" class="btn-daily-pulse">▶ Daily Pulse</button>
-        <label class="sr-only" for="daily-date">Back-date (optional)</label>
+        <button type="submit" class="ta-btn ta-btn-daily-pulse">▶ Daily Pulse</button>
+        <label class="ta-sr-only" for="daily-date">Back-date (optional)</label>
         <input type="date" id="daily-date" name="date" title="Leave blank for today; pick a past date to back-date">
       </form>
     </div>
   </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Periodic</span>
-    <div class="action-group">
+  <div class="ta-action-tier">
+    <span class="ta-action-tier-label">Periodic</span>
+    <div class="ta-action-group">
       <form method="post" action="/synthesize" onsubmit="startPoll('Running Weekly Delta synthesis…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="weekly">
-        <button type="submit" class="btn-periodic">▶ {% if last_weekly and last_weekly.bdays and last_weekly.bdays > 8 %}Weekly Delta ({{ last_weekly.bdays }}d catch-up){% else %}Weekly Delta{% endif %}</button>
-        <label class="sr-only" for="weekly-date">Week anchor date (optional)</label>
+        <button type="submit" class="ta-btn ta-btn-periodic">▶ {% if last_weekly and last_weekly.bdays and last_weekly.bdays > 8 %}Weekly Delta ({{ last_weekly.bdays }}d catch-up){% else %}Weekly Delta{% endif %}</button>
+        <label class="ta-sr-only" for="weekly-date">Week anchor date (optional)</label>
         <input type="date" id="weekly-date" name="date" title="Leave blank for this week">
         {% if last_weekly %}
           {% if last_weekly.label and last_weekly.bdays and last_weekly.bdays > 5 %}
-          <span class="weekly-nudge weekly-nudge-orange" title="Last weekly was {{ last_weekly.label }}">Last: {{ last_weekly.label }}</span>
+          <span class="ta-weekly-nudge ta-weekly-nudge-orange" title="Last weekly was {{ last_weekly.label }}">Last: {{ last_weekly.label }}</span>
           {% elif not last_weekly.label %}
-          <span class="weekly-nudge weekly-nudge-muted">Not yet run</span>
+          <span class="ta-weekly-nudge ta-weekly-nudge-muted">Not yet run</span>
           {% endif %}
         {% endif %}
       </form>
     </div>
-    <div class="action-group">
+    <div class="ta-action-group">
       <form method="post" action="/synthesize" onsubmit="startPoll('Running catch-up — one pulse per backlog day…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="catch-up">
-        <button type="submit" class="btn-periodic">▶ Catch Up</button>
-        <label class="sr-only" for="catchup-since">Since date (optional)</label>
+        <button type="submit" class="ta-btn ta-btn-periodic">▶ Catch Up</button>
+        <label class="ta-sr-only" for="catchup-since">Since date (optional)</label>
         <input type="date" id="catchup-since" name="since" title="Start from this date (leave blank for full backlog)">
       </form>
     </div>
   </div>
-  <div class="action-tier">
-    <span class="action-tier-label">Rare</span>
-    <div class="action-group">
+  <div class="ta-action-tier">
+    <span class="ta-action-tier-label">Rare</span>
+    <div class="ta-action-group">
       <form method="post" action="/synthesize" id="career-form"
             onsubmit="return careerSubmit(this, startPoll)" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="career">
-        <button type="submit" id="career-btn" class="btn-rare">▶ Career</button>
-        <label style="font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:4px"
+        <button type="submit" id="career-btn" class="ta-btn ta-btn-rare">▶ Career</button>
+        <label style="font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b);display:inline-flex;align-items:center;gap:4px"
                title="Re-read ALL analyses to re-baseline. Off = incremental.">
           <input type="checkbox" name="full" value="1" id="career-full"
-                 onchange="document.getElementById('career-btn').classList.toggle('career-full-active',this.checked)"> full
+                 onchange="document.getElementById('career-btn').classList.toggle('ta-career-full-active',this.checked)"> full
         </label>
       </form>
     </div>
-    <div class="action-group">
+    <div class="ta-action-group">
       <form method="post" action="/synthesize" onsubmit="startPoll('Compiling Weekly Timecard…')" style="display:flex;gap:6px;align-items:center">
         <input type="hidden" name="mode" value="timecard">
-        <button type="submit" class="btn-rare">▶ Timecard</button>
-        <label class="sr-only" for="timecard-date">Week date (optional)</label>
+        <button type="submit" class="ta-btn ta-btn-rare">▶ Timecard</button>
+        <label class="ta-sr-only" for="timecard-date">Week date (optional)</label>
         <input type="date" id="timecard-date" name="date" title="Leave blank for current week">
       </form>
     </div>
@@ -1281,7 +1499,7 @@ _RUN_BODY = """\
 
 <div id="job-status" {% if not job_running %}style="display:none"{% endif %}>
   <h3>
-    <span id="job-indicator"><span class="spinner"></span> Running {{ job_label or "job" }}…</span>
+    <span id="job-indicator"><span class="ta-spinner"></span> Running {{ job_label or "job" }}…</span>
     <span id="job-done" style="display:none">Done — refreshing…</span>
   </h3>
   <div id="job-output" role="log" aria-live="polite" aria-label="Job output">{{ job_output }}</div>
@@ -1289,10 +1507,10 @@ _RUN_BODY = """\
 """
 
 _BRIEF_STATE_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="flash" style="background:var(--bg-job-run);color:var(--accent);display:flex;align-items:center;gap:8px">
-  <span class="spinner"></span>
+<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+  <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> The page will refresh when done.
 </div>
 {% endif %}
@@ -1300,13 +1518,13 @@ _BRIEF_STATE_BODY = """\
 {# ── P0 BRIEF BANNER: overdue acts surfaced before anything else ── #}
 {% set overdue_acts = act_items | selectattr('overdue') | list %}
 {% if overdue_acts %}
-<div class="bs-brief-banner" role="region" aria-label="Overdue obligations">
-  <div class="bs-brief-banner-icon">🔴</div>
-  <div class="bs-brief-banner-body">
-    <div class="bs-brief-banner-title">{{ overdue_acts|length }} overdue act{{ 's' if overdue_acts|length != 1 else '' }} — action required</div>
-    <ul class="bs-brief-banner-items">
+<div class="ta-bs-brief-banner" role="region" aria-label="Overdue obligations">
+  <div class="ta-bs-brief-banner-icon">🔴</div>
+  <div class="ta-bs-brief-banner-body">
+    <div class="ta-bs-brief-banner-title">{{ overdue_acts|length }} overdue act{{ 's' if overdue_acts|length != 1 else '' }} — action required</div>
+    <ul class="ta-bs-brief-banner-items">
       {% for item in overdue_acts %}
-      <li>{{ item.text }}{% if item.days_overdue %} <span class="badge badge-overdue" style="font-size:10px">{{ item.days_overdue }}d overdue</span>{% endif %}</li>
+      <li>{{ item.text }}{% if item.days_overdue %} <span class="ta-badge ta-badge-overdue" style="font-size:10px">{{ item.days_overdue }}d overdue</span>{% endif %}</li>
       {% endfor %}
     </ul>
   </div>
@@ -1315,23 +1533,23 @@ _BRIEF_STATE_BODY = """\
 
 {# ── MACRO: render one act item row (used in both Focus and grouped sections) ── #}
 {% macro act_row(item, show_pin=true) %}
-<div class="bs-item{% if item.overdue %} bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
-  <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
-  <div class="bs-body">
-    <div class="bs-text">
-      {% if item.overdue %}<span class="badge badge-overdue">OVERDUE</span> {% endif %}
-      {% if item.loe %}<span class="badge" style="background:var(--bg-alt);color:var(--fg-muted);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span> {% endif %}
+<div class="ta-bs-item{% if item.overdue %} ta-bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} ta-bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
+  <span class="ta-drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
+  <div class="ta-bs-body">
+    <div class="ta-bs-text">
+      {% if item.overdue %}<span class="ta-badge ta-badge-overdue">OVERDUE</span> {% endif %}
+      {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span> {% endif %}
       {{ item.text }}
-      {% if item.source_pulse %}<a href="#" class="quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
+      {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
     </div>
-    <div class="bs-meta">
+    <div class="ta-bs-meta">
       {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
       From {{ item.source_brief[:10] if item.source_brief else '—' }}
       {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
     </div>
     {% if not item.program %}
-    <form method="post" action="/brief-state/assign-program/{{ item.id }}" class="inline-program-form">
-      <select name="program" class="btn-secondary btn-sm" style="padding:2px 5px;font-size:11px;max-width:160px" onchange="this.form.submit()">
+    <form method="post" action="/brief-state/assign-program/{{ item.id }}" class="ta-inline-program-form">
+      <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 5px;font-size:11px;max-width:160px" onchange="this.form.submit()">
         <option value="">assign program…</option>
         {% for p in programs %}
         <option value="{{ p.key }}">{{ p.label }}</option>
@@ -1339,62 +1557,62 @@ _BRIEF_STATE_BODY = """\
       </select>
     </form>
     {% endif %}
-    {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+    {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
   </div>
-  <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+  <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
     <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
       <form method="post" action="/brief-state/close/{{ item.id }}">
         <input type="hidden" name="status" value="complete">
-        <button type="submit" class="btn-secondary btn-sm" data-act-action="done">Done</button>
+        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" data-act-action="done">Done</button>
       </form>
       <form method="post" action="/brief-state/close/{{ item.id }}"
             onsubmit="return confirm('Drop this item? It will be marked dropped.');">
         <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="btn-destructive btn-sm" data-act-action="drop">Drop</button>
+        <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm" data-act-action="drop">Drop</button>
       </form>
-      <span class="bs-defer-sep"></span>
-      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
-      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
-      <button type="button" class="btn-secondary btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
-      <details class="ops-overflow" style="display:inline-block;position:relative">
-        <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-        <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+      <span class="ta-bs-defer-sep"></span>
+      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
+      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
+      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
+      <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+        <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+        <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
           <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-            <label class="sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
+            <label class="ta-sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
             <input type="hidden" name="return_to" value="inbox">
             <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
-            <button type="submit" class="btn-secondary btn-sm">Defer</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Defer</button>
           </form>
           <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
             <input type="hidden" name="return_to" value="inbox">
-            <select name="loe" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+            <select name="loe" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
               <option value="">LoE…</option>
               <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S — small (&lt;2h)</option>
               <option value="M" {% if item.loe == 'M' %}selected{% endif %}>M — medium (half day)</option>
               <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L — large (multi-day)</option>
             </select>
-            <button type="submit" class="btn-secondary btn-sm">Set</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Set</button>
           </form>
           <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
             <input type="hidden" name="return_to" value="inbox">
-            <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+            <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
               <option value="">Clear program</option>
               {% for p in programs %}
               <option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>
               {% endfor %}
             </select>
-            <button type="submit" class="btn-secondary btn-sm">Assign</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
           </form>
           {% if show_pin %}
           {% if item.pinned %}
           <form method="post" action="/brief-state/unpin/{{ item.id }}">
             <input type="hidden" name="return_to" value="inbox">
-            <button type="submit" class="btn-secondary btn-sm" style="width:100%">☆ Unpin from Focus</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">☆ Unpin from Focus</button>
           </form>
           {% else %}
           <form method="post" action="/brief-state/pin/{{ item.id }}">
             <input type="hidden" name="return_to" value="inbox">
-            <button type="submit" class="btn-secondary btn-sm" style="width:100%">★ Pin to Today's Focus</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">★ Pin to Today's Focus</button>
           </form>
           {% endif %}
           {% endif %}
@@ -1407,10 +1625,10 @@ _BRIEF_STATE_BODY = """\
 
 {# ── TODAY'S FOCUS ── #}
 {% if pinned_acts %}
-<div class="card" style="border-color:var(--accent);border-width:2px">
+<div class="ta-card" style="border-color:var(--slds-g-color-brand-2,#0176d3);border-width:2px">
   <h2 style="display:flex;align-items:center;gap:8px">
-    <span style="color:var(--accent)">★</span> Today's Focus
-    <span class="badge" style="background:var(--accent);color:#000;font-size:10px">{{ pinned_acts|length }}</span>
+    <span style="color:var(--slds-g-color-brand-2,#0176d3)">★</span> Today's Focus
+    <span class="ta-badge" style="background:var(--slds-g-color-brand-2,#0176d3);color:#000;font-size:10px">{{ pinned_acts|length }}</span>
   </h2>
   {% for item in pinned_acts %}
   {{ act_row(item, show_pin=true) }}
@@ -1419,25 +1637,25 @@ _BRIEF_STATE_BODY = """\
 {% endif %}
 
 {# ── ACT ITEMS — grouped by program, each group collapsible ── #}
-<div class="card" style="{% if overdue_acts %}border-color:var(--border-alert){% endif %}">
+<div class="ta-card" style="{% if overdue_acts %}border-color:#fac9c9{% endif %}">
   <h2>Act items — Brad owns</h2>
   {% if act_groups %}
   {% for group in act_groups %}
   {% if act_groups|length > 1 %}
-  <details class="bs-group-section" open>
-    <summary class="bs-program-header bs-program-header-toggle">
-      <span class="bs-section-chevron">▶</span>
+  <details class="ta-bs-group-section" open>
+    <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+      <span class="ta-bs-section-chevron">▶</span>
       {{ group.label }}
-      <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.acts|length }}</span>
+      <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.acts|length }}</span>
     </summary>
-    <div class="bs-group-items" data-group-key="{{ group.key }}">
+    <div class="ta-bs-group-items" data-group-key="{{ group.key }}">
     {% for item in group.acts %}
     {{ act_row(item, show_pin=true) }}
     {% endfor %}
     </div>
   </details>
   {% else %}
-  <div class="bs-group-items" data-group-key="{{ group.key }}">
+  <div class="ta-bs-group-items" data-group-key="{{ group.key }}">
   {% for item in group.acts %}
   {{ act_row(item, show_pin=true) }}
   {% endfor %}
@@ -1445,11 +1663,11 @@ _BRIEF_STATE_BODY = """\
   {% endif %}
   {% endfor %}
   {% if act_items|length >= 2 %}
-  <div class="kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
+  <div class="ta-kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
   {% endif %}
   {% else %}
-  <div class="bs-empty" style="display:flex;align-items:center;gap:8px">
-    <span style="color:var(--green);font-size:15px">✓</span>
+  <div class="ta-bs-empty" style="display:flex;align-items:center;gap:8px">
+    <span style="color:var(--slds-g-color-success-2,#2e844a);font-size:15px">✓</span>
     All clear — no pending acts.
   </div>
   {% endif %}
@@ -1459,80 +1677,80 @@ _BRIEF_STATE_BODY = """\
 {% if candidate_items %}
 {% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
 {% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
-<div class="card card-inbox" id="inbox">
+<div class="ta-card ta-card-inbox" id="inbox">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <h2 style="margin-bottom:0">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
     <form method="post" action="/brief-state/dismiss-all-candidates" style="display:inline"
           onsubmit="return confirm('Dismiss all {{ candidate_items|length }} candidate item{{ \'s\' if candidate_items|length != 1 else \'\'}}? They will be marked dismissed.');">
-      <button type="submit" class="btn-secondary btn-sm">Dismiss all</button>
+      <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss all</button>
     </form>
   </div>
   {% if urgent_items %}
-  <div class="inbox-urgent-header">⚠ {{ urgent_items|length }} urgent — action required</div>
+  <div class="ta-inbox-urgent-header">⚠ {{ urgent_items|length }} urgent — action required</div>
   {% for item in urgent_items %}
-  <div class="bs-item bs-item-urgent">
-    <div class="bs-body">
-      <div class="bs-text">
-        <span class="badge badge-act" style="background:var(--bg-alert);color:var(--red)">URGENT</span>
+  <div class="ta-bs-item ta-bs-item-urgent">
+    <div class="ta-bs-body">
+      <div class="ta-bs-text">
+        <span class="ta-badge ta-badge-act" style="background:#fff5f5;color:var(--slds-g-color-error-2,#c23934)">URGENT</span>
         {{ item.text }}
       </div>
-      <div class="bs-meta">
+      <div class="ta-bs-meta">
         From {{ item.source_analyzed or '—' }}
         {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
         {% if item.program %} · {{ item.program }}{% endif %}
       </div>
     </div>
-    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+    <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
       <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
         <input type="hidden" name="type" value="act">
-        <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
+        <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
           <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
           {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
         </select>
-        <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--red);color:var(--red)">Accept</button>
+        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-error-2,#c23934);color:var(--slds-g-color-error-2,#c23934)">Accept</button>
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
             onsubmit="return confirm('Dismiss this urgent item?');">
-        <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
+        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
       </form>
     </div>
   </div>
   {% endfor %}
   {% endif %}
   {% if normal_items %}
-  {% if urgent_items %}<div class="inbox-normal-header">Signals</div>{% endif %}
+  {% if urgent_items %}<div class="ta-inbox-normal-header">Signals</div>{% endif %}
   {% for item in normal_items %}
-  <div class="bs-item">
-    <div class="bs-body">
-      <div class="bs-text">
-        <span class="badge badge-{{ item.type }}">{{ item.type }}</span>
-        {% if item.owner and item.owner != "Brad" %}<span class="muted" style="font-size:11px"> {{ item.owner }} owes</span>{% endif %}
+  <div class="ta-bs-item">
+    <div class="ta-bs-body">
+      <div class="ta-bs-text">
+        <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
+        {% if item.owner and item.owner != "Brad" %}<span class="ta-muted" style="font-size:11px"> {{ item.owner }} owes</span>{% endif %}
         {{ item.text }}
       </div>
-      <div class="bs-meta">
+      <div class="ta-bs-meta">
         From {{ item.source_analyzed or '—' }}
         {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
         {% if item.program %} · {{ item.program }}{% endif %}
       </div>
     </div>
-    <div class="bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
+    <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
       <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
-        <select name="type" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+        <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
           <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
           <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
           <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
           <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
           <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
         </select>
-        <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
+        <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
           <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
           {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
         </select>
-        <button type="submit" class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)">Accept</button>
+        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-warning-2,#dd7a01);color:var(--slds-g-color-warning-2,#dd7a01)">Accept</button>
       </form>
       <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
             onsubmit="return confirm('Dismiss this candidate item?');">
-        <button type="submit" class="btn-secondary btn-sm">Dismiss</button>
+        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
       </form>
     </div>
   </div>
@@ -1546,24 +1764,24 @@ _BRIEF_STATE_BODY = """\
 {% set total = namespace(n=0) %}
 {% for g in groups %}{% set total.n = total.n + g[item_key]|length %}{% endfor %}
 {% if total.n > 0 %}
-<div class="card" id="{{ section_id }}">
-  <details class="bs-section">
+<div class="ta-card" id="{{ section_id }}">
+  <details class="ta-bs-section">
     <summary>
-      <span class="bs-section-chevron">▶</span>
+      <span class="ta-bs-section-chevron">▶</span>
       {{ title }}
-      <span class="badge {{ badge_class }}" style="margin-left:4px">{{ total.n }}</span>
+      <span class="ta-badge {{ badge_class }}" style="margin-left:4px">{{ total.n }}</span>
     </summary>
     {% for group in groups %}
-    <details class="bs-group-section" open>
-      <summary class="bs-program-header bs-program-header-toggle">
-        <span class="bs-section-chevron">▶</span>
+    <details class="ta-bs-group-section" open>
+      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+        <span class="ta-bs-section-chevron">▶</span>
         {{ group.label }}
-        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group[item_key]|length }}</span>
+        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group[item_key]|length }}</span>
         <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
           {% for item in group[item_key] %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="{{ mass_close_status }}">
           <input type="hidden" name="anchor" value="{{ section_id }}">
-          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
                   onclick="return confirm('Mark all {{ group[item_key]|length }} {{ group.label }} items as {{ mass_close_status }}?')">
             ✓ All {{ mass_close_label }}
           </button>
@@ -1579,59 +1797,59 @@ _BRIEF_STATE_BODY = """\
 
 {# ── WATCH ── #}
 {% if watch_groups %}
-<div class="card" id="watch-section">
-  <details class="bs-section">
+<div class="ta-card" id="watch-section">
+  <details class="ta-bs-section">
     <summary>
-      <span class="bs-section-chevron">▶</span>
+      <span class="ta-bs-section-chevron">▶</span>
       Watch
-      <span class="badge badge-watch" style="margin-left:4px">{{ watch_items|length }}</span>
+      <span class="ta-badge ta-badge-watch" style="margin-left:4px">{{ watch_items|length }}</span>
     </summary>
     {% for group in watch_groups %}
-    <details class="bs-group-section" open>
-      <summary class="bs-program-header bs-program-header-toggle">
-        <span class="bs-section-chevron">▶</span>
+    <details class="ta-bs-group-section" open>
+      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+        <span class="ta-bs-section-chevron">▶</span>
         {{ group.label }}
-        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
         <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
           {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
           <input type="hidden" name="anchor" value="watch-section">
-          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
                   onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} watch items as done?')">✓ All done</button>
         </form>
       </summary>
       {% for item in group.rows %}
-      <div class="bs-item" data-act-id="{{ item.id }}">
-        <div class="bs-body">
-          <div class="bs-text">{{ item.text }}</div>
-          <div class="bs-meta">
+      <div class="ta-bs-item" data-act-id="{{ item.id }}">
+        <div class="ta-bs-body">
+          <div class="ta-bs-text">{{ item.text }}</div>
+          <div class="ta-bs-meta">
             From {{ item.source_brief[:10] if item.source_brief else '—' }}
             {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
           </div>
-          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
         </div>
-        <div class="bs-actions">
+        <div class="ta-bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="watch-section">
-            <button type="submit" class="btn-secondary btn-sm">Done</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Done</button>
           </form>
           <form method="post" action="/brief-state/close/{{ item.id }}"
                 onsubmit="return confirm('Drop this watch item?');">
             <input type="hidden" name="status" value="dropped">
             <input type="hidden" name="return_to" value="watch-section">
-            <button type="submit" class="btn-destructive btn-sm">Drop</button>
+            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Drop</button>
           </form>
-          <details class="ops-overflow" style="display:inline-block;position:relative">
-            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
                 <input type="hidden" name="return_to" value="watch-section">
-                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
                 </select>
-                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
               </form>
             </div>
           </details>
@@ -1646,59 +1864,59 @@ _BRIEF_STATE_BODY = """\
 
 {# ── DELEGATED ── #}
 {% if delegate_items %}
-<div class="card" id="delegate-section">
-  <details class="bs-section">
+<div class="ta-card" id="delegate-section">
+  <details class="ta-bs-section">
     <summary>
-      <span class="bs-section-chevron">▶</span>
+      <span class="ta-bs-section-chevron">▶</span>
       Delegated
-      <span class="badge badge-delegate" style="margin-left:4px">{{ delegate_items|length }}</span>
+      <span class="ta-badge ta-badge-delegate" style="margin-left:4px">{{ delegate_items|length }}</span>
     </summary>
     {% for group in delegate_groups %}
-    <details class="bs-group-section" open>
-      <summary class="bs-program-header bs-program-header-toggle">
-        <span class="bs-section-chevron">▶</span>
+    <details class="ta-bs-group-section" open>
+      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+        <span class="ta-bs-section-chevron">▶</span>
         {{ group.label }}
-        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
         <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
           {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
           <input type="hidden" name="anchor" value="delegate-section">
-          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
                   onclick="return confirm('Confirm all {{ group.rows|length }} {{ group.label }} delegated items done?')">✓ All confirmed</button>
         </form>
       </summary>
       {% for item in group.rows %}
-      <div class="bs-item" data-act-id="{{ item.id }}">
-        <div class="bs-body">
-          <div class="bs-text">{{ item.text }}</div>
-          <div class="bs-meta">
+      <div class="ta-bs-item" data-act-id="{{ item.id }}">
+        <div class="ta-bs-body">
+          <div class="ta-bs-text">{{ item.text }}</div>
+          <div class="ta-bs-meta">
             Owner: <strong>{{ item.owner }}</strong>
             {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
             {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
             {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
           </div>
-          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
         </div>
-        <div class="bs-actions">
+        <div class="ta-bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="delegate-section">
-            <button type="submit" class="btn-secondary btn-sm">Confirmed done</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Confirmed done</button>
           </form>
           <form method="post" action="/brief-state/re-own/{{ item.id }}">
             <input type="hidden" name="return_to" value="delegate-section">
-            <button type="submit" class="btn-destructive btn-sm">Re-own</button>
+            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Re-own</button>
           </form>
-          <details class="ops-overflow" style="display:inline-block;position:relative">
-            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
                 <input type="hidden" name="return_to" value="delegate-section">
-                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
                 </select>
-                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
               </form>
             </div>
           </details>
@@ -1713,59 +1931,59 @@ _BRIEF_STATE_BODY = """\
 
 {# ── THEY OWE YOU ── #}
 {% if they_owe_items %}
-<div class="card" id="they-owe-section">
-  <details class="bs-section">
+<div class="ta-card" id="they-owe-section">
+  <details class="ta-bs-section">
     <summary>
-      <span class="bs-section-chevron">▶</span>
+      <span class="ta-bs-section-chevron">▶</span>
       They owe you
-      <span class="badge badge-they-owe" style="margin-left:4px">{{ they_owe_items|length }}</span>
+      <span class="ta-badge ta-badge-they-owe" style="margin-left:4px">{{ they_owe_items|length }}</span>
     </summary>
     {% for group in they_owe_groups %}
-    <details class="bs-group-section" open>
-      <summary class="bs-program-header bs-program-header-toggle">
-        <span class="bs-section-chevron">▶</span>
+    <details class="ta-bs-group-section" open>
+      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+        <span class="ta-bs-section-chevron">▶</span>
         {{ group.label }}
-        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
         <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
           {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
           <input type="hidden" name="status" value="complete">
           <input type="hidden" name="anchor" value="they-owe-section">
-          <button type="submit" class="btn-secondary btn-sm" style="font-size:10px;padding:2px 6px"
+          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
                   onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} items as received?')">✓ All received</button>
         </form>
       </summary>
       {% for item in group.rows %}
-      <div class="bs-item" data-act-id="{{ item.id }}">
-        <div class="bs-body">
-          <div class="bs-text">{{ item.text }}</div>
-          <div class="bs-meta">
+      <div class="ta-bs-item" data-act-id="{{ item.id }}">
+        <div class="ta-bs-body">
+          <div class="ta-bs-text">{{ item.text }}</div>
+          <div class="ta-bs-meta">
             <strong>{{ item.owner }}</strong>
-            {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--red)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
+            {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--slds-g-color-error-2,#c23934)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
             {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
           </div>
-          {% if item.notes %}<div class="bs-notes">{{ item.notes }}</div>{% endif %}
+          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
         </div>
-        <div class="bs-actions">
+        <div class="ta-bs-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="they-owe-section">
-            <button type="submit" class="btn-secondary btn-sm">Received</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Received</button>
           </form>
           <form method="post" action="/brief-state/close/{{ item.id }}">
             <input type="hidden" name="status" value="dropped">
             <input type="hidden" name="return_to" value="they-owe-section">
-            <button type="submit" class="btn-destructive btn-sm">Drop</button>
+            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Drop</button>
           </form>
-          <details class="ops-overflow" style="display:inline-block;position:relative">
-            <summary class="btn-secondary btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
                 <input type="hidden" name="return_to" value="they-owe-section">
-                <select name="program" class="btn-secondary btn-sm" style="padding:3px 6px;font-size:11px">
+                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
                   <option value="">Clear program</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
                 </select>
-                <button type="submit" class="btn-secondary btn-sm">Assign</button>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
               </form>
             </div>
           </details>
@@ -1780,19 +1998,19 @@ _BRIEF_STATE_BODY = """\
 
 {# ── CLOSED ── #}
 {% if recent_closed %}
-<div class="card" id="closed-section">
-  <details class="bs-section">
+<div class="ta-card" id="closed-section">
+  <details class="ta-bs-section">
     <summary>
-      <span class="bs-section-chevron">▶</span>
+      <span class="ta-bs-section-chevron">▶</span>
       Closed (last 7 days)
-      <span class="badge badge-complete" style="margin-left:4px">{{ recent_closed|length }}</span>
+      <span class="ta-badge ta-badge-complete" style="margin-left:4px">{{ recent_closed|length }}</span>
     </summary>
     {% for group in closed_groups %}
-    <details class="bs-group-section" open>
-      <summary class="bs-program-header bs-program-header-toggle">
-        <span class="bs-section-chevron">▶</span>
+    <details class="ta-bs-group-section" open>
+      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+        <span class="ta-bs-section-chevron">▶</span>
         {{ group.label }}
-        <span class="badge" style="margin-left:4px;font-size:10px;background:var(--bg-alt);color:var(--fg-muted)">{{ group.rows|length }}</span>
+        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
       </summary>
       <table style="margin-top:4px">
         <thead>
@@ -1802,12 +2020,12 @@ _BRIEF_STATE_BODY = """\
         {% for item in group.rows %}
         <tr>
           <td>{{ item.text }}</td>
-          <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
-          <td><span class="badge badge-{{ item.status }}">{{ item.status }}</span></td>
-          <td class="muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+          <td><span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span></td>
+          <td><span class="ta-badge ta-badge-{{ item.status }}">{{ item.status }}</span></td>
+          <td class="ta-muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
           <td>
             <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
-              <button type="submit" class="btn-secondary btn-sm">Reopen</button>
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Reopen</button>
             </form>
           </td>
         </tr>
@@ -1824,7 +2042,7 @@ _BRIEF_STATE_BODY = """\
 <div id="source-drawer">
   <div id="source-drawer-header">
     <span id="source-drawer-title">Source</span>
-    <button class="btn-secondary btn-sm" onclick="closeSourceDrawer()">✕ Close</button>
+    <button class="ta-btn ta-btn-secondary ta-btn-sm" onclick="closeSourceDrawer()">✕ Close</button>
   </div>
   <div id="source-drawer-body">
     <pre id="source-drawer-content"></pre>
@@ -1833,12 +2051,12 @@ _BRIEF_STATE_BODY = """\
 """
 
 _PREP_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
-<div class="card" id="meeting-prep-card">
+<div class="ta-card" id="meeting-prep-card">
   <h2>Meeting Prep</h2>
-  <p class="muted" style="font-size:12px;margin-bottom:14px">Select a program to generate a pre-meeting brief from its recent signals and open act items.</p>
-  <div class="prep-controls">
+  <p class="ta-muted" style="font-size:12px;margin-bottom:14px">Select a program to generate a pre-meeting brief from its recent signals and open act items.</p>
+  <div class="ta-prep-controls">
     <select id="prep-program" name="program">
       <option value="">Select program…</option>
       {% set ns = namespace(cur_group=None) %}
@@ -1856,26 +2074,26 @@ _PREP_BODY = """\
       {% if ns.cur_group is not none %}</optgroup>{% endif %}
     </select>
     <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
-    <button class="btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
-    <button class="btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
+    <button class="ta-btn ta-btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
+    <button class="ta-btn ta-btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
   </div>
   <div id="prep-output" style="display:none"></div>
 </div>
 """
 
 _SLACK_PASTE_BODY = """\
-{% if flash %}<div class="flash flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 
-<div class="card">
+<div class="ta-card">
   <h2>Paste Slack canvas</h2>
-  <p class="muted" style="margin-bottom:16px;font-size:12px">
+  <p class="ta-muted" style="margin-bottom:16px;font-size:12px">
     Paste your Slack canvas (markdown) below. It will be saved as a <code>.md</code>
     file directly into the <strong>Call Transcripts</strong> inbox so the next
     <em>Run Analysis</em> picks it up.
   </p>
 
   <form method="post" action="/slack-paste">
-    <div class="field" style="margin-bottom:12px">
+    <div class="ta-field" style="margin-bottom:12px">
       <label>Filename (no extension)</label>
       <input type="text" name="filename" value="{{ default_filename }}"
              placeholder="e.g. 2026-10-12 Slack Canvas"
@@ -1883,9 +2101,9 @@ _SLACK_PASTE_BODY = """\
       <div class="desc">Saved as <code>{{ inbox_path }}/&lt;filename&gt;.md</code></div>
     </div>
 
-    <div class="field">
+    <div class="ta-field">
       <label>Canvas content</label>
-      <textarea class="paste-area" name="content" placeholder="Paste your Slack canvas markdown here…"></textarea>
+      <textarea class="ta-paste-area" name="content" placeholder="Paste your Slack canvas markdown here…"></textarea>
     </div>
 
     <div style="margin-top:14px">

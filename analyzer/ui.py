@@ -303,6 +303,7 @@ _HTML = """\
 <script>
   (function() {
     var mode = localStorage.getItem('slds-ui-color-mode');
+    // Default is now light; only apply dark if explicitly stored
     if (mode === 'dark') document.documentElement.classList.add('slds-color-scheme_dark');
   })();
 </script>
@@ -654,14 +655,12 @@ _HTML = """\
   details.ta-bs-section[open] summary .ta-bs-section-chevron { transform: rotate(90deg); }
   details.ta-bs-section summary:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }
 
-  /* ── Drag-to-reorder ── */
+  /* ── Drag-to-reorder (program order list in Settings) ── */
   .ta-drag-handle {
     cursor: grab; color: var(--slds-g-color-border-2, #c9c7c5);
     font-size: 14px; padding: 0 6px 0 0; flex-shrink: 0; line-height: 1; user-select: none;
   }
   .ta-drag-handle:active { cursor: grabbing; }
-  .ta-bs-item.drag-over { outline: 2px dashed var(--slds-g-color-brand-2, #0176d3); outline-offset: -2px; }
-  .ta-bs-item.dragging { opacity: 0.4; }
   .ta-inline-program-form { margin-top: 4px; }
 
   /* ── Nav badge ── */
@@ -840,11 +839,11 @@ _HTML = """\
     white-space: pre-wrap; overflow-wrap: break-word;
   }
 
-  /* ── Keyboard focus ring for act items ── */
-  .ta-bs-item-focused {
-    border-left: 2px solid var(--slds-g-color-brand-2, #0176d3);
-    padding-left: 18px; margin-left: -20px;
-    padding-right: 20px; margin-right: -20px;
+  /* ── Keyboard focus ring for act items (act items are <tr>, so target td) ── */
+  .ta-bs-item-focused td:first-child {
+    border-left: 3px solid var(--slds-g-color-brand-2, #0176d3);
+  }
+  .ta-bs-item-focused td {
     background: rgba(1,118,211,0.05);
   }
   .ta-kb-hint {
@@ -904,6 +903,92 @@ _HTML = """\
   /* Job running banner */
   .ta-flash-info { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); border: 1px solid #b8d4f5; }
   .slds-color-scheme_dark .ta-flash-info { background: #0e2a45; color: #60b0f4; border-color: #1a4a70; }
+
+  /* ── Brief State record-page tabs ── */
+  .ta-bs-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    margin-bottom: 20px; background: var(--slds-g-color-surface-1, #fff);
+    position: sticky; top: 53px; z-index: 9;
+    padding: 0 0 0 0;
+  }
+  .ta-bs-tab {
+    padding: 12px 20px; font-size: var(--slds-g-font-scale-2, 0.875rem); font-weight: 400;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border: none; background: none; cursor: pointer;
+    border-bottom: 3px solid transparent; margin-bottom: -1px;
+    white-space: nowrap; display: flex; align-items: center; gap: 6px;
+    transition: color .1s;
+  }
+  .ta-bs-tab:hover { color: var(--slds-g-color-on-surface-2, #181818); }
+  .ta-bs-tab.active {
+    color: var(--slds-g-color-brand-2, #0176d3);
+    border-bottom-color: var(--slds-g-color-brand-2, #0176d3);
+    font-weight: 600;
+  }
+  .ta-bs-tab-count {
+    background: var(--slds-g-color-surface-2, #f3f3f3);
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+  }
+  .ta-bs-tab.active .ta-bs-tab-count {
+    background: #daeaf8; color: var(--slds-g-color-brand-2, #0176d3);
+  }
+  .ta-bs-tab-count.urgent { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); }
+  .ta-bs-panel { display: none; }
+  .ta-bs-panel.active { display: block; }
+
+  /* ── Related-list table inside Brief State ── */
+  .ta-rl { width: 100%; border-collapse: collapse; }
+  .ta-rl thead tr { background: var(--slds-g-color-surface-2, #f3f3f3); }
+  .ta-rl th {
+    text-align: left; padding: 6px 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border-bottom: 1px solid var(--slds-g-color-border-2, #c9c7c5);
+    white-space: nowrap;
+  }
+  .ta-rl td {
+    padding: 10px 12px; vertical-align: top;
+    border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.4;
+  }
+  .ta-rl tr:last-child td { border-bottom: none; }
+  .ta-rl tbody tr:hover { background: rgba(1,118,211,0.03); }
+  .ta-rl-overdue td { background: rgba(194,57,52,0.04); }
+  .ta-rl-due-soon td { background: rgba(221,122,1,0.04); }
+  .ta-rl-item-text { max-width: 520px; overflow-wrap: break-word; word-break: break-word; }
+  .ta-rl-item-text .ta-bs-text-toggle { font-size: 11px; color: var(--slds-g-color-brand-2, #0176d3); background: none; border: none; padding: 0; cursor: pointer; margin-left: 4px; }
+  .ta-rl-actions { white-space: nowrap; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+  .ta-rl-meta { font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b); margin-top: 2px; }
+  .ta-rl-section-header {
+    background: var(--slds-g-color-surface-1, #fff);
+    padding: 10px 12px 6px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+  }
+  .ta-rl-view-all {
+    display: block; text-align: center; padding: 10px;
+    font-size: 12px; color: var(--slds-g-color-brand-2, #0176d3);
+    border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    cursor: pointer; background: none; border-left: none; border-right: none; border-bottom: none;
+    width: 100%; text-decoration: none;
+  }
+  .ta-rl-view-all:hover { background: var(--slds-g-color-surface-2, #f3f3f3); text-decoration: none; }
+  .ta-rl-empty {
+    padding: 20px 12px; text-align: center;
+    color: var(--slds-g-color-on-surface-4, #706e6b);
+    font-size: var(--slds-g-font-scale-2, 0.875rem);
+  }
+  .ta-rl-inbox-row td { background: #fffdf0; }
+  .ta-rl-inline-accept { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+
+  /* Dark mode for tabs + related-list */
+  .slds-color-scheme_dark .ta-bs-tabs { background: var(--slds-g-color-surface-1); border-bottom-color: var(--slds-g-color-border-2); }
+  .slds-color-scheme_dark .ta-rl thead tr { background: var(--slds-g-color-surface-2); }
+  .slds-color-scheme_dark .ta-rl-inbox-row td { background: #2a2100; }
+  .slds-color-scheme_dark .ta-rl tbody tr:hover { background: rgba(100,160,255,0.04); }
+  .slds-color-scheme_dark .ta-bs-tab-count.urgent { background: #3a1a1a; color: #f87171; }
 </style>
 </head>
 <body>
@@ -961,6 +1046,24 @@ _HTML = """\
 {{ body | safe }}
 </div>
 <script>
+// Brief State tab switching
+function bsTab(name) {
+  document.querySelectorAll('.ta-bs-tab').forEach(function(t) {
+    var active = t.id === 'bs-tab-' + name;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.ta-bs-panel').forEach(function(p) {
+    p.classList.toggle('active', p.id === 'bs-panel-' + name);
+  });
+  try { sessionStorage.setItem('bs-active-tab', name); } catch(_) {}
+}
+// Restore last-used tab on load
+(function() {
+  var saved = sessionStorage.getItem('bs-active-tab');
+  if (saved && document.getElementById('bs-tab-' + saved)) bsTab(saved);
+})();
+
 // Expand/collapse clamped text (inbox uses itext-, acts use atext-)
 function toggleText(id) {
   var el = document.getElementById('itext-' + id);
@@ -1275,70 +1378,10 @@ document.addEventListener('submit', function(e) {
   });
 })();
 
-// ── Drag-to-reorder act items within a group ──
-(function() {
-  var dragged = null;
-
-  function initDragGroup(container) {
-    container.addEventListener('dragstart', function(e) {
-      var item = e.target.closest('.ta-bs-item[data-act-id]');
-      if (!item || !item.parentElement.classList.contains('ta-bs-group-items') &&
-          item.parentElement.id !== 'focus-group') return;
-      dragged = item;
-      item.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    container.addEventListener('dragend', function(e) {
-      if (dragged) { dragged.classList.remove('dragging'); dragged = null; }
-      container.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
-    });
-    container.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      var target = e.target.closest('.ta-bs-item[data-act-id]');
-      if (!target || target === dragged) return;
-      target.classList.add('drag-over');
-    });
-    container.addEventListener('dragleave', function(e) {
-      var target = e.target.closest('.ta-bs-item[data-act-id]');
-      if (target) target.classList.remove('drag-over');
-    });
-    container.addEventListener('drop', function(e) {
-      e.preventDefault();
-      var target = e.target.closest('.ta-bs-item[data-act-id]');
-      if (!target || target === dragged || !dragged) return;
-      target.classList.remove('drag-over');
-      var parent = target.parentElement;
-      var items = Array.from(parent.querySelectorAll(':scope > .ta-bs-item[data-act-id]'));
-      var draggedIdx = items.indexOf(dragged);
-      var targetIdx = items.indexOf(target);
-      if (draggedIdx < targetIdx) {
-        parent.insertBefore(dragged, target.nextSibling);
-      } else {
-        parent.insertBefore(dragged, target);
-      }
-      // Persist new order
-      var ids = Array.from(parent.querySelectorAll(':scope > .ta-bs-item[data-act-id]')).map(function(el) { return el.dataset.actId; });
-      fetch('/brief-state/reorder', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ids: ids})
-      });
-    });
-  }
-
-  document.querySelectorAll('.ta-bs-group-items').forEach(function(grp) {
-    // Make items draggable
-    grp.querySelectorAll('.ta-bs-item[data-act-id]').forEach(function(item) {
-      item.setAttribute('draggable', 'true');
-    });
-    initDragGroup(grp);
-  });
-
-  // Always start closed — browser restore can re-open these after form submissions
-  document.querySelectorAll('details.ta-ops-drawer').forEach(function(d) {
-    d.removeAttribute('open');
-  });
-})();
+// Always start ops-drawer details closed — browser restore can re-open these
+document.querySelectorAll('details.ta-ops-drawer').forEach(function(d) {
+  d.removeAttribute('open');
+});
 </script>
 </body>
 </html>
@@ -1613,7 +1656,7 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{# ── P0 BRIEF BANNER: overdue acts surfaced before anything else ── #}
+{# ── OVERDUE BANNER ── #}
 {% set overdue_acts = act_items | selectattr('overdue') | list %}
 {% if overdue_acts %}
 <div class="ta-bs-brief-banner" role="region" aria-label="Overdue obligations">
@@ -1635,509 +1678,453 @@ _BRIEF_STATE_BODY = """\
 </div>
 {% endif %}
 
-{# ── MACRO: render one act item row (used in both Focus and grouped sections) ── #}
-{% macro act_row(item, show_pin=true) %}
-<div class="ta-bs-item{% if item.overdue %} ta-bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} ta-bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
-  <span class="ta-drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
-  <div class="ta-bs-body">
-    <div class="ta-bs-type-row">
-      {% if item.overdue %}<span class="ta-badge ta-badge-overdue">OVERDUE</span>{% endif %}
-      {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span>{% endif %}
-      {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %}</span>{% endif %}
-      {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
-      {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
-    </div>
-    <div class="ta-bs-text" id="atext-{{ item.id }}">{{ item.text }}</div>
-    <button class="ta-bs-text-toggle" onclick="toggleText2('{{ item.id }}')">more</button>
-    <div class="ta-bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
-    {% if not item.program %}
-    <form method="post" action="/brief-state/assign-program/{{ item.id }}" class="ta-inline-program-form">
-      <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 5px;font-size:11px;max-width:160px" onchange="this.form.submit()">
-        <option value="">assign program…</option>
-        {% for p in programs %}
-        <option value="{{ p.key }}">{{ p.label }}</option>
-        {% endfor %}
-      </select>
-    </form>
-    {% endif %}
-    {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
-  </div>
-  <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-    <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
-      <form method="post" action="/brief-state/close/{{ item.id }}">
-        <input type="hidden" name="status" value="complete">
-        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" data-act-action="done">Done</button>
-      </form>
-      <form method="post" action="/brief-state/close/{{ item.id }}"
-            onsubmit="return confirm('Drop this item? It will be marked dropped.');">
-        <input type="hidden" name="status" value="dropped">
-        <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm" data-act-action="drop">Drop</button>
-      </form>
-      <span class="ta-bs-defer-sep"></span>
-      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer 1 day" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
-      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer 3 days" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
-      <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:4px 8px" aria-label="Defer to Monday" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
-      <details class="ta-ops-drawer" style="display:inline-block;position:relative">
-        <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-        <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
-          <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-            <label class="ta-sr-only" for="defer-date-{{ item.id }}">Defer to date</label>
-            <input type="hidden" name="return_to" value="inbox">
-            <input type="date" id="defer-date-{{ item.id }}" name="target" required style="width:120px">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Defer</button>
-          </form>
-          <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-            <input type="hidden" name="return_to" value="inbox">
-            <select name="loe" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-              <option value="">LoE…</option>
-              <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S — small (&lt;2h)</option>
-              <option value="M" {% if item.loe == 'M' %}selected{% endif %}>M — medium (half day)</option>
-              <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L — large (multi-day)</option>
-            </select>
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Set</button>
-          </form>
-          <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-            <input type="hidden" name="return_to" value="inbox">
-            <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-              <option value="">Clear program</option>
-              {% for p in programs %}
-              <option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>
-              {% endfor %}
-            </select>
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
-          </form>
-          {% if show_pin %}
-          {% if item.pinned %}
-          <form method="post" action="/brief-state/unpin/{{ item.id }}">
-            <input type="hidden" name="return_to" value="inbox">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">☆ Unpin from Focus</button>
-          </form>
-          {% else %}
-          <form method="post" action="/brief-state/pin/{{ item.id }}">
-            <input type="hidden" name="return_to" value="inbox">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">★ Pin to Today's Focus</button>
-          </form>
-          {% endif %}
-          {% endif %}
-        </div>
-      </details>
-    </div>
-  </div>
-</div>
-{% endmacro %}
+{# ── COUNT HELPERS ── #}
+{% set waiting_count = delegate_items|length + they_owe_items|length %}
+{% set inbox_count = candidate_items|length %}
+{% set urgent_count = candidate_items | selectattr('urgency', 'equalto', 'high') | list | length %}
 
-{# ── TODAY'S FOCUS ── #}
+{# ── TAB BAR ── #}
+<div class="ta-bs-tabs" role="tablist">
+  <button class="ta-bs-tab active" role="tab" aria-selected="true" aria-controls="bs-panel-act" id="bs-tab-act" onclick="bsTab('act')">
+    Act
+    {% if act_items %}
+    <span class="ta-bs-tab-count{% if overdue_acts %} urgent{% endif %}">{{ act_items|length }}</span>
+    {% endif %}
+  </button>
+  <button class="ta-bs-tab" role="tab" aria-selected="false" aria-controls="bs-panel-watch" id="bs-tab-watch" onclick="bsTab('watch')">
+    Watch
+    {% if watch_items %}<span class="ta-bs-tab-count">{{ watch_items|length }}</span>{% endif %}
+  </button>
+  <button class="ta-bs-tab" role="tab" aria-selected="false" aria-controls="bs-panel-waiting" id="bs-tab-waiting" onclick="bsTab('waiting')">
+    Waiting
+    {% if waiting_count %}<span class="ta-bs-tab-count">{{ waiting_count }}</span>{% endif %}
+  </button>
+  {% if inbox_count %}
+  <button class="ta-bs-tab" role="tab" aria-selected="false" aria-controls="bs-panel-inbox" id="bs-tab-inbox" onclick="bsTab('inbox')">
+    Inbox
+    <span class="ta-bs-tab-count{% if urgent_count %} urgent{% endif %}">{{ inbox_count }}</span>
+  </button>
+  {% endif %}
+  <button class="ta-bs-tab" role="tab" aria-selected="false" aria-controls="bs-panel-closed" id="bs-tab-closed" onclick="bsTab('closed')">
+    Closed
+    {% if recent_closed %}<span class="ta-bs-tab-count">{{ recent_closed|length }}</span>{% endif %}
+  </button>
+</div>
+
+{# ──────────────────────────────────────────── #}
+{# ACT TAB                                      #}
+{# ──────────────────────────────────────────── #}
+<div class="ta-bs-panel active" id="bs-panel-act" role="tabpanel" aria-labelledby="bs-tab-act">
+
+{# Pinned / Today's Focus — always at top of Act tab #}
 {% if pinned_acts %}
-<div class="ta-card" style="border-color:var(--slds-g-color-brand-2,#0176d3);border-width:2px">
-  <h2 style="display:flex;align-items:center;gap:8px">
-    <span style="color:var(--slds-g-color-brand-2,#0176d3)">★</span> Today's Focus
-    <span class="ta-badge" style="background:var(--slds-g-color-brand-2,#0176d3);color:#000;font-size:10px">{{ pinned_acts|length }}</span>
+<div class="ta-card" style="border-color:var(--slds-g-color-brand-2,#0176d3);border-width:2px;margin-bottom:16px">
+  <h2 style="display:flex;align-items:center;gap:8px;color:var(--slds-g-color-brand-2,#0176d3)">
+    ★ Today's Focus
+    <span class="ta-bs-tab-count" style="background:#daeaf8;color:var(--slds-g-color-brand-2,#0176d3)">{{ pinned_acts|length }}</span>
   </h2>
-  {% for item in pinned_acts %}
-  {{ act_row(item, show_pin=true) }}
-  {% endfor %}
+  <table class="ta-rl">
+    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>Due</th><th></th></tr></thead>
+    <tbody>
+    {% for item in pinned_acts %}
+    <tr class="{% if item.overdue %}ta-rl-overdue{% elif item.deadline and item.deadline <= today_iso %}ta-rl-due-soon{% endif %}" data-act-id="{{ item.id }}">
+      <td class="ta-rl-item-text">
+        {% if item.overdue %}<span class="ta-badge ta-badge-overdue" style="margin-right:6px">OVERDUE</span>{% endif %}
+        <span id="atext-{{ item.id }}">{{ item.text }}</span>
+        {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;margin-left:5px">{{ item.loe }}</span>{% endif %}
+        {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">
+        {% if item.deadline %}
+        <span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
+            <input type="hidden" name="status" value="complete">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" data-act-action="done">Done</button>
+          </form>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
+          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+              <form method="post" action="/brief-state/close/{{ item.id }}" style="margin-bottom:6px" onsubmit="return confirm('Drop this item?');">
+                <input type="hidden" name="status" value="dropped">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">Drop</button>
+              </form>
+              <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <input type="date" name="target" required style="width:120px">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Defer to…</button>
+              </form>
+              <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <select name="loe" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">LoE…</option>
+                  <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S (&lt;2h)</option>
+                  <option value="M" {% if item.loe == 'M' %}selected{% endif %}>M (half day)</option>
+                  <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L (multi-day)</option>
+                </select>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Set LoE</button>
+              </form>
+              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">Clear program</option>
+                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
+              </form>
+              <form method="post" action="/brief-state/unpin/{{ item.id }}">
+                <input type="hidden" name="return_to" value="inbox">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">☆ Unpin</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endif %}
 
-{# ── ACT ITEMS — grouped by program, each group collapsible ── #}
-<div class="ta-card" style="{% if overdue_acts %}border-color:#fac9c9{% endif %}">
+{# All act items grouped by program #}
+<div class="ta-card">
   <h2>Act items — Brad owns</h2>
   {% if act_groups %}
+  <table class="ta-rl">
+    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>Due</th><th></th></tr></thead>
+    <tbody>
   {% for group in act_groups %}
   {% if act_groups|length > 1 %}
-  <details class="ta-bs-group-section" open>
-    <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-      <span class="ta-bs-section-chevron">▶</span>
-      {{ group.label }}
-      <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.acts|length }}</span>
-    </summary>
-    <div class="ta-bs-group-items" data-group-key="{{ group.key }}">
-    {% for item in group.acts %}
-    {{ act_row(item, show_pin=true) }}
-    {% endfor %}
-    </div>
-  </details>
-  {% else %}
-  <div class="ta-bs-group-items" data-group-key="{{ group.key }}">
-  {% for item in group.acts %}
-  {{ act_row(item, show_pin=true) }}
-  {% endfor %}
-  </div>
+  <tr><td colspan="4" class="ta-rl-section-header" style="padding:6px 12px">{{ group.label }}</td></tr>
   {% endif %}
+    {% for item in group.acts %}
+    <tr class="{% if item.overdue %}ta-rl-overdue{% elif item.deadline and item.deadline <= today_iso %}ta-rl-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
+      <td class="ta-rl-item-text">
+        {% if item.overdue %}<span class="ta-badge ta-badge-overdue" style="margin-right:6px">OVERDUE</span>{% endif %}
+        <span id="atext-{{ item.id }}" class="ta-bs-text">{{ item.text }}</span>
+        {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;margin-left:5px">{{ item.loe }}</span>{% endif %}
+        {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
+        {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">
+        {% if item.deadline %}<span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>{% else %}—{% endif %}
+      </td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
+            <input type="hidden" name="status" value="complete">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" data-act-action="done">Done</button>
+          </form>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',1)" data-act-action="defer1">+1d</button>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',3)" data-act-action="defer3">+3d</button>
+          <button type="button" class="ta-btn ta-btn-secondary ta-btn-sm" onclick="deferQuick('{{ item.id }}',0)" data-act-action="defermon">Mon</button>
+          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
+            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
+            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
+              <form method="post" action="/brief-state/close/{{ item.id }}" style="margin-bottom:6px" onsubmit="return confirm('Drop this item?');">
+                <input type="hidden" name="status" value="dropped">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">Drop</button>
+              </form>
+              <form method="post" action="/brief-state/defer/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <input type="date" name="target" required style="width:120px">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Defer to…</button>
+              </form>
+              <form method="post" action="/brief-state/loe/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <select name="loe" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">LoE…</option>
+                  <option value="S" {% if item.loe == 'S' %}selected{% endif %}>S (&lt;2h)</option>
+                  <option value="M" {% if item.loe == 'M' %}selected{% endif %}>M (half day)</option>
+                  <option value="L" {% if item.loe == 'L' %}selected{% endif %}>L (multi-day)</option>
+                </select>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Set LoE</button>
+              </form>
+              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+                <input type="hidden" name="return_to" value="inbox">
+                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                  <option value="">Clear program</option>
+                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
+              </form>
+              <form method="post" action="/brief-state/pin/{{ item.id }}">
+                <input type="hidden" name="return_to" value="inbox">
+                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="width:100%">★ Pin to Focus</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
   {% endfor %}
+    </tbody>
+  </table>
   {% if act_items|length >= 2 %}
   <div class="ta-kb-hint">[k] done &nbsp; [d] drop &nbsp; [1/3/m] defer &nbsp; [↓/j] next &nbsp; [↑/i] prev</div>
   {% endif %}
   {% else %}
-  <div class="ta-bs-empty" style="display:flex;align-items:center;gap:8px">
-    <span style="color:var(--slds-g-color-success-2,#2e844a);font-size:15px">✓</span>
-    All clear — no pending acts.
+  <div class="ta-rl-empty">
+    <span style="color:var(--slds-g-color-success-2,#2e844a)">✓</span> All clear — no pending acts.
   </div>
   {% endif %}
 </div>
 
-{# ── INBOX (candidates) ── #}
-{% if candidate_items %}
-{% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
-{% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
-<div class="ta-card ta-card-inbox" id="inbox">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <h2 style="margin-bottom:0">Inbox — signals pending triage ({{ candidate_items|length }})</h2>
-    <form method="post" action="/brief-state/dismiss-all-candidates" style="display:inline"
-          onsubmit="return confirm('Dismiss all {{ candidate_items|length }} candidate item{{ \'s\' if candidate_items|length != 1 else \'\'}}? They will be marked dismissed.');">
-      <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss all</button>
-    </form>
-  </div>
-  {% if urgent_items %}
-  <div class="ta-inbox-urgent-header">⚠ {{ urgent_items|length }} urgent — action required</div>
-  {% for item in urgent_items %}
-  <div class="ta-bs-item ta-bs-item-urgent">
-    <div class="ta-bs-body">
-      <div class="ta-bs-type-row">
-        <span class="ta-badge ta-badge-act" style="background:#fff5f5;color:var(--slds-g-color-error-2,#c23934)">URGENT</span>
-        {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">Due {{ item.deadline }}</span>{% endif %}
-        {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
-      </div>
-      <div class="ta-bs-text" id="itext-{{ item.id }}">{{ item.text }}</div>
-      <button class="ta-bs-text-toggle" onclick="toggleText('{{ item.id }}')">more</button>
-      <div class="ta-bs-meta"><span class="ta-bs-meta-source" title="{{ item.source_analyzed or '' }}">{{ item.source_analyzed or '—' }}</span></div>
-    </div>
-    <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
-      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-        <input type="hidden" name="type" value="act">
-        <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
-          <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
-          {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
-        </select>
-        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-error-2,#c23934);color:var(--slds-g-color-error-2,#c23934)">Accept</button>
-      </form>
-      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
-            onsubmit="return confirm('Dismiss this urgent item?');">
-        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
-  {% endif %}
-  {% if normal_items %}
-  {% if urgent_items %}<div class="ta-inbox-normal-header">Signals</div>{% endif %}
-  {% for item in normal_items %}
-  <div class="ta-bs-item">
-    <div class="ta-bs-body">
-      <div class="ta-bs-type-row">
-        <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
-        {% if item.owner and item.owner != "Brad" %}<span class="ta-bs-meta" style="margin-top:0">{{ item.owner }} owes</span>{% endif %}
-        {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">{% if item.owner and item.owner != "Brad" %} · {% endif %}Due {{ item.deadline }}</span>{% endif %}
-        {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
-      </div>
-      <div class="ta-bs-text" id="itext-{{ item.id }}">{{ item.text }}</div>
-      <button class="ta-bs-text-toggle" onclick="toggleText('{{ item.id }}')">more</button>
-      <div class="ta-bs-meta">{{ item.source_analyzed or '—' }}</div>
-    </div>
-    <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
-      <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
-        <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-          <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
-          <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
-          <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
-          <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
-          <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
-        </select>
-        <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:130px">
-          <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
-          {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
-        </select>
-        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-warning-2,#dd7a01);color:var(--slds-g-color-warning-2,#dd7a01)">Accept</button>
-      </form>
-      <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}"
-            onsubmit="return confirm('Dismiss this candidate item?');">
-        <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
-  {% endif %}
-</div>
-{% endif %}
+</div>{# /bs-panel-act #}
 
-{# ── MACRO: render a grouped collapsible section with per-group mass-close ── #}
-{% macro grouped_section(section_id, title, badge_class, groups, item_key, mass_close_label, mass_close_status) %}
-{% set total = namespace(n=0) %}
-{% for g in groups %}{% set total.n = total.n + g[item_key]|length %}{% endfor %}
-{% if total.n > 0 %}
-<div class="ta-card" id="{{ section_id }}">
-  <details class="ta-bs-section">
-    <summary>
-      <span class="ta-bs-section-chevron">▶</span>
-      {{ title }}
-      <span class="ta-badge {{ badge_class }}" style="margin-left:4px">{{ total.n }}</span>
-    </summary>
-    {% for group in groups %}
-    <details class="ta-bs-group-section" open>
-      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-        <span class="ta-bs-section-chevron">▶</span>
-        {{ group.label }}
-        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group[item_key]|length }}</span>
-        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
-          {% for item in group[item_key] %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
-          <input type="hidden" name="status" value="{{ mass_close_status }}">
-          <input type="hidden" name="anchor" value="{{ section_id }}">
-          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
-                  onclick="return confirm('Mark all {{ group[item_key]|length }} {{ group.label }} items as {{ mass_close_status }}?')">
-            ✓ All {{ mass_close_label }}
-          </button>
-        </form>
-      </summary>
-      {{ caller(group[item_key]) }}
-    </details>
-    {% endfor %}
-  </details>
-</div>
-{% endif %}
-{% endmacro %}
-
-{# ── WATCH ── #}
-{% if watch_groups %}
-<div class="ta-card" id="watch-section">
-  <details class="ta-bs-section">
-    <summary>
-      <span class="ta-bs-section-chevron">▶</span>
-      Watch
-      <span class="ta-badge ta-badge-watch" style="margin-left:4px">{{ watch_items|length }}</span>
-    </summary>
+{# ──────────────────────────────────────────── #}
+{# WATCH TAB                                    #}
+{# ──────────────────────────────────────────── #}
+<div class="ta-bs-panel" id="bs-panel-watch" role="tabpanel" aria-labelledby="bs-tab-watch">
+<div class="ta-card">
+  <h2>Watch — monitoring items</h2>
+  {% if watch_items %}
+  <table class="ta-rl">
+    <thead><tr><th style="width:66%">Item</th><th>Program</th><th>From</th><th></th></tr></thead>
+    <tbody>
     {% for group in watch_groups %}
-    <details class="ta-bs-group-section" open>
-      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-        <span class="ta-bs-section-chevron">▶</span>
-        {{ group.label }}
-        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
-        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
-          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
-          <input type="hidden" name="status" value="complete">
-          <input type="hidden" name="anchor" value="watch-section">
-          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
-                  onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} watch items as done?')">✓ All done</button>
-        </form>
-      </summary>
-      {% for item in group.rows %}
-      <div class="ta-bs-item" data-act-id="{{ item.id }}">
-        <div class="ta-bs-body">
-          <div class="ta-bs-text">{{ item.text }}</div>
-          <div class="ta-bs-meta">
-            From {{ item.source_brief[:10] if item.source_brief else '—' }}
-            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
-          </div>
-          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
-        </div>
-        <div class="ta-bs-actions">
-          <form method="post" action="/brief-state/close/{{ item.id }}">
+    {% if watch_groups|length > 1 %}
+    <tr><td colspan="4" class="ta-rl-section-header" style="padding:6px 12px">{{ group.label }}</td></tr>
+    {% endif %}
+    {% for item in group.rows %}
+    <tr data-act-id="{{ item.id }}">
+      <td class="ta-rl-item-text">
+        {{ item.text }}
+        {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ item.source_brief[:10] if item.source_brief else '—' }}</td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="watch-section">
             <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Done</button>
           </form>
-          <form method="post" action="/brief-state/close/{{ item.id }}"
-                onsubmit="return confirm('Drop this watch item?');">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline" onsubmit="return confirm('Drop this watch item?');">
             <input type="hidden" name="status" value="dropped">
             <input type="hidden" name="return_to" value="watch-section">
-            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Drop</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Drop</button>
           </form>
-          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
-            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
-              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-                <input type="hidden" name="return_to" value="watch-section">
-                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-                  <option value="">Clear program</option>
-                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
-              </form>
-            </div>
-          </details>
         </div>
-      </div>
-      {% endfor %}
-    </details>
+      </td>
+    </tr>
     {% endfor %}
-  </details>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="ta-rl-empty">No active watch items.</div>
+  {% endif %}
 </div>
-{% endif %}
+</div>{# /bs-panel-watch #}
 
-{# ── DELEGATED ── #}
+{# ──────────────────────────────────────────── #}
+{# WAITING TAB (Delegate + They Owe)            #}
+{# ──────────────────────────────────────────── #}
+<div class="ta-bs-panel" id="bs-panel-waiting" role="tabpanel" aria-labelledby="bs-tab-waiting">
+
 {% if delegate_items %}
-<div class="ta-card" id="delegate-section">
-  <details class="ta-bs-section">
-    <summary>
-      <span class="ta-bs-section-chevron">▶</span>
-      Delegated
-      <span class="ta-badge ta-badge-delegate" style="margin-left:4px">{{ delegate_items|length }}</span>
-    </summary>
-    {% for group in delegate_groups %}
-    <details class="ta-bs-group-section" open>
-      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-        <span class="ta-bs-section-chevron">▶</span>
-        {{ group.label }}
-        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
-        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
-          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
-          <input type="hidden" name="status" value="complete">
-          <input type="hidden" name="anchor" value="delegate-section">
-          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
-                  onclick="return confirm('Confirm all {{ group.rows|length }} {{ group.label }} delegated items done?')">✓ All confirmed</button>
-        </form>
-      </summary>
-      {% for item in group.rows %}
-      <div class="ta-bs-item" data-act-id="{{ item.id }}">
-        <div class="ta-bs-body">
-          <div class="ta-bs-text">{{ item.text }}</div>
-          <div class="ta-bs-meta">
-            Owner: <strong>{{ item.owner }}</strong>
-            {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
-            {% if item.resurfaced_count %} · Re-surfaced {{ item.resurfaced_count }}×{% endif %}
-            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
-          </div>
-          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
-        </div>
-        <div class="ta-bs-actions">
-          <form method="post" action="/brief-state/close/{{ item.id }}">
+<div class="ta-card" style="margin-bottom:16px">
+  <h2>Delegated — waiting for confirmation</h2>
+  <table class="ta-rl">
+    <thead><tr><th style="width:52%">Item</th><th>Owner</th><th>Due</th><th></th></tr></thead>
+    <tbody>
+    {% for item in delegate_items %}
+    <tr data-act-id="{{ item.id }}">
+      <td class="ta-rl-item-text">
+        {{ item.text }}
+        {% if item.resurfaced_count %}<div class="ta-rl-meta">Re-surfaced {{ item.resurfaced_count }}×</div>{% endif %}
+        {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ item.deadline or '—' }}</td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="delegate-section">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Confirmed done</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Confirmed</button>
           </form>
-          <form method="post" action="/brief-state/re-own/{{ item.id }}">
+          <form method="post" action="/brief-state/re-own/{{ item.id }}" style="display:inline">
             <input type="hidden" name="return_to" value="delegate-section">
-            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Re-own</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Re-own</button>
           </form>
-          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
-            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
-              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-                <input type="hidden" name="return_to" value="delegate-section">
-                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-                  <option value="">Clear program</option>
-                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
-              </form>
-            </div>
-          </details>
         </div>
-      </div>
-      {% endfor %}
-    </details>
+      </td>
+    </tr>
     {% endfor %}
-  </details>
+    </tbody>
+  </table>
 </div>
 {% endif %}
 
-{# ── THEY OWE YOU ── #}
 {% if they_owe_items %}
-<div class="ta-card" id="they-owe-section">
-  <details class="ta-bs-section">
-    <summary>
-      <span class="ta-bs-section-chevron">▶</span>
-      They owe you
-      <span class="ta-badge ta-badge-they-owe" style="margin-left:4px">{{ they_owe_items|length }}</span>
-    </summary>
-    {% for group in they_owe_groups %}
-    <details class="ta-bs-group-section" open>
-      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-        <span class="ta-bs-section-chevron">▶</span>
-        {{ group.label }}
-        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
-        <form method="post" action="/brief-state/close-group" style="margin-left:auto;display:inline-flex;gap:4px" onclick="event.stopPropagation()">
-          {% for item in group.rows %}<input type="hidden" name="ids" value="{{ item.id }}">{% endfor %}
-          <input type="hidden" name="status" value="complete">
-          <input type="hidden" name="anchor" value="they-owe-section">
-          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="font-size:10px;padding:2px 6px"
-                  onclick="return confirm('Mark all {{ group.rows|length }} {{ group.label }} items as received?')">✓ All received</button>
-        </form>
-      </summary>
-      {% for item in group.rows %}
-      <div class="ta-bs-item" data-act-id="{{ item.id }}">
-        <div class="ta-bs-body">
-          <div class="ta-bs-text">{{ item.text }}</div>
-          <div class="ta-bs-meta">
-            <strong>{{ item.owner }}</strong>
-            {% if item.deadline %} · Due {{ item.deadline }}{% if item.they_overdue %} <span style="color:var(--slds-g-color-error-2,#c23934)">({{ item.days_overdue }}d overdue)</span>{% endif %}{% endif %}
-            {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
-          </div>
-          {% if item.notes %}<div class="ta-bs-notes">{{ item.notes }}</div>{% endif %}
-        </div>
-        <div class="ta-bs-actions">
-          <form method="post" action="/brief-state/close/{{ item.id }}">
+<div class="ta-card">
+  <h2>They owe you</h2>
+  <table class="ta-rl">
+    <thead><tr><th style="width:52%">Item</th><th>Who</th><th>Due</th><th></th></tr></thead>
+    <tbody>
+    {% for item in they_owe_items %}
+    <tr class="{% if item.they_overdue %}ta-rl-overdue{% endif %}" data-act-id="{{ item.id }}">
+      <td class="ta-rl-item-text">
+        {{ item.text }}
+        {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">
+        {% if item.deadline %}<span style="{% if item.they_overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% endif %}">{{ item.deadline }}{% if item.they_overdue %} ({{ item.days_overdue }}d){% endif %}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="they-owe-section">
             <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Received</button>
           </form>
-          <form method="post" action="/brief-state/close/{{ item.id }}">
+          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline" onsubmit="return confirm('Drop?');">
             <input type="hidden" name="status" value="dropped">
             <input type="hidden" name="return_to" value="they-owe-section">
-            <button type="submit" class="ta-btn ta-btn-destructive ta-btn-sm">Drop</button>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Drop</button>
           </form>
-          <details class="ta-ops-drawer" style="display:inline-block;position:relative">
-            <summary class="ta-btn ta-btn-secondary ta-btn-sm" style="list-style:none;cursor:pointer;padding:4px 8px">…</summary>
-            <div style="position:absolute;background:var(--slds-g-color-surface-1,#fff);border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:6px;padding:10px;margin-top:4px;z-index:20;min-width:220px;right:0;white-space:nowrap">
-              <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-                <input type="hidden" name="return_to" value="they-owe-section">
-                <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-                  <option value="">Clear program</option>
-                  {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
-              </form>
-            </div>
-          </details>
         </div>
-      </div>
-      {% endfor %}
-    </details>
+      </td>
+    </tr>
     {% endfor %}
-  </details>
+    </tbody>
+  </table>
 </div>
 {% endif %}
 
-{# ── CLOSED ── #}
-{% if recent_closed %}
-<div class="ta-card" id="closed-section">
-  <details class="ta-bs-section">
-    <summary>
-      <span class="ta-bs-section-chevron">▶</span>
-      Closed (last 7 days)
-      <span class="ta-badge ta-badge-complete" style="margin-left:4px">{{ recent_closed|length }}</span>
-    </summary>
-    {% for group in closed_groups %}
-    <details class="ta-bs-group-section" open>
-      <summary class="ta-bs-program-header ta-bs-program-header-toggle">
-        <span class="ta-bs-section-chevron">▶</span>
-        {{ group.label }}
-        <span class="ta-badge" style="margin-left:4px;font-size:10px;background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b)">{{ group.rows|length }}</span>
-      </summary>
-      <table style="margin-top:4px">
-        <thead>
-          <tr><th>Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr>
-        </thead>
-        <tbody>
-        {% for item in group.rows %}
-        <tr>
-          <td>{{ item.text }}</td>
-          <td><span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span></td>
-          <td><span class="ta-badge ta-badge-{{ item.status }}">{{ item.status }}</span></td>
-          <td class="ta-muted">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
-          <td>
-            <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
-              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Reopen</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </details>
+{% if not delegate_items and not they_owe_items %}
+<div class="ta-card"><div class="ta-rl-empty">Nothing delegated or owed.</div></div>
+{% endif %}
+
+</div>{# /bs-panel-waiting #}
+
+{# ──────────────────────────────────────────── #}
+{# INBOX TAB                                    #}
+{# ──────────────────────────────────────────── #}
+{% if inbox_count %}
+<div class="ta-bs-panel" id="bs-panel-inbox" role="tabpanel" aria-labelledby="bs-tab-inbox">
+<div class="ta-card ta-card-inbox">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <h2 style="margin-bottom:0">Inbox — {{ candidate_items|length }} pending triage</h2>
+    <form method="post" action="/brief-state/dismiss-all-candidates" style="display:inline"
+          onsubmit="return confirm('Dismiss all {{ candidate_items|length }} candidate item{{ \'s\' if candidate_items|length != 1 else \'\'}}?');">
+      <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss all</button>
+    </form>
+  </div>
+  {% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
+  {% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
+  <table class="ta-rl">
+    <thead><tr><th style="width:54%">Signal</th><th>Type</th><th>Program</th><th></th></tr></thead>
+    <tbody>
+    {% for item in urgent_items %}
+    <tr class="ta-rl-inbox-row">
+      <td class="ta-rl-item-text">
+        <span class="ta-badge ta-badge-act" style="margin-right:6px">URGENT</span>
+        <span id="itext-{{ item.id }}">{{ item.text }}</span>
+        <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
+      </td>
+      <td><span class="ta-badge ta-badge-act">act</span></td>
+      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:inline">
+            <input type="hidden" name="type" value="act">
+            <input type="hidden" name="program" value="{{ item.program or '' }}">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-error-2,#c23934);color:var(--slds-g-color-error-2,#c23934)">Accept</button>
+          </form>
+          <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
+          </form>
+        </div>
+      </td>
+    </tr>
     {% endfor %}
-  </details>
+    {% for item in normal_items %}
+    <tr>
+      <td class="ta-rl-item-text">
+        <span id="itext-{{ item.id }}">{{ item.text }}</span>
+        <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
+      </td>
+      <td>
+        <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
+        {% if item.owner and item.owner != 'Brad' %}<div class="ta-rl-meta">{{ item.owner }}</div>{% endif %}
+      </td>
+      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td>
+        <div class="ta-rl-actions">
+          <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+            <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+              <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
+              <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
+              <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
+              <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
+              <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
+            </select>
+            <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:120px">
+              <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
+              {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
+            </select>
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-warning-2,#dd7a01);color:var(--slds-g-color-warning-2,#dd7a01)">Accept</button>
+          </form>
+          <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 </div>
 {% endif %}
+{# /bs-panel-inbox #}
+
+{# ──────────────────────────────────────────── #}
+{# CLOSED TAB                                   #}
+{# ──────────────────────────────────────────── #}
+<div class="ta-bs-panel" id="bs-panel-closed" role="tabpanel" aria-labelledby="bs-tab-closed">
+<div class="ta-card">
+  <h2>Closed — last 7 days</h2>
+  {% if recent_closed %}
+  <table class="ta-rl">
+    <thead><tr><th style="width:54%">Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr></thead>
+    <tbody>
+    {% for item in recent_closed %}
+    <tr>
+      <td class="ta-rl-item-text">{{ item.text }}</td>
+      <td><span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span></td>
+      <td><span class="ta-badge ta-badge-{{ item.status }}">{{ item.status }}</span></td>
+      <td class="ta-muted" style="white-space:nowrap">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+      <td>
+        <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
+          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Reopen</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="ta-rl-empty">Nothing closed in the last 7 days.</div>
+  {% endif %}
+</div>
+</div>{# /bs-panel-closed #}
 
 {# ── SOURCE DRAWER ── #}
 <div id="source-drawer">

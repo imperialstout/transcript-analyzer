@@ -1724,7 +1724,7 @@ _BRIEF_STATE_BODY = """\
     <span class="ta-bs-tab-count" style="background:#daeaf8;color:var(--slds-g-color-brand-2,#0176d3)">{{ pinned_acts|length }}</span>
   </h2>
   <table class="ta-rl">
-    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>Due</th><th></th></tr></thead>
+    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>From</th><th>Due</th><th></th></tr></thead>
     <tbody>
     {% for item in pinned_acts %}
     <tr class="{% if item.overdue %}ta-rl-overdue{% elif item.deadline and item.deadline <= today_iso %}ta-rl-due-soon{% endif %}" data-act-id="{{ item.id }}">
@@ -1735,6 +1735,7 @@ _BRIEF_STATE_BODY = """\
         {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
       </td>
       <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}
         <span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>
@@ -1799,7 +1800,7 @@ _BRIEF_STATE_BODY = """\
   <h2>Act items — Brad owns</h2>
   {% if act_groups %}
   <table class="ta-rl">
-    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>Due</th><th></th></tr></thead>
+    <thead><tr><th style="width:60%">Item</th><th>From</th><th>Due</th><th></th></tr></thead>
     <tbody>
   {% for group in act_groups %}
   {% if act_groups|length > 1 %}
@@ -1814,7 +1815,7 @@ _BRIEF_STATE_BODY = """\
         {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗</a>{% endif %}
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
-      <td class="ta-muted">{{ item.program or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}<span style="{% if item.overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% elif item.deadline <= today_iso %}color:var(--slds-g-color-warning-2,#dd7a01){% endif %}">{{ item.deadline }}</span>{% else %}—{% endif %}
       </td>
@@ -1903,7 +1904,7 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.program or '—' }}</td>
-      <td class="ta-muted" style="white-space:nowrap">{{ item.source_brief[:10] if item.source_brief else '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
       <td>
         <div class="ta-rl-actions">
           <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
@@ -1938,7 +1939,7 @@ _BRIEF_STATE_BODY = """\
 <div class="ta-card" style="margin-bottom:16px">
   <h2>Delegated — waiting for confirmation</h2>
   <table class="ta-rl">
-    <thead><tr><th style="width:52%">Item</th><th>Owner</th><th>Due</th><th></th></tr></thead>
+    <thead><tr><th style="width:52%">Item</th><th>Owner</th><th>From</th><th>Due</th><th></th></tr></thead>
     <tbody>
     {% for item in delegate_items %}
     <tr data-act-id="{{ item.id }}">
@@ -1948,6 +1949,7 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
       <td class="ta-muted" style="white-space:nowrap">{{ item.deadline or '—' }}</td>
       <td>
         <div class="ta-rl-actions">
@@ -1973,7 +1975,7 @@ _BRIEF_STATE_BODY = """\
 <div class="ta-card">
   <h2>They owe you</h2>
   <table class="ta-rl">
-    <thead><tr><th style="width:52%">Item</th><th>Who</th><th>Due</th><th></th></tr></thead>
+    <thead><tr><th style="width:52%">Item</th><th>Who</th><th>From</th><th>Due</th><th></th></tr></thead>
     <tbody>
     {% for item in they_owe_items %}
     <tr class="{% if item.they_overdue %}ta-rl-overdue{% endif %}" data-act-id="{{ item.id }}">
@@ -1982,6 +1984,7 @@ _BRIEF_STATE_BODY = """\
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
       <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td class="ta-muted" style="white-space:nowrap">{{ (item.source_brief or item.source_analyzed or '')[:10] or '—' }}</td>
       <td class="ta-muted" style="white-space:nowrap">
         {% if item.deadline %}<span style="{% if item.they_overdue %}color:var(--slds-g-color-error-2,#c23934);font-weight:600{% endif %}">{{ item.deadline }}{% if item.they_overdue %} ({{ item.days_overdue }}d){% endif %}</span>
         {% else %}—{% endif %}

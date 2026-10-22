@@ -133,7 +133,7 @@ def extract_signals_from_file(
             "deadline": c["deadline"],
             "status": "pending",
             "source_analyzed": source_name,
-            "source_brief": "",
+            "source_brief": source_name,
             "source_pulse": "",
             "notes": "",
             "program": program_key,

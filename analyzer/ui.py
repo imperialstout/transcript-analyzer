@@ -1493,35 +1493,7 @@ _SETTINGS_BODY = """\
 </div>
 </form>
 
-<div class="ta-card">
-  <h2>Display</h2>
-  <div class="ta-field">
-    <label>Color mode</label>
-    <div class="ta-toggle-row">
-      <label class="ta-toggle">
-        <input type="checkbox" id="theme-toggle-input" onchange="toggleTheme()">
-        <span class="ta-slider"></span>
-      </label>
-      <span style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin:0">Dark mode</span>
-    </div>
-  </div>
-</div>
-
 <div style="display:flex;flex-direction:column;gap:20px">
-
-<div class="ta-card">
-  <h2>Content files</h2>
-  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:16px">Drive files — opens in your default editor.</p>
-  {% for label, path in drive_files %}
-  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--slds-g-color-border-1,#e5e5e5)">
-    <a class="ta-quick-link" href="/open-file?path={{ path }}" style="display:flex;flex-direction:column;gap:2px">
-      <span style="font-weight:600;font-size:13px">{{ label }}</span>
-      <span class="ta-muted" style="font-size:11px;font-family:'SF Mono',monospace">{{ path }}</span>
-    </a>
-  </div>
-  {% endfor %}
-  <div style="margin-top:-2px;padding-top:0;border-top:none"></div>
-</div>
 
 <div class="ta-card">
   <h2>Diagnostics</h2>
@@ -1537,6 +1509,34 @@ _SETTINGS_BODY = """\
     </form>
     <div style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-top:8px">Re-execs in place to pick up code or <code class="ta-code-inline">.env</code> changes. Analysis runs fresh each time — this only refreshes the long-lived UI process.</div>
   </div>
+</div>
+
+<div class="ta-card">
+  <h2>Display</h2>
+  <div class="ta-field">
+    <label>Color mode</label>
+    <div class="ta-toggle-row">
+      <label class="ta-toggle">
+        <input type="checkbox" id="theme-toggle-input" onchange="toggleTheme()">
+        <span class="ta-slider"></span>
+      </label>
+      <span style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin:0">Dark mode</span>
+    </div>
+  </div>
+</div>
+
+<div class="ta-card">
+  <h2>Content files</h2>
+  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:16px">Drive files — opens in your default editor.</p>
+  {% for label, path in drive_files %}
+  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--slds-g-color-border-1,#e5e5e5)">
+    <a class="ta-quick-link" href="/open-file?path={{ path }}" style="display:flex;flex-direction:column;gap:2px">
+      <span style="font-weight:600;font-size:13px">{{ label }}</span>
+      <span class="ta-muted" style="font-size:11px;font-family:'SF Mono',monospace">{{ path }}</span>
+    </a>
+  </div>
+  {% endfor %}
+  <div style="margin-top:-2px;padding-top:0;border-top:none"></div>
 </div>
 
 <div class="ta-card">

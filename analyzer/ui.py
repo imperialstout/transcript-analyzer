@@ -320,7 +320,7 @@ _HTML = """\
   /* ── Global chrome ── */
   header.ta-header {
     background: var(--slds-g-color-surface-1, #fff);
-    border-bottom: 1px solid var(--slds-g-color-border-1, #e5e5e5);
+    border-bottom: 4px solid var(--slds-g-color-brand-2, #0176d3);
     padding: 10px 24px; display: flex; align-items: center; gap: 16px;
     position: sticky; top: 0; z-index: 10;
   }
@@ -365,11 +365,11 @@ _HTML = """\
   }
   .ta-btn-secondary:hover { background: var(--slds-g-color-surface-2, #f3f3f3); opacity: 1; }
   .ta-btn-destructive {
-    background: var(--slds-g-color-error-1, #fef1f1);
-    color: var(--slds-g-color-error-2, #c23934);
-    border: 1px solid var(--slds-g-color-error-2, #c23934);
+    background: var(--slds-g-color-error-2, #c23934);
+    color: #fff;
+    border: none;
   }
-  .ta-btn-destructive:hover { background: var(--slds-g-color-error-1, #fdd8d8); opacity: 1; }
+  .ta-btn-destructive:hover { background: #a61c17; opacity: 1; }
   .ta-btn-sm { padding: 3px 8px; font-size: 11px; border-radius: var(--slds-g-radius-border-1, 0.125rem); }
   .ta-btn:focus-visible, .ta-btn-secondary:focus-visible, .ta-btn-destructive:focus-visible {
     outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px;
@@ -482,7 +482,7 @@ _HTML = """\
   .ta-badge-deferred  { background: #fff8e1; color: #8a6000; }
   .ta-badge-expired   { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); }
   .ta-badge-dropped   { background: var(--slds-g-color-surface-2, #f3f3f3); color: var(--slds-g-color-on-surface-4, #706e6b); }
-  .ta-badge-overdue   { background: var(--slds-g-color-error-2, #c23934); color: #fff; font-weight: 700; }
+  .ta-badge-overdue   { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); border: 1px solid #fac9c9; font-weight: 700; }
 
   /* ── Job panel ── */
   #job-status {
@@ -583,19 +583,34 @@ _HTML = """\
     border-bottom: 1px solid #ffe0a0; margin-bottom: 4px;
   }
   .ta-bs-item-urgent {
-    background: #fff5f5;
-    border-left: 3px solid var(--slds-g-color-error-2, #c23934); padding-left: 10px;
+    background: #fef7f7;
   }
 
   /* ── Brief State items ── */
   .ta-bs-item {
-    display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
+    display: flex; align-items: flex-start; gap: 12px; padding: 13px 0;
     border-top: 1px solid var(--slds-g-color-border-1, #e5e5e5);
   }
   .ta-bs-item:first-of-type { border-top: none; }
   .ta-bs-body { flex: 1; min-width: 0; }
-  .ta-bs-text { font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
-  .ta-bs-meta { font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b); margin-top: 3px; }
+  /* Type badge sits on its own line above the text, not inline */
+  .ta-bs-type-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .ta-bs-text {
+    font-size: var(--slds-g-font-scale-2, 0.875rem); line-height: 1.5;
+    overflow-wrap: break-word; word-break: break-word;
+    /* Clamp to 3 lines; full text on hover via title attr */
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .ta-bs-text.expanded { display: block; -webkit-line-clamp: unset; }
+  .ta-bs-text-toggle {
+    font-size: 11px; color: var(--slds-g-color-brand-2, #0176d3);
+    background: none; border: none; padding: 0; cursor: pointer; margin-top: 2px;
+  }
+  .ta-bs-meta { font-size: 11px; color: var(--slds-g-color-on-surface-4, #706e6b); margin-top: 4px; }
+  .ta-bs-meta-source {
+    max-width: 480px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; display: inline-block; vertical-align: bottom;
+  }
   .ta-bs-notes {
     font-size: 12px; color: var(--slds-g-color-on-surface-4, #706e6b); font-style: italic; margin-top: 3px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px;
@@ -651,7 +666,7 @@ _HTML = """\
 
   /* ── Nav badge ── */
   .ta-nav-badge {
-    background: var(--slds-g-color-error-2, #c23934); color: #fff;
+    background: var(--slds-g-color-brand-2, #0176d3); color: #fff;
     border-radius: 10px; padding: 0 6px; font-size: 12px; font-weight: 700;
     line-height: 18px; display: inline-block; vertical-align: middle; margin-left: 4px;
   }
@@ -689,16 +704,19 @@ _HTML = """\
 
   /* ── Brief state overdue banner ── */
   .ta-bs-brief-banner {
-    background: #fff5f5; border: 1px solid #fac9c9;
+    background: #fef1f1;
+    border: 1px solid #fac9c9;
+    border-left: 4px solid var(--slds-g-color-error-2, #c23934);
     border-radius: var(--slds-g-radius-border-3, 0.5rem);
     padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px;
   }
-  .ta-bs-brief-banner-icon { font-size: 16px; flex-shrink: 0; padding-top: 1px; }
+  .ta-bs-brief-banner-icon { flex-shrink: 0; padding-top: 2px; line-height: 0; }
+  .ta-bs-brief-banner-icon svg { display: block; }
   .ta-bs-brief-banner-body { flex: 1; }
   .ta-bs-brief-banner-title {
     font-size: var(--slds-g-font-scale-2, 0.875rem); font-weight: 700;
     color: var(--slds-g-color-error-2, #c23934);
-    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+    margin-bottom: 6px;
   }
   .ta-bs-brief-banner-items { list-style: none; display: flex; flex-direction: column; gap: 4px; }
   .ta-bs-brief-banner-items li {
@@ -835,13 +853,57 @@ _HTML = """\
   }
 
   /* ── Theme toggle button in header ── */
-  .ta-theme-toggle {
-    background: none; border: 1px solid var(--slds-g-color-border-2, #c9c7c5);
-    border-radius: var(--slds-g-radius-border-2, 0.25rem);
-    color: var(--slds-g-color-on-surface-4, #706e6b);
-    font-size: 11px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
+  /* ── Dark-mode overrides for hardcoded light hex values ── */
+  .slds-color-scheme_dark .ta-card-inbox          { background: #2a2100; border-color: #7a5200; }
+  .slds-color-scheme_dark .ta-card-inbox h2       { color: #f5a623; }
+  .slds-color-scheme_dark .ta-inbox-urgent-header { color: #f87171; border-bottom-color: #5a2e2e; }
+  .slds-color-scheme_dark .ta-inbox-normal-header { color: #f5a623; border-bottom-color: #5a3a00; }
+  .slds-color-scheme_dark .ta-bs-item-urgent      { background: rgba(200,50,50,0.12); }
+
+  .slds-color-scheme_dark .ta-bs-brief-banner {
+    background: #2a1a1a; border-color: #5a2e2e;
+    border-left-color: #f87171;
   }
-  .ta-theme-toggle:hover { color: var(--slds-g-color-on-surface-2, #181818); }
+  .slds-color-scheme_dark .ta-bs-brief-banner-title { color: #f87171; }
+  .slds-color-scheme_dark .ta-bs-brief-banner-icon svg circle,
+  .slds-color-scheme_dark .ta-bs-brief-banner-icon svg line { stroke: #f87171; }
+  .slds-color-scheme_dark .ta-bs-brief-banner-icon svg circle:last-child { fill: #f87171; stroke: none; }
+  .slds-color-scheme_dark .ta-bs-brief-banner-items li { color: var(--slds-g-color-on-surface-2, #e5e5e5); }
+
+  /* Badges — all tint-on-dark equivalents */
+  .slds-color-scheme_dark .ta-badge-exec      { background: #3a1a1a; color: #f87171; }
+  .slds-color-scheme_dark .ta-badge-solution  { background: #0e2a45; color: #60b0f4; }
+  .slds-color-scheme_dark .ta-badge-daily     { background: #0e2e1a; color: #5acf8a; }
+  .slds-color-scheme_dark .ta-badge-standup   { background: #2e1e00; color: #f5a623; }
+  .slds-color-scheme_dark .ta-badge-notes     { background: #2a1a3a; color: #c08ef7; }
+  .slds-color-scheme_dark .ta-badge-pulse     { background: #0e2e1a; color: #5acf8a; }
+  .slds-color-scheme_dark .ta-badge-delta     { background: #0e2a2a; color: #3ecfcf; }
+  .slds-color-scheme_dark .ta-badge-synthesis { background: #2a1a3a; color: #c08ef7; }
+  .slds-color-scheme_dark .ta-badge-act       { background: #3a1a1a; color: #f87171; }
+  .slds-color-scheme_dark .ta-badge-watch     { background: #2e1e00; color: #f5a623; }
+  .slds-color-scheme_dark .ta-badge-delegate  { background: #0e2a45; color: #60b0f4; }
+  .slds-color-scheme_dark .ta-badge-they-owe  { background: #2a1a3a; color: #c08ef7; }
+  .slds-color-scheme_dark .ta-badge-insight   { background: #0e2a2a; color: #3ecfcf; }
+  .slds-color-scheme_dark .ta-badge-pending   { background: #0e2e1a; color: #5acf8a; }
+  .slds-color-scheme_dark .ta-badge-complete  { background: #0e2e1a; color: #5acf8a; }
+  .slds-color-scheme_dark .ta-badge-deferred  { background: #2a2000; color: #cfaf3e; }
+  .slds-color-scheme_dark .ta-badge-expired   { background: #3a1a1a; color: #f87171; }
+  .slds-color-scheme_dark .ta-badge-dropped   { background: #2a2a2a; color: #888; }
+  .slds-color-scheme_dark .ta-badge-overdue   { background: #3a1a1a; color: #f87171; border-color: #5a2e2e; }
+
+  /* Flash messages */
+  .slds-color-scheme_dark .ta-flash-ok  { background: #0e2e1a; color: #5acf8a; border-color: #1a5a2a; }
+  .slds-color-scheme_dark .ta-flash-err { background: #2a1a1a; color: #f87171; border-color: #5a2e2e; }
+
+  /* Toggle thumb stays white */
+  .slds-color-scheme_dark .ta-slider:before { background: #e5e5e5; }
+
+  /* Focus/Today card border when overdue */
+  .slds-color-scheme_dark .ta-card[style*="fac9c9"] { border-color: #5a2e2e !important; }
+
+  /* Job running banner */
+  .ta-flash-info { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); border: 1px solid #b8d4f5; }
+  .slds-color-scheme_dark .ta-flash-info { background: #0e2a45; color: #60b0f4; border-color: #1a4a70; }
 </style>
 </head>
 <body>
@@ -893,18 +955,40 @@ _HTML = """\
       ↗ Shared Meeting Files
     </a>
     {% endif %}
-    <button class="ta-theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀ / ☾</button>
   </div>
 </header>
 <div class="ta-content">
 {{ body | safe }}
 </div>
 <script>
+// Expand/collapse clamped text (inbox uses itext-, acts use atext-)
+function toggleText(id) {
+  var el = document.getElementById('itext-' + id);
+  var btn = el && el.nextElementSibling;
+  if (!el) return;
+  var expanded = el.classList.toggle('expanded');
+  if (btn) btn.textContent = expanded ? 'less' : 'more';
+}
+function toggleText2(id) {
+  var el = document.getElementById('atext-' + id);
+  var btn = el && el.nextElementSibling;
+  if (!el) return;
+  var expanded = el.classList.toggle('expanded');
+  if (btn) btn.textContent = expanded ? 'less' : 'more';
+}
+
 // Theme toggle (light / dark via slds-color-scheme_dark on <html>)
 function toggleTheme() {
   const dark = document.documentElement.classList.toggle('slds-color-scheme_dark');
   localStorage.setItem('slds-ui-color-mode', dark ? 'dark' : 'light');
+  var cb = document.getElementById('theme-toggle-input');
+  if (cb) cb.checked = dark;
 }
+// Sync settings toggle to current mode on page load
+(function() {
+  var cb = document.getElementById('theme-toggle-input');
+  if (cb) cb.checked = document.documentElement.classList.contains('slds-color-scheme_dark');
+})();
 
 // Quick-defer: daysOffset=0 → next Monday; >0 → N days from today
 function deferQuick(itemId, daysOffset) {
@@ -1263,7 +1347,7 @@ document.addEventListener('submit', function(e) {
 _HOME_BODY = """\
 {% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+<div id="job-running-banner" class="ta-flash ta-flash-info" style="display:flex;align-items:center;gap:8px">
   <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> This takes a few minutes. The page will refresh automatically when done.
 </div>
@@ -1366,6 +1450,20 @@ _SETTINGS_BODY = """\
 </div>
 </form>
 
+<div class="ta-card">
+  <h2>Display</h2>
+  <div class="ta-field">
+    <label>Color mode</label>
+    <div class="ta-toggle-row">
+      <label class="ta-toggle">
+        <input type="checkbox" id="theme-toggle-input" onchange="toggleTheme()">
+        <span class="ta-slider"></span>
+      </label>
+      <span style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin:0">Dark mode</span>
+    </div>
+  </div>
+</div>
+
 <div style="display:flex;flex-direction:column;gap:20px">
 
 <div class="ta-card">
@@ -1423,7 +1521,7 @@ _SETTINGS_BODY = """\
 _RUN_BODY = """\
 {% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+<div id="job-running-banner" class="ta-flash ta-flash-info" style="display:flex;align-items:center;gap:8px">
   <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> The page will refresh when done.
 </div>
@@ -1509,7 +1607,7 @@ _RUN_BODY = """\
 _BRIEF_STATE_BODY = """\
 {% if flash %}<div class="ta-flash ta-flash-{{ flash_type }}">{{ flash }}</div>{% endif %}
 {% if job_running %}
-<div id="job-running-banner" class="ta-flash" style="background:#eaf1fb;color:var(--slds-g-color-brand-2,#0176d3);display:flex;align-items:center;gap:8px">
+<div id="job-running-banner" class="ta-flash ta-flash-info" style="display:flex;align-items:center;gap:8px">
   <span class="ta-spinner"></span>
   <strong>Running {{ job_label }}…</strong> The page will refresh when done.
 </div>
@@ -1519,7 +1617,13 @@ _BRIEF_STATE_BODY = """\
 {% set overdue_acts = act_items | selectattr('overdue') | list %}
 {% if overdue_acts %}
 <div class="ta-bs-brief-banner" role="region" aria-label="Overdue obligations">
-  <div class="ta-bs-brief-banner-icon">🔴</div>
+  <div class="ta-bs-brief-banner-icon">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="7.5" stroke="#c23934"/>
+      <line x1="8" y1="4.5" x2="8" y2="9" stroke="#c23934" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="11.5" r="0.75" fill="#c23934"/>
+    </svg>
+  </div>
   <div class="ta-bs-brief-banner-body">
     <div class="ta-bs-brief-banner-title">{{ overdue_acts|length }} overdue act{{ 's' if overdue_acts|length != 1 else '' }} — action required</div>
     <ul class="ta-bs-brief-banner-items">
@@ -1536,17 +1640,16 @@ _BRIEF_STATE_BODY = """\
 <div class="ta-bs-item{% if item.overdue %} ta-bs-item-overdue{% elif item.deadline and item.deadline <= today_iso %} ta-bs-item-due-soon{% endif %}" data-act-id="{{ item.id }}" tabindex="0">
   <span class="ta-drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
   <div class="ta-bs-body">
-    <div class="ta-bs-text">
-      {% if item.overdue %}<span class="ta-badge ta-badge-overdue">OVERDUE</span> {% endif %}
-      {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span> {% endif %}
-      {{ item.text }}
-      {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px;margin-left:6px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
+    <div class="ta-bs-type-row">
+      {% if item.overdue %}<span class="ta-badge ta-badge-overdue">OVERDUE</span>{% endif %}
+      {% if item.loe %}<span class="ta-badge" style="background:var(--slds-g-color-surface-2,#f3f3f3);color:var(--slds-g-color-on-surface-4,#706e6b);font-size:10px;letter-spacing:.04em">{{ item.loe }}</span>{% endif %}
+      {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %}</span>{% endif %}
+      {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
+      {% if item.source_pulse %}<a href="#" class="ta-quick-link" style="font-size:11px" onclick="openSourceDrawer('{{ item.id }}','{{ item.source_pulse }}');return false">↗ source</a>{% endif %}
     </div>
-    <div class="ta-bs-meta">
-      {% if item.deadline %}Due {{ item.deadline }}{% if item.overdue %} ({{ item.days_overdue }}d overdue){% endif %} · {% endif %}
-      From {{ item.source_brief[:10] if item.source_brief else '—' }}
-      {% if item.program %} · <span style="opacity:.65">{{ item.program }}</span>{% endif %}
-    </div>
+    <div class="ta-bs-text" id="atext-{{ item.id }}">{{ item.text }}</div>
+    <button class="ta-bs-text-toggle" onclick="toggleText2('{{ item.id }}')">more</button>
+    <div class="ta-bs-meta">From {{ item.source_brief[:10] if item.source_brief else '—' }}</div>
     {% if not item.program %}
     <form method="post" action="/brief-state/assign-program/{{ item.id }}" class="ta-inline-program-form">
       <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 5px;font-size:11px;max-width:160px" onchange="this.form.submit()">
@@ -1690,15 +1793,14 @@ _BRIEF_STATE_BODY = """\
   {% for item in urgent_items %}
   <div class="ta-bs-item ta-bs-item-urgent">
     <div class="ta-bs-body">
-      <div class="ta-bs-text">
+      <div class="ta-bs-type-row">
         <span class="ta-badge ta-badge-act" style="background:#fff5f5;color:var(--slds-g-color-error-2,#c23934)">URGENT</span>
-        {{ item.text }}
+        {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">Due {{ item.deadline }}</span>{% endif %}
+        {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
       </div>
-      <div class="ta-bs-meta">
-        From {{ item.source_analyzed or '—' }}
-        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
-        {% if item.program %} · {{ item.program }}{% endif %}
-      </div>
+      <div class="ta-bs-text" id="itext-{{ item.id }}">{{ item.text }}</div>
+      <button class="ta-bs-text-toggle" onclick="toggleText('{{ item.id }}')">more</button>
+      <div class="ta-bs-meta"><span class="ta-bs-meta-source" title="{{ item.source_analyzed or '' }}">{{ item.source_analyzed or '—' }}</span></div>
     </div>
     <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
       <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
@@ -1722,16 +1824,15 @@ _BRIEF_STATE_BODY = """\
   {% for item in normal_items %}
   <div class="ta-bs-item">
     <div class="ta-bs-body">
-      <div class="ta-bs-text">
+      <div class="ta-bs-type-row">
         <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
-        {% if item.owner and item.owner != "Brad" %}<span class="ta-muted" style="font-size:11px"> {{ item.owner }} owes</span>{% endif %}
-        {{ item.text }}
+        {% if item.owner and item.owner != "Brad" %}<span class="ta-bs-meta" style="margin-top:0">{{ item.owner }} owes</span>{% endif %}
+        {% if item.deadline %}<span class="ta-bs-meta" style="margin-top:0">{% if item.owner and item.owner != "Brad" %} · {% endif %}Due {{ item.deadline }}</span>{% endif %}
+        {% if item.program %}<span class="ta-bs-meta" style="margin-top:0"> · {{ item.program }}</span>{% endif %}
       </div>
-      <div class="ta-bs-meta">
-        From {{ item.source_analyzed or '—' }}
-        {% if item.deadline %} · Due {{ item.deadline }}{% endif %}
-        {% if item.program %} · {{ item.program }}{% endif %}
-      </div>
+      <div class="ta-bs-text" id="itext-{{ item.id }}">{{ item.text }}</div>
+      <button class="ta-bs-text-toggle" onclick="toggleText('{{ item.id }}')">more</button>
+      <div class="ta-bs-meta">{{ item.source_analyzed or '—' }}</div>
     </div>
     <div class="ta-bs-actions" style="flex-direction:column;align-items:flex-end;gap:4px">
       <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">

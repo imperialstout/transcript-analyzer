@@ -892,11 +892,19 @@ document.addEventListener('submit', function(e) {
   });
 });
 
-// Auto-resume polling if server reports a job in-flight when page loads
+// Auto-resume polling if server reports a job in-flight when page loads.
+// Also fires on bfcache restore (pageshow persisted=true) so the banner
+// doesn't stay stuck after back-navigation to a page with a running job.
 (function() {
-  {% if job_running %}
-  startPoll({{ job_label | tojson }} + '…');
-  {% endif %}
+  function _maybeResume() {
+    {% if job_running %}
+    if (!_pollTimer) startPoll({{ job_label | tojson }} + '…');
+    {% endif %}
+  }
+  _maybeResume();
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) _maybeResume();
+  });
 })();
 
 // ── Persist <details> open/closed state across page reloads ──

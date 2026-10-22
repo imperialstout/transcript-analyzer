@@ -645,6 +645,11 @@ _HTML = """\
   details.ta-bs-group-section:first-child > summary { border-top: none; padding-top: 4px; }
   details.ta-bs-group-section[open] summary .ta-bs-section-chevron { transform: rotate(90deg); }
   details.ta-bs-group-section .ta-bs-section-chevron { font-size: 10px; transition: transform 0.15s; }
+  details.ta-bs-program-group { margin-top: 6px; }
+  details.ta-bs-program-group > summary { padding-bottom: 2px; }
+  details.ta-bs-program-group:first-child > summary { border-top: none; margin-top: 0; }
+  details.ta-bs-program-group:not([open]) .ta-bs-program-chevron { transform: rotate(-90deg); }
+  .ta-bs-program-chevron { font-size: 10px; display: inline-block; transition: transform 0.15s; }
   details.ta-bs-section summary {
     cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
     padding: 10px 0; color: var(--slds-g-color-on-surface-4, #706e6b);
@@ -1317,7 +1322,8 @@ document.addEventListener('submit', function(e) {
   if (typeof sessionStorage === 'undefined') return;
   var KEY = 'bs-details-state';
   function stateKey(el) {
-    // Use id of closest card ancestor + local index among all details on page
+    // Prefer explicit data-persist-key for stable identity across reloads
+    if (el.dataset && el.dataset.persistKey) return KEY + ':' + el.dataset.persistKey;
     var card = el.closest('[id]');
     var cardId = card ? card.id : 'root';
     var all = Array.from(document.querySelectorAll('details'));
@@ -1540,7 +1546,7 @@ _SETTINGS_BODY = """\
 </div>
 
 <div class="ta-card">
-  <h2>Program order</h2>
+  <h2>Project order</h2>
   <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:12px;line-height:1.5">
     Drag to reorder. Controls grouping order across Brief State sections. Takes effect immediately.
   </p>
@@ -1553,7 +1559,7 @@ _SETTINGS_BODY = """\
     </div>
     {% endfor %}
   </div>
-  <p style="margin-top:10px;font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b)">New programs not in this list appear at the bottom.</p>
+  <p style="margin-top:10px;font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b)">New projects not in this list appear at the bottom.</p>
 </div>
 
 </div><!-- right column -->
@@ -1683,6 +1689,18 @@ _BRIEF_STATE_BODY = """\
 {% set inbox_count = candidate_items|length %}
 {% set urgent_count = candidate_items | selectattr('urgency', 'equalto', 'high') | list | length %}
 
+{# ── MACRO: inline project reassign select (auto-submits on change) ── #}
+{% macro project_select(item, return_to) %}
+<form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:inline">
+  <input type="hidden" name="return_to" value="{{ return_to }}">
+  <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 4px;font-size:11px;max-width:130px"
+          onchange="this.form.submit()" title="Reassign project">
+    <option value="">— project —</option>
+    {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+  </select>
+</form>
+{% endmacro %}
+
 {# ── TAB BAR ── #}
 <div class="ta-bs-tabs" role="tablist">
   <button class="ta-bs-tab active" role="tab" aria-selected="true" aria-controls="bs-panel-act" id="bs-tab-act" onclick="bsTab('act')">
@@ -1724,7 +1742,7 @@ _BRIEF_STATE_BODY = """\
     <span class="ta-bs-tab-count" style="background:#daeaf8;color:var(--slds-g-color-brand-2,#0176d3)">{{ pinned_acts|length }}</span>
   </h2>
   <table class="ta-rl">
-    <thead><tr><th style="width:56%">Item</th><th>Program</th><th>From</th><th>Due</th><th></th></tr></thead>
+    <thead><tr><th style="width:56%">Item</th><th>Project</th><th>From</th><th>Due</th><th></th></tr></thead>
     <tbody>
     {% for item in pinned_acts %}
     <tr class="{% if item.overdue %}ta-rl-overdue{% elif item.deadline and item.deadline <= today_iso %}ta-rl-due-soon{% endif %}" data-act-id="{{ item.id }}">
@@ -1776,7 +1794,7 @@ _BRIEF_STATE_BODY = """\
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
                 <input type="hidden" name="return_to" value="inbox">
                 <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-                  <option value="">Clear program</option>
+                  <option value="">Clear project</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
                 </select>
                 <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
@@ -1855,7 +1873,7 @@ _BRIEF_STATE_BODY = """\
               <form method="post" action="/brief-state/assign-program/{{ item.id }}" style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
                 <input type="hidden" name="return_to" value="inbox">
                 <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-                  <option value="">Clear program</option>
+                  <option value="">Clear project</option>
                   {% for p in programs %}<option value="{{ p.key }}" {% if item.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
                 </select>
                 <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Assign</button>
@@ -1892,41 +1910,44 @@ _BRIEF_STATE_BODY = """\
 <div class="ta-card">
   <h2>Watch — monitoring items</h2>
   {% if watch_items %}
-  <table class="ta-rl">
-    <thead><tr><th style="width:66%">Item</th><th>Program</th><th>From</th><th></th></tr></thead>
-    <tbody>
-    {% for group in watch_groups %}
-    {% if watch_groups|length > 1 %}
-    <tr><td colspan="4" class="ta-rl-section-header" style="padding:6px 12px">{{ group.label }}</td></tr>
-    {% endif %}
-    {% for item in group.rows %}
-    <tr data-act-id="{{ item.id }}">
-      <td class="ta-rl-item-text">
-        {{ item.text }}
-        {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
-      </td>
-      <td class="ta-muted">{{ item.program or '—' }}</td>
-      {% set _from = item.source_brief or item.source_analyzed or '' %}
-      <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
-      <td>
-        <div class="ta-rl-actions">
-          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
-            <input type="hidden" name="status" value="complete">
-            <input type="hidden" name="return_to" value="watch-section">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Done</button>
-          </form>
-          <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline" onsubmit="return confirm('Drop this watch item?');">
-            <input type="hidden" name="status" value="dropped">
-            <input type="hidden" name="return_to" value="watch-section">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Drop</button>
-          </form>
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-    {% endfor %}
-    </tbody>
-  </table>
+  {% for group in watch_groups %}
+  <details class="ta-bs-program-group" data-persist-key="watch-group-{{ group.key }}" open>
+    <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+      <span class="ta-bs-program-chevron">▾</span>
+      {{ group.label }}
+      <span class="ta-muted" style="font-size:11px;font-weight:400">({{ group.rows|length }})</span>
+    </summary>
+    <table class="ta-rl" style="margin-top:4px">
+      <thead><tr><th style="width:72%">Item</th><th>From</th><th></th></tr></thead>
+      <tbody>
+      {% for item in group.rows %}
+      <tr data-act-id="{{ item.id }}">
+        <td class="ta-rl-item-text">
+          {{ item.text }}
+          {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
+        </td>
+        {% set _from = item.source_brief or item.source_analyzed or '' %}
+        <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
+        <td>
+          <div class="ta-rl-actions">
+            <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
+              <input type="hidden" name="status" value="complete">
+              <input type="hidden" name="return_to" value="watch-section">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Done</button>
+            </form>
+            <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline" onsubmit="return confirm('Drop this watch item?');">
+              <input type="hidden" name="status" value="dropped">
+              <input type="hidden" name="return_to" value="watch-section">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Drop</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
   {% else %}
   <div class="ta-rl-empty">No active watch items.</div>
   {% endif %}
@@ -1951,12 +1972,20 @@ _BRIEF_STATE_BODY = """\
         {% if item.resurfaced_count %}<div class="ta-rl-meta">Re-surfaced {{ item.resurfaced_count }}×</div>{% endif %}
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
-      <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td>
+        <form method="post" action="/brief-state/set-owner/{{ item.id }}" style="display:inline">
+          <input type="hidden" name="return_to" value="delegate-section">
+          <input type="text" name="owner" value="{{ item.owner or '' }}" placeholder="owner…"
+                 class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 5px;font-size:11px;width:90px"
+                 onblur="this.form.submit()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
+        </form>
+      </td>
       {% set _from = item.source_brief or item.source_analyzed or '' %}
       <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">{{ item.deadline or '—' }}</td>
       <td>
         <div class="ta-rl-actions">
+          {{ project_select(item, 'delegate-section') }}
           <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="delegate-section">
@@ -1987,7 +2016,14 @@ _BRIEF_STATE_BODY = """\
         {{ item.text }}
         {% if item.notes %}<div class="ta-rl-meta">{{ item.notes }}</div>{% endif %}
       </td>
-      <td class="ta-muted">{{ item.owner or '—' }}</td>
+      <td>
+        <form method="post" action="/brief-state/set-owner/{{ item.id }}" style="display:inline">
+          <input type="hidden" name="return_to" value="they-owe-section">
+          <input type="text" name="owner" value="{{ item.owner or '' }}" placeholder="who…"
+                 class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:2px 5px;font-size:11px;width:90px"
+                 onblur="this.form.submit()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
+        </form>
+      </td>
       {% set _from = item.source_brief or item.source_analyzed or '' %}
       <td class="ta-muted" style="white-space:nowrap">{% if _from %}<a class="ta-quick-link" href="/open-file?path={{ analyzed_path }}/{{ _from }}">{{ _from[:10] }}</a>{% else %}—{% endif %}</td>
       <td class="ta-muted" style="white-space:nowrap">
@@ -1996,6 +2032,7 @@ _BRIEF_STATE_BODY = """\
       </td>
       <td>
         <div class="ta-rl-actions">
+          {{ project_select(item, 'they-owe-section') }}
           <form method="post" action="/brief-state/close/{{ item.id }}" style="display:inline">
             <input type="hidden" name="status" value="complete">
             <input type="hidden" name="return_to" value="they-owe-section">
@@ -2034,70 +2071,85 @@ _BRIEF_STATE_BODY = """\
       <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss all</button>
     </form>
   </div>
-  {% set urgent_items = candidate_items | selectattr('urgency', 'equalto', 'high') | list %}
-  {% set normal_items = candidate_items | rejectattr('urgency', 'equalto', 'high') | list %}
-  <table class="ta-rl">
-    <thead><tr><th style="width:54%">Signal</th><th>Type</th><th>Program</th><th></th></tr></thead>
-    <tbody>
-    {% for item in urgent_items %}
-    <tr class="ta-rl-inbox-row">
-      <td class="ta-rl-item-text">
-        <span class="ta-badge ta-badge-act" style="margin-right:6px">URGENT</span>
-        <span id="itext-{{ item.id }}">{{ item.text }}</span>
-        <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
-      </td>
-      <td><span class="ta-badge ta-badge-act">act</span></td>
-      <td class="ta-muted">{{ item.program or '—' }}</td>
-      <td>
-        <div class="ta-rl-actions">
-          <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:inline">
-            <input type="hidden" name="type" value="act">
-            <input type="hidden" name="program" value="{{ item.program or '' }}">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-error-2,#c23934);color:var(--slds-g-color-error-2,#c23934)">Accept</button>
-          </form>
-          <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
-          </form>
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-    {% for item in normal_items %}
-    <tr>
-      <td class="ta-rl-item-text">
-        <span id="itext-{{ item.id }}">{{ item.text }}</span>
-        <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
-      </td>
-      <td>
-        <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
-        {% if item.owner and item.owner != 'Brad' %}<div class="ta-rl-meta">{{ item.owner }}</div>{% endif %}
-      </td>
-      <td class="ta-muted">{{ item.program or '—' }}</td>
-      <td>
-        <div class="ta-rl-actions">
-          <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
-            <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
-              <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
-              <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
-              <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
-              <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
-              <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
-            </select>
-            <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px;max-width:120px">
-              <option value="{{ item.program or '' }}">{{ item.program or 'program…' }}</option>
-              {% for p in programs %}{% if p.key != item.program %}<option value="{{ p.key }}">{{ p.label }}</option>{% endif %}{% endfor %}
-            </select>
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-warning-2,#dd7a01);color:var(--slds-g-color-warning-2,#dd7a01)">Accept</button>
-          </form>
-          <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
-            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
-          </form>
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  {% for group in inbox_groups %}
+  {% set group_urgent = group.rows | selectattr('urgency', 'equalto', 'high') | list %}
+  {% set group_normal = group.rows | rejectattr('urgency', 'equalto', 'high') | list %}
+  <details class="ta-bs-program-group" data-persist-key="inbox-group-{{ group.key }}" open>
+    <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+      <span class="ta-bs-program-chevron">▾</span>
+      {{ group.label }}
+      <span class="ta-muted" style="font-size:11px;font-weight:400">({{ group.rows|length }})</span>
+    </summary>
+    <table class="ta-rl" style="margin-top:4px">
+      <thead><tr><th style="width:60%">Signal</th><th>Type</th><th></th></tr></thead>
+      <tbody>
+      {% for item in group_urgent %}
+      <tr class="ta-rl-inbox-row">
+        <td class="ta-rl-item-text">
+          <span class="ta-badge ta-badge-act" style="margin-right:6px">URGENT</span>
+          <span id="itext-{{ item.id }}">{{ item.text }}</span>
+          <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
+        </td>
+        <td>
+          <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
+          {% if item.owner and item.owner != 'Brad' %}<div class="ta-rl-meta">{{ item.owner }}</div>{% endif %}
+        </td>
+        <td>
+          <div class="ta-rl-actions">
+            {{ project_select(item, 'inbox') }}
+            <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+              <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
+                <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
+                <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
+                <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
+                <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
+              </select>
+              <input type="hidden" name="program" value="{{ item.program or '' }}">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-error-2,#c23934);color:var(--slds-g-color-error-2,#c23934)">Accept</button>
+            </form>
+            <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% for item in group_normal %}
+      <tr>
+        <td class="ta-rl-item-text">
+          <span id="itext-{{ item.id }}">{{ item.text }}</span>
+          <div class="ta-rl-meta">{{ item.source_analyzed or '—' }}{% if item.deadline %} · Due {{ item.deadline }}{% endif %}</div>
+        </td>
+        <td>
+          <span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span>
+          {% if item.owner and item.owner != 'Brad' %}<div class="ta-rl-meta">{{ item.owner }}</div>{% endif %}
+        </td>
+        <td>
+          <div class="ta-rl-actions">
+            {{ project_select(item, 'inbox') }}
+            <form method="post" action="/brief-state/accept/{{ item.id }}" style="display:flex;gap:4px;align-items:center">
+              <select name="type" class="ta-btn ta-btn-secondary ta-btn-sm" style="padding:3px 6px;font-size:11px">
+                <option value="act"      {% if item.type == 'act' %}selected{% endif %}>act</option>
+                <option value="watch"    {% if item.type == 'watch' %}selected{% endif %}>watch</option>
+                <option value="they-owe" {% if item.type == 'they-owe' %}selected{% endif %}>they-owe</option>
+                <option value="delegate" {% if item.type == 'delegate' %}selected{% endif %}>delegate</option>
+                <option value="insight"  {% if item.type == 'insight' %}selected{% endif %}>insight</option>
+              </select>
+              <input type="hidden" name="program" value="{{ item.program or '' }}">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm" style="border-color:var(--slds-g-color-warning-2,#dd7a01);color:var(--slds-g-color-warning-2,#dd7a01)">Accept</button>
+            </form>
+            <form method="post" action="/brief-state/dismiss-candidate/{{ item.id }}" style="display:inline" onsubmit="return confirm('Dismiss?');">
+              <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Dismiss</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
 </div>
 </div>
 {% endif %}
@@ -2110,24 +2162,33 @@ _BRIEF_STATE_BODY = """\
 <div class="ta-card">
   <h2>Closed — last 7 days</h2>
   {% if recent_closed %}
-  <table class="ta-rl">
-    <thead><tr><th style="width:54%">Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr></thead>
-    <tbody>
-    {% for item in recent_closed %}
-    <tr>
-      <td class="ta-rl-item-text">{{ item.text }}</td>
-      <td><span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span></td>
-      <td><span class="ta-badge ta-badge-{{ item.status }}">{{ item.status }}</span></td>
-      <td class="ta-muted" style="white-space:nowrap">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
-      <td>
-        <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
-          <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Reopen</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  {% for group in closed_groups %}
+  <details class="ta-bs-program-group" data-persist-key="closed-group-{{ group.key }}" open>
+    <summary class="ta-bs-program-header ta-bs-program-header-toggle">
+      <span class="ta-bs-program-chevron">▾</span>
+      {{ group.label }}
+      <span class="ta-muted" style="font-size:11px;font-weight:400">({{ group.rows|length }})</span>
+    </summary>
+    <table class="ta-rl" style="margin-top:4px">
+      <thead><tr><th style="width:54%">Item</th><th>Type</th><th>Status</th><th>Closed</th><th></th></tr></thead>
+      <tbody>
+      {% for item in group.rows %}
+      <tr>
+        <td class="ta-rl-item-text">{{ item.text }}</td>
+        <td><span class="ta-badge ta-badge-{{ item.type }}">{{ item.type }}</span></td>
+        <td><span class="ta-badge ta-badge-{{ item.status }}">{{ item.status }}</span></td>
+        <td class="ta-muted" style="white-space:nowrap">{{ item.closed_at[:10] if item.closed_at else '—' }}</td>
+        <td>
+          <form method="post" action="/brief-state/reopen/{{ item.id }}" style="display:inline">
+            <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">Reopen</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
   {% else %}
   <div class="ta-rl-empty">Nothing closed in the last 7 days.</div>
   {% endif %}
@@ -2154,7 +2215,7 @@ _PREP_BODY = """\
   <p class="ta-muted" style="font-size:12px;margin-bottom:14px">Select a program to generate a pre-meeting brief from its recent signals and open act items.</p>
   <div class="ta-prep-controls">
     <select id="prep-program" name="program">
-      <option value="">Select program…</option>
+      <option value="">Select project…</option>
       {% set ns = namespace(cur_group=None) %}
       {% for p in programs %}
         {% if p.group != ns.cur_group %}
@@ -2170,7 +2231,7 @@ _PREP_BODY = """\
       {% if ns.cur_group is not none %}</optgroup>{% endif %}
     </select>
     <input type="text" id="prep-context" placeholder="Meeting topic or agenda (optional)">
-    <button class="ta-btn ta-btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh program signals from analyzed files">↻ Refresh signals</button>
+    <button class="ta-btn ta-btn-secondary" id="prep-refresh-btn" onclick="refreshSignals()" title="Refresh project signals from analyzed files">↻ Refresh signals</button>
     <button class="ta-btn ta-btn-secondary" id="prep-submit" onclick="runMeetingPrep()">Prep</button>
   </div>
   <div id="prep-output" style="display:none"></div>
@@ -2798,19 +2859,26 @@ def create_app():
 
         # Group unpinned acts by program; null → "_unassigned"
         prog_order = _load_prog_order()
+        _prog_labels = {p["key"]: p["label"] for p in _get_programs()}
 
         def _group_by_program(items, row_key="rows"):
             by_prog: dict[str, list] = {}
             for item in items:
                 k = item.get("program") or "_unassigned"
                 by_prog.setdefault(k, []).append(item)
+
+            def _label(k):
+                if k == "_unassigned":
+                    return "Unassigned"
+                return _prog_labels.get(k, k)
+
             groups = [
-                {"key": k, "label": k if k != "_unassigned" else "Unassigned", row_key: by_prog[k]}
+                {"key": k, "label": _label(k), row_key: by_prog[k]}
                 for k in prog_order if k in by_prog
             ]
             for k, grp_items in by_prog.items():
                 if k not in prog_order:
-                    groups.append({"key": k, "label": k, row_key: grp_items})
+                    groups.append({"key": k, "label": _label(k), row_key: grp_items})
             return groups
 
         act_groups = _group_by_program(unpinned_acts, "acts")
@@ -2820,6 +2888,7 @@ def create_app():
         they_owe_list = [_enrich_they_owe(i) for i in _bs.pending_they_owe()]
         they_owe_groups = _group_by_program(they_owe_list, "rows")
         closed_groups = _group_by_program(recent_closed, "rows")
+        inbox_groups = _group_by_program(_bs.pending_candidates(), "rows")
 
         return _render(
             _BRIEF_STATE_BODY,
@@ -2837,6 +2906,7 @@ def create_app():
             they_owe_groups=they_owe_groups,
             recent_closed=recent_closed,
             closed_groups=closed_groups,
+            inbox_groups=inbox_groups,
             programs=_get_programs(),
             prog_order=prog_order,
             flash=request.args.get("flash", ""),
@@ -2953,6 +3023,21 @@ def create_app():
         ft = "ok" if found else "err"
         anchor = request.form.get("return_to", "")
         dest = url_for("brief_state_page", flash=msg, ft=ft)
+        return redirect(dest + f"#{anchor}" if anchor else dest)
+
+    @app.post("/brief-state/set-owner/<item_id>")
+    def brief_state_set_owner(item_id):
+        from . import brief_state as _bs
+        owner = (request.form.get("owner") or "").strip() or None
+        all_items = _bs.all_items()
+        target = next((i for i in all_items if i["id"] == item_id), None)
+        if target is None:
+            return redirect(url_for("brief_state_page", flash="Item not found", ft="err"))
+        updated = dict(target)
+        updated["owner"] = owner or "Brad"
+        _bs.upsert(updated)
+        anchor = request.form.get("return_to", "")
+        dest = url_for("brief_state_page", flash=f"Owner set to {updated['owner']}", ft="ok")
         return redirect(dest + f"#{anchor}" if anchor else dest)
 
     @app.post("/brief-state/re-own/<item_id>")

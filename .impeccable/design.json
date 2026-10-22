@@ -1,32 +1,42 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-14T00:00:00Z",
+  "generatedAt": "2026-10-22T00:00:00Z",
   "title": "Design System: Transcript Analyzer",
   "extensions": {
     "colorMeta": {
-      "bg":      { "role": "neutral",   "displayName": "Deep Void",          "canonical": "#0f1117", "tonalRamp": ["#0a0c10", "#0f1117", "#14171f", "#191c27", "#1e212f", "#252838", "#2d3042", "#3a3d4f"] },
-      "surface": { "role": "neutral",   "displayName": "Surface Layer",       "canonical": "#1a1d27", "tonalRamp": ["#0f1117", "#1a1d27", "#22263a", "#2a2f45", "#333851", "#3d4260", "#474d6e", "#545a7d"] },
-      "border":  { "role": "neutral",   "displayName": "Quiet Border",        "canonical": "#2a2d3a", "tonalRamp": ["#1a1d27", "#2a2d3a", "#353848", "#404457", "#4c5066", "#585d76", "#656a86", "#737896"] },
-      "text":    { "role": "neutral",   "displayName": "Primary Text",        "canonical": "#e2e4ec", "tonalRamp": ["#6e7080", "#8e909e", "#aeb0bc", "#c4c6d0", "#d4d6e0", "#e2e4ec", "#eef0f6", "#f8f9fc"] },
-      "muted":   { "role": "neutral",   "displayName": "Muted Text",          "canonical": "#7a7f96", "tonalRamp": ["#3a3f55", "#4a4f66", "#5a5f78", "#6a6f8a", "#7a7f96", "#8e94a8", "#a4a9bc", "#bbbfce"] },
-      "accent":  { "role": "primary",   "displayName": "Signal Blue",         "canonical": "#4f8ef7", "tonalRamp": ["#0d1f3c", "#1a3560", "#234c88", "#2d63b0", "#3c7ad8", "#4f8ef7", "#74a8ff", "#a0c4ff"] },
-      "green":   { "role": "secondary", "displayName": "Confirmation Green",  "canonical": "#3ecf8e", "tonalRamp": ["#0a2e1e", "#10402a", "#165438", "#1c6845", "#287d54", "#3ecf8e", "#6ddba9", "#9de8c3"] },
-      "orange":  { "role": "tertiary",  "displayName": "Warning Orange",      "canonical": "#f7a24f", "tonalRamp": ["#2e1a06", "#4a2a0a", "#663b10", "#834d18", "#a06024", "#c07a38", "#f7a24f", "#ffbe80"] },
-      "red":     { "role": "tertiary",  "displayName": "Alert Red",           "canonical": "#f76f6f", "tonalRamp": ["#2e0a0a", "#4a1010", "#661818", "#832222", "#a02e2e", "#c04040", "#f76f6f", "#ff9898"] },
-      "purple":  { "role": "tertiary",  "displayName": "Delegation Purple",   "canonical": "#b08ef7", "tonalRamp": ["#1a0d2e", "#2a1848", "#3c2860", "#503878", "#664a90", "#8060b8", "#b08ef7", "#cdb4ff"] },
-      "cyan":    { "role": "tertiary",  "displayName": "Watch Cyan",          "canonical": "#3ecfcf", "tonalRamp": ["#0a2a2a", "#103e3e", "#165454", "#1c6a6a", "#288080", "#3ab0b0", "#3ecfcf", "#70e0e0"] },
-      "gold":    { "role": "tertiary",  "displayName": "Deferred Gold",       "canonical": "#cfaf3e", "tonalRamp": ["#261e06", "#3a2e0a", "#504012", "#665218", "#7c6420", "#9a7e2c", "#cfaf3e", "#e8cc70"] }
+      "brand":        { "role": "primary",   "displayName": "Salesforce Blue",     "canonical": "#0176d3", "tonalRamp": ["#001f3f", "#013a6b", "#015498", "#0165b8", "#0176d3", "#1a8ce0", "#4aaaf0", "#8cceff"] },
+      "brandDark":    { "role": "primary",   "displayName": "Salesforce Blue Deep", "canonical": "#014486", "tonalRamp": ["#001530", "#012450", "#013570", "#014486", "#01559c", "#0168b8", "#1a7ed0", "#4aa0e8"] },
+      "surface1":     { "role": "neutral",   "displayName": "Canvas White",         "canonical": "#ffffff", "tonalRamp": ["#c8c8c8", "#d8d8d8", "#e5e5e5", "#ededed", "#f3f3f3", "#f8f8f8", "#fbfbfb", "#ffffff"] },
+      "surface2":     { "role": "neutral",   "displayName": "Table Header Grey",    "canonical": "#f3f3f3", "tonalRamp": ["#c0c0c0", "#d0d0d0", "#dcdcdc", "#e5e5e5", "#ededed", "#f3f3f3", "#f7f7f7", "#fbfbfb"] },
+      "border1":      { "role": "neutral",   "displayName": "Light Divider",        "canonical": "#e5e5e5", "tonalRamp": ["#909090", "#aaaaaa", "#c0c0c0", "#d0d0d0", "#dcdcdc", "#e5e5e5", "#eeeeee", "#f5f5f5"] },
+      "border2":      { "role": "neutral",   "displayName": "Input Border",         "canonical": "#c9c7c5", "tonalRamp": ["#6e6c6a", "#8a8886", "#a09e9c", "#b4b2b0", "#c2c0be", "#c9c7c5", "#d8d6d4", "#e8e6e4"] },
+      "text":         { "role": "neutral",   "displayName": "Primary Text",         "canonical": "#181818", "tonalRamp": ["#181818", "#2a2a2a", "#404040", "#585858", "#707070", "#888888", "#aaaaaa", "#cccccc"] },
+      "muted":        { "role": "neutral",   "displayName": "Muted Text",           "canonical": "#706e6b", "tonalRamp": ["#404040", "#504e4c", "#605e5c", "#706e6b", "#888684", "#a09e9c", "#bcbab8", "#d8d6d4"] },
+      "success":      { "role": "secondary", "displayName": "Confirmation Green",   "canonical": "#2e844a", "tonalRamp": ["#0a2015", "#143020", "#1e4c30", "#266440", "#2e844a", "#3aab60", "#5acc7a", "#90e0a8"] },
+      "warning":      { "role": "tertiary",  "displayName": "Warning Orange",       "canonical": "#dd7a01", "tonalRamp": ["#2e1800", "#4c2c00", "#6e4200", "#8e5800", "#b87000", "#dd7a01", "#f59a30", "#ffc060"] },
+      "error":        { "role": "tertiary",  "displayName": "Alert Red",            "canonical": "#c23934", "tonalRamp": ["#2e0a08", "#4c1412", "#6e2020", "#902c2a", "#b03530", "#c23934", "#d86060", "#f09090"] },
+      "purple":       { "role": "tertiary",  "displayName": "Delegation Purple",    "canonical": "#6b3fa0", "tonalRamp": ["#1a0a28", "#2c1442", "#40205c", "#562e78", "#6b3fa0", "#8a60c0", "#aa88da", "#ccb4f0"] },
+      "teal":         { "role": "tertiary",  "displayName": "Insight Teal",         "canonical": "#0d7377", "tonalRamp": ["#021e20", "#053438", "#084c50", "#0a6064", "#0d7377", "#1a9898", "#3abcbc", "#70d8d8"] },
+      "deferredGold": { "role": "tertiary",  "displayName": "Deferred Gold",        "canonical": "#8a6000", "tonalRamp": ["#1e1400", "#382400", "#503800", "#6a4c00", "#8a6000", "#a87a10", "#c89c30", "#e8c060"] }
     },
     "typographyMeta": {
-      "ui":    { "displayName": "UI / Body",        "purpose": "All prose, table cells, nav, form copy. The default register." },
-      "label": { "displayName": "Label / Badge",    "purpose": "Section headers, table column headers, badge text, stat labels. Always uppercase with tracking." },
-      "mono":  { "displayName": "Mono / Terminal",  "purpose": "Job output panel, file paths, inline code, .env key names. Only for machine-generated or machine-readable text." }
+      "ui":    { "displayName": "UI / Body",       "purpose": "All prose, table cells, nav, form copy. The default register for human-readable content." },
+      "label": { "displayName": "Label / Badge",   "purpose": "Section headers (h2 in cards), table column headers, badge text, stat labels. Always uppercase with tracking." },
+      "mono":  { "displayName": "Mono / Terminal", "purpose": "Job output panel, file paths, inline code tokens, .env key names, source drawer content. Strictly for machine-generated or machine-readable text." },
+      "stat":  { "displayName": "Stat Value",      "purpose": "Counted quantities on the Files page stat strip. The largest text in the UI — reserved for numeric values only." }
     },
-    "shadows": [],
+    "shadows": [
+      { "name": "panel-overlay", "value": "var(--slds-g-shadow-2, -4px 0 16px rgba(0,0,0,.1))",  "purpose": "Source drawer (right side panel). Indicates physical overlap above the canvas." },
+      { "name": "popover",       "value": "var(--slds-g-shadow-2, 0 4px 16px rgba(0,0,0,.12))", "purpose": "Render-warnings popover. Anchored dropdown that overlaps header content." }
+    ],
     "motion": [
-      { "name": "opacity-hover",   "value": "opacity 0.15s ease",              "purpose": "Button hover — opacity 1 → 0.85. The only interactive transition." },
-      { "name": "slider-toggle",   "value": "background 0.2s, transform 0.2s", "purpose": "Toggle switch track and thumb. System-convention timing." },
-      { "name": "spinner",         "value": "spin 0.7s linear infinite",        "purpose": "Running-job indicator. Only appears during active pipeline work." }
+      { "name": "button-fade",     "value": "opacity 0.15s ease",              "purpose": "Primary button hover — opacity 1.0 → 0.85. The only transition on interactive controls." },
+      { "name": "nav-color",       "value": "color 0.15s, background 0.15s",   "purpose": "Nav link hover and active state." },
+      { "name": "tab-color",       "value": "color 0.1s",                      "purpose": "Brief State tab hover." },
+      { "name": "slider-toggle",   "value": "background 0.2s, transform 0.2s", "purpose": "Toggle switch track color and thumb translation." },
+      { "name": "drawer-slide",    "value": "transform 0.2s ease",             "purpose": "Source drawer enter/exit slide." },
+      { "name": "details-chevron", "value": "transform 0.15s",                 "purpose": "Operations drawer and program section chevron rotation." },
+      { "name": "spinner",         "value": "ta-spin 0.7s linear infinite",    "purpose": "Running-job indicator. Only visible during active pipeline work." }
     ],
     "breakpoints": []
   },
@@ -35,114 +45,129 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Highest-priority action in a context group. Used for Daily Pulse trigger and Save Settings.",
+      "description": "Highest-priority action. Daily Pulse trigger, Save settings, Run Analysis.",
       "html": "<button class=\"ds-btn-primary\">▶ Daily Pulse</button>",
-      "css": ".ds-btn-primary { background: #4f8ef7; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font: 600 13px/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s ease; } .ds-btn-primary:hover { opacity: 0.85; } .ds-btn-primary:focus-visible { outline: 2px solid #4f8ef7; outline-offset: 2px; }"
+      "css": ".ds-btn-primary { background: var(--slds-g-color-brand-2, #0176d3); color: #fff; border: none; border-radius: var(--slds-g-radius-border-2, 0.25rem); padding: 8px 16px; font: 600 0.875rem/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: opacity 0.15s ease; } .ds-btn-primary:hover { opacity: 0.85; } .ds-btn-primary:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Standard pipeline actions — Run Analysis, Weekly Delta, Catch Up, Career, Timecard.",
-      "html": "<button class=\"ds-btn-secondary\">⚡ Run Analysis</button>",
-      "css": ".ds-btn-secondary { background: #1a1d27; color: #e2e4ec; border: 1px solid #2a2d3a; border-radius: 6px; padding: 8px 16px; font: 600 13px/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s ease; } .ds-btn-secondary:hover { background: #2a2d3a; } .ds-btn-secondary:focus-visible { outline: 2px solid #4f8ef7; outline-offset: 2px; }"
+      "description": "Default action weight for Done, Dismiss, Drop, and most table row actions.",
+      "html": "<button class=\"ds-btn-secondary\">Done</button>",
+      "css": ".ds-btn-secondary { background: var(--slds-g-color-surface-1, #fff); color: var(--slds-g-color-on-surface-2, #181818); border: 1px solid var(--slds-g-color-border-2, #c9c7c5); border-radius: var(--slds-g-radius-border-2, 0.25rem); padding: 8px 16px; font: 600 0.875rem/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 0.15s; } .ds-btn-secondary:hover { background: var(--slds-g-color-surface-2, #f3f3f3); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }"
     },
     {
-      "name": "Danger Button",
+      "name": "Secondary Button Small",
       "kind": "button",
-      "refersTo": "button-danger",
-      "description": "Destructive actions in the brief-state panel — Drop, Re-own.",
-      "html": "<button class=\"ds-btn-danger\">Drop</button>",
-      "css": ".ds-btn-danger { background: #3a1f1f; color: #f76f6f; border: 1px solid #5a2e2e; border-radius: 6px; padding: 8px 16px; font: 600 13px/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; transition: background 0.15s; } .ds-btn-danger:hover { background: #4a2828; } .ds-btn-danger:focus-visible { outline: 2px solid #f76f6f; outline-offset: 2px; }"
+      "refersTo": "button-secondary-small",
+      "description": "Table row actions — Done, +1d, +3d, Mon, … overflow menu trigger.",
+      "html": "<button class=\"ds-btn-sm\">+1d</button>",
+      "css": ".ds-btn-sm { background: var(--slds-g-color-surface-1, #fff); color: var(--slds-g-color-on-surface-2, #181818); border: 1px solid var(--slds-g-color-border-2, #c9c7c5); border-radius: var(--slds-g-radius-border-1, 0.125rem); padding: 3px 8px; font: 600 11px/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transition: background 0.15s; } .ds-btn-sm:hover { background: var(--slds-g-color-surface-2, #f3f3f3); } .ds-btn-sm:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }"
     },
     {
-      "name": "EXEC Badge",
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Irreversible administrative actions only — server restart. Never for completion or dismissal.",
+      "html": "<button class=\"ds-btn-destructive\">↻ Restart server</button>",
+      "css": ".ds-btn-destructive { background: var(--slds-g-color-error-2, #c23934); color: #fff; border: none; border-radius: var(--slds-g-radius-border-2, 0.25rem); padding: 8px 16px; font: 600 0.875rem/1 'SF Pro Text', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 0.15s; } .ds-btn-destructive:hover { background: #a61c17; } .ds-btn-destructive:focus-visible { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }"
+    },
+    {
+      "name": "Brief State Tabs",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Horizontal tab bar sticky below header. Act / Watch / Waiting / Inbox / Closed.",
+      "html": "<div class=\"ds-tab-bar\"><button class=\"ds-tab ds-tab-active\" role=\"tab\" aria-selected=\"true\">Act <span class=\"ds-tab-count ds-tab-count-urgent\">4</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Watch <span class=\"ds-tab-count\">2</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Waiting</button></div>",
+      "css": ".ds-tab-bar { display: flex; border-bottom: 1px solid var(--slds-g-color-border-2, #c9c7c5); background: var(--slds-g-color-surface-1, #fff); } .ds-tab { padding: 12px 20px; font: 400 0.875rem/1 'SF Pro Text', system-ui, sans-serif; color: var(--slds-g-color-on-surface-4, #706e6b); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: color 0.1s; } .ds-tab:hover { color: var(--slds-g-color-on-surface-2, #181818); } .ds-tab-active { color: var(--slds-g-color-brand-2, #0176d3); border-bottom-color: var(--slds-g-color-brand-2, #0176d3); font-weight: 600; } .ds-tab-count { background: var(--slds-g-color-surface-2, #f3f3f3); color: var(--slds-g-color-on-surface-4, #706e6b); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; } .ds-tab-active .ds-tab-count { background: #daeaf8; color: var(--slds-g-color-brand-2, #0176d3); } .ds-tab-count-urgent { background: #fef1f1 !important; color: var(--slds-g-color-error-2, #c23934) !important; }"
+    },
+    {
+      "name": "Badge",
       "kind": "chip",
       "refersTo": "badge-exec",
-      "description": "Category badge for executive-tier transcript analyses.",
-      "html": "<span class=\"ds-badge ds-badge-exec\">EXEC</span>",
-      "css": ".ds-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font: 700 11px/1.4 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; } .ds-badge-exec { background: #3a2020; color: #f76f6f; }"
-    },
-    {
-      "name": "OVERDUE Badge",
-      "kind": "chip",
-      "refersTo": "badge-overdue",
-      "description": "The loudest badge in the system. Used only for overdue act items in Brief State.",
-      "html": "<span class=\"ds-badge ds-badge-overdue\">OVERDUE</span>",
-      "css": ".ds-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font: 700 11px/1.4 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; } .ds-badge-overdue { background: #4a1010; color: #f76f6f; font-weight: 700; }"
+      "description": "Semantic status badges. Each hue owns exactly one role.",
+      "html": "<div class=\"ds-badge-row\"><span class=\"ds-badge ds-badge-exec\">EXEC</span><span class=\"ds-badge ds-badge-solution\">SOLUTION</span><span class=\"ds-badge ds-badge-daily\">DAILY</span><span class=\"ds-badge ds-badge-overdue\">OVERDUE</span><span class=\"ds-badge ds-badge-deferred\">DEFERRED</span></div>",
+      "css": ".ds-badge-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; } .ds-badge { display: inline-block; padding: 2px 7px; border-radius: var(--slds-g-radius-border-2, 0.25rem); font: 700 11px/1.4 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; } .ds-badge-exec { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); } .ds-badge-solution { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); } .ds-badge-daily { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); } .ds-badge-standup { background: #fff3e0; color: var(--slds-g-color-warning-2, #dd7a01); } .ds-badge-overdue { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); border: 1px solid #fac9c9; font-weight: 700; } .ds-badge-deferred { background: #fff8e1; color: #8a6000; }"
     },
     {
       "name": "Card",
       "kind": "card",
       "refersTo": "card",
-      "description": "Primary structural unit. All content lives in cards against the --bg floor.",
-      "html": "<div class=\"ds-card\"><h2 class=\"ds-card-title\">Analyzed files</h2><p class=\"ds-card-body\">Content goes here.</p></div>",
-      "css": ".ds-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 20px; } .ds-card-title { font: 700 13px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #7a7f96; margin-bottom: 14px; } .ds-card-body { font: 400 13px/1.5 'SF Pro Text', system-ui, sans-serif; color: #e2e4ec; overflow-wrap: break-word; word-break: break-word; }"
+      "description": "Primary surface container. Flat — no shadow. Differentiated from page background by a 1px border.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\">Section Title</div><p class=\"ds-card-body\">Card content here.</p></div>",
+      "css": ".ds-card { background: var(--slds-g-color-surface-1, #fff); border: 1px solid var(--slds-g-color-border-1, #e5e5e5); border-radius: var(--slds-g-radius-border-3, 0.5rem); padding: 20px; margin-bottom: 20px; } .ds-card-header { font: 700 11px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slds-g-color-on-surface-4, #706e6b); margin-bottom: 14px; } .ds-card-body { font: 400 0.875rem/1.5 'SF Pro Text', system-ui, sans-serif; color: var(--slds-g-color-on-surface-2, #181818); }"
     },
     {
-      "name": "Stat Tile",
+      "name": "Today's Focus Card",
+      "kind": "card",
+      "refersTo": "card-focus",
+      "description": "Pinned act items. 2px brand-blue border distinguishes it from the act table below.",
+      "html": "<div class=\"ds-card-focus\"><div class=\"ds-card-focus-header\">★ Today's Focus <span class=\"ds-badge\" style=\"background:#daeaf8;color:#0176d3;margin-left:6px\">2</span></div></div>",
+      "css": ".ds-card-focus { background: var(--slds-g-color-surface-1, #fff); border: 2px solid var(--slds-g-color-brand-2, #0176d3); border-radius: var(--slds-g-radius-border-3, 0.5rem); padding: 20px; margin-bottom: 16px; } .ds-card-focus-header { font: 700 11px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slds-g-color-brand-2, #0176d3); margin-bottom: 14px; display: flex; align-items: center; }"
+    },
+    {
+      "name": "Overdue Banner",
       "kind": "custom",
-      "description": "Pipeline metric tile. Flex-wraps in a row above the action strip. 22px bold value — the only large text in the system.",
-      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-val\">47</div><div class=\"ds-stat-lbl\">Total analyzed</div></div>",
-      "css": ".ds-stat { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 14px 20px; min-width: 140px; } .ds-stat-val { font: 700 22px/1 'SF Pro Text', system-ui, sans-serif; color: #e2e4ec; } .ds-stat-lbl { font: 700 11px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: #7a7f96; margin-top: 2px; }"
-    },
-    {
-      "name": "Text Input",
-      "kind": "input",
-      "description": "Form fields in Settings and Slack Paste. Recessed (--bg background) below the card surface.",
-      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\">Model override</label><input class=\"ds-input\" type=\"text\" placeholder=\"e.g. claude-opus-4-8\"><div class=\"ds-field-desc\">Force a specific model for all runs.</div></div>",
-      "css": ".ds-field { margin-bottom: 18px; } .ds-field-label { display: block; font: 700 12px/1 'SF Pro Text', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: #7a7f96; margin-bottom: 5px; } .ds-input { background: #0f1117; border: 1px solid #2a2d3a; border-radius: 6px; color: #e2e4ec; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 7px 10px; width: 100%; box-sizing: border-box; } .ds-input:focus { outline: none; border-color: #4f8ef7; } .ds-input:focus-visible { border-color: #4f8ef7; } .ds-field-desc { font: 400 12px/1.4 'SF Pro Text', system-ui, sans-serif; color: #7a7f96; margin-top: 4px; }"
+      "refersTo": null,
+      "description": "Always-visible alert above the Brief State tabs. Renders whenever there are overdue act items.",
+      "html": "<div class=\"ds-overdue-banner\"><div class=\"ds-overdue-icon\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"8\" cy=\"8\" r=\"7.5\" stroke=\"#c23934\"/><line x1=\"8\" y1=\"4.5\" x2=\"8\" y2=\"9\" stroke=\"#c23934\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"11.5\" r=\"0.75\" fill=\"#c23934\"/></svg></div><div class=\"ds-overdue-body\"><div class=\"ds-overdue-title\">2 overdue acts — action required</div><ul class=\"ds-overdue-list\"><li>Follow up with Jitu on cost group approach</li></ul></div></div>",
+      "css": ".ds-overdue-banner { background: #fef1f1; border: 1px solid #fac9c9; border-left: 4px solid var(--slds-g-color-error-2, #c23934); border-radius: var(--slds-g-radius-border-3, 0.5rem); padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; } .ds-overdue-icon { flex-shrink: 0; padding-top: 2px; } .ds-overdue-body { flex: 1; } .ds-overdue-title { font: 700 0.875rem/1 'SF Pro Text', system-ui, sans-serif; color: var(--slds-g-color-error-2, #c23934); margin-bottom: 6px; } .ds-overdue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; } .ds-overdue-list li { font: 400 0.875rem/1.5 'SF Pro Text', system-ui, sans-serif; color: var(--slds-g-color-on-surface-2, #181818); overflow-wrap: break-word; }"
     },
     {
       "name": "Toggle Switch",
       "kind": "input",
-      "description": "Boolean settings toggle. Pill track 36×20px; circular thumb 14×14px. Keyboard focus ring appears on the track via :focus-visible + .slider.",
-      "html": "<label class=\"ds-toggle\"><input class=\"ds-toggle-input\" type=\"checkbox\"><span class=\"ds-toggle-slider\"></span></label>",
-      "css": ".ds-toggle { position: relative; width: 36px; height: 20px; display: inline-block; flex-shrink: 0; } .ds-toggle-input { opacity: 0; width: 0; height: 0; position: absolute; } .ds-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #2a2d3a; border-radius: 20px; transition: background 0.2s; } .ds-toggle-slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; } .ds-toggle-input:checked + .ds-toggle-slider { background: #4f8ef7; } .ds-toggle-input:checked + .ds-toggle-slider::before { transform: translateX(16px); } .ds-toggle-input:focus-visible + .ds-toggle-slider { outline: 2px solid #4f8ef7; outline-offset: 2px; }"
+      "refersTo": null,
+      "description": "Boolean setting control — color mode, shareable pass, Plaud sync. Pill track with sliding thumb.",
+      "html": "<label class=\"ds-toggle\"><input type=\"checkbox\" class=\"ds-toggle-input\" checked><span class=\"ds-toggle-slider\"></span></label>",
+      "css": ".ds-toggle { position: relative; display: inline-block; width: 36px; height: 20px; } .ds-toggle-input { opacity: 0; width: 0; height: 0; position: absolute; } .ds-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--slds-g-color-border-2, #c9c7c5); border-radius: 20px; transition: background 0.2s; } .ds-toggle-slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; } .ds-toggle-input:checked + .ds-toggle-slider { background: var(--slds-g-color-brand-2, #0176d3); } .ds-toggle-input:checked + .ds-toggle-slider::before { transform: translateX(16px); } .ds-toggle-input:focus-visible + .ds-toggle-slider { outline: 2px solid var(--slds-g-color-brand-2, #0176d3); outline-offset: 2px; }"
     },
     {
-      "name": "Navigation",
-      "kind": "nav",
-      "description": "Top-header nav strip. Active state uses --border fill. Pending count badge is a red pill appended inline.",
-      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-active\" href=\"#\">Brief State <span class=\"ds-nav-badge\">3</span></a><a class=\"ds-nav-link\" href=\"#\">Analyzed Files</a><a class=\"ds-nav-link\" href=\"#\">Settings</a></nav>",
-      "css": ".ds-nav { display: flex; gap: 4px; } .ds-nav-link { color: #7a7f96; text-decoration: none; font: 400 13px/1 'SF Pro Text', system-ui, sans-serif; padding: 6px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; } .ds-nav-link:hover, .ds-nav-active { color: #e2e4ec; background: #2a2d3a; } .ds-nav-link:focus-visible { outline: 2px solid #4f8ef7; outline-offset: 2px; } .ds-nav-badge { background: #f76f6f; color: #fff; border-radius: 10px; padding: 0 5px; font: 700 10px/1.6 'SF Pro Text', system-ui, sans-serif; }"
+      "name": "Flash Message",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Feedback messages. Three variants: ok (green), err (red), info (blue for running job).",
+      "html": "<div class=\"ds-flash ds-flash-info\" style=\"display:flex;align-items:center;gap:8px\"><span class=\"ds-spinner\"></span><strong>Running Daily Pulse synthesis…</strong></div>",
+      "css": ".ds-flash { padding: 10px 16px; border-radius: var(--slds-g-radius-border-2, 0.25rem); margin-bottom: 16px; font: 400 0.875rem/1 'SF Pro Text', system-ui, sans-serif; } .ds-flash-ok { background: #eaf5ec; color: var(--slds-g-color-success-2, #2e844a); border: 1px solid #c2e0c6; } .ds-flash-err { background: #fef1f1; color: var(--slds-g-color-error-2, #c23934); border: 1px solid #fac9c9; } .ds-flash-info { background: #eaf1fb; color: var(--slds-g-color-brand-2, #0176d3); border: 1px solid #b8d4f5; } .ds-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--slds-g-color-border-2, #c9c7c5); border-top-color: var(--slds-g-color-brand-2, #0176d3); border-radius: 50%; animation: ds-spin 0.7s linear infinite; flex-shrink: 0; } @keyframes ds-spin { to { transform: rotate(360deg); } }"
     }
   ],
   "narrative": {
-    "northStar": "The Intelligence Terminal",
-    "overview": "This interface is a classified-grade analyst's workspace. Raw transcripts and meeting notes flow in through a background pipeline; distilled obligations, decisions, and program signal emerge on screen. The design premise is that the analysis is the product — the interface exists only to surface it with zero friction and maximum legibility. In a tool this personal and this operational, every pixel that isn't carrying signal is overhead.\n\nThe palette is near-black with surgical precision accents. Category signals (EXEC, SOLUTION, DAILY, overdue acts) are color-coded in the same semantic vocabulary across every surface — once learned, a glance at the file table communicates the morning's meeting mix before a single word is read. Depth comes from tonal layering, not shadows: the hierarchy is --bg → --surface → foreground, and you always know where you are in it.\n\nInteractive components are precise and considered. Buttons have a hair of transition on hover; badges use deeply-saturated-but-dark backgrounds that read clearly without shouting. Nothing moves unless it's earning its motion — the spinner on a running job, the scroll auto-advance in the output panel.",
+    "northStar": "Salesforce Record Page for Obligations",
+    "overview": "The interface follows Salesforce's native record-page pattern: a clean white field, a sticky header with a brand-blue underline, horizontal subtabs for major information categories, and related-list tables for scannable row-by-row content. The tool is used by someone who lives in Salesforce — the design language should feel immediately familiar, not like a custom tool that needs to be learned.\n\nThe primary Brief State view uses five tabs (Act / Watch / Waiting / Inbox / Closed), so arriving on the page shows only the active obligations at the weight the user chooses. Operational paralysis is eliminated by making sections mutually exclusive rather than stacked. A pinned Today's Focus card (2px blue border) floats above the act table for the most critical items; the overdue banner is always visible above the tabs regardless of which tab is active.\n\nDark mode is preserved as a toggle (dimly-lit office use), but light is the default. In light mode, the SLDS token system provides the chrome; dark mode applies an explicit slds-color-scheme_dark class and overrides the hardcoded hex values.",
     "keyCharacteristics": [
-      "Near-black field (#0f1117) as the absolute base — the screen recedes",
-      "Semantic color vocabulary: seven named signal colors, each owned by a single role",
-      "Flat tonal layering, no drop shadows anywhere",
-      "11px uppercase tracked labels for all section headers and table columns",
-      "SF Pro Text / system-ui as the sole prose face; SF Mono exclusively for code and live job output",
-      "Dense information layout — 14px base size, 1100px content cap, no wasted whitespace"
+      "SLDS2 Cosmos token system (--slds-g-color-*, --slds-g-font-scale-*, --slds-g-radius-border-*) loaded from CDN",
+      "White/light-grey field (Salesforce native); dark toggle preserved",
+      "Salesforce brand blue (#0176d3) as the single action color",
+      "Brief State as tab-based record page — Act / Watch / Waiting / Inbox / Closed",
+      "Related-list tables inside each tab: grey table header row, subtle row hover, right-aligned actions",
+      "Semantic badge vocabulary: light tinted backgrounds (not dark), each hue owns one role",
+      "Synthesis buttons tiered by frequency: daily-pulse (blue primary), periodic (secondary), rare (muted secondary)"
     ],
     "rules": [
-      { "name": "The One Hue, One Role Rule",    "body": "Each signal color — blue, green, orange, red, purple, cyan, gold — is owned by exactly one semantic role. Never repurpose --accent for decoration, never use --green for anything other than success/confirmation, and never use --red for anything other than urgency/danger.",  "section": "colors" },
-      { "name": "The Neutral Majority Rule",      "body": "At least 90% of any given screen surface uses only the four neutral tokens. Signal colors are the 10% that earns attention by being rare.",                                                                                                                                            "section": "colors" },
-      { "name": "The Uppercase Label Rule",       "body": "Organizational text — card section headers, table column headers, badge text, stat labels — is always 11px uppercase with letter-spacing. Body text is never uppercase.",                                                                                                                      "section": "typography" },
-      { "name": "The No-Shadow Rule",             "body": "Drop shadows are permanently absent. When a surface needs to read as elevated, it uses --surface background against a --bg surround, optionally framed by a 1px --border outline. Adding shadows is a hard regression.",                                                                     "section": "elevation" },
-      { "name": "The Consistent Rounding Rule",   "body": "Radius tier is determined by component class: cards are always 8px, buttons/inputs are always 6px, badges are always 4px. Never mix tiers within the same element or use ad-hoc values.",                                                                                                  "section": "shapes" }
+      { "name": "One hue, one role", "body": "Blue = action only. Red = urgency/error only. Never use red for a completion action (Dismiss, Done) — those are secondary buttons. The vocabulary works because it is consistent.", "section": "colors" },
+      { "name": "The Static Hex Exception", "body": "Badge backgrounds and the inbox card use direct hex rather than SLDS tokens because they carry semantic meaning independent of the surface color — the tint IS the signal. Overriding these in dark mode requires explicit dark-mode rules, not token inheritance.", "section": "colors" },
+      { "name": "The Mono Firewall", "body": "SF Mono appears only for machine-generated or machine-readable text: job output, file paths, env key names, inline code tokens. Never use mono for UI copy, labels, or nav text.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "All surfaces are flat at rest. --slds-g-shadow-2 is permitted only for elements that physically overlap the canvas: the source drawer (fixed side panel) and the render-warnings popover (anchored dropdown). Adding shadows elsewhere breaks the uniform depth contract.", "section": "elevation" },
+      { "name": "The Token Radius Rule", "body": "All radius values reference the SLDS scale vars with a px fallback. Never hardcode a bare pixel value for border-radius on a standard element — the fallback is for environments where the SLDS stylesheet hasn't loaded.", "section": "shapes" }
     ],
     "dos": [
-      "Do use --accent (#4f8ef7) for all and only interactive affordances — links, focus rings, primary buttons, active nav state.",
-      "Do keep table rows at 7px vertical padding. Denser obscures; looser wastes the density advantage.",
-      "Do use SF Mono only for machine-generated or machine-readable text: job output, file paths, inline code, .env key names.",
-      "Do keep the stat tile value at 22px bold — it's the only large text in the system.",
-      "Do use the dark-tinted badge pattern (dark saturated background + colored text) for all new semantic badge types.",
-      "Do make the OVERDUE badge (#4a1010 / --red bold) the most visually prominent badge.",
-      "Do apply overflow-wrap: break-word to all flex-child text containers (.bs-text, .alert-text, job output). AI-generated obligation text and long meeting titles will shatter flex layouts without it.",
-      "Do truncate the source-file column in tables (max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap) and expose the full name in a title attribute."
+      "Do use var(--slds-g-color-brand-2, #0176d3) for all interactive affordances: buttons, tab underlines, focus rings, count pills on active tabs.",
+      "Do keep the Brief State tab bar sticky (top: 53px) so it's reachable without scrolling past the header.",
+      "Do tint overdue rows with rgba(194,57,52,0.04) — the row tint is visible at a glance without requiring a badge scan.",
+      "Do use related-list table layout (grey header, row hover, right-aligned actions) for all Brief State content panels.",
+      "Do persist the active tab to sessionStorage so returning to the page resumes context.",
+      "Do keep the overdue banner above the tabs — it's the only element that renders regardless of tab state.",
+      "Do tier synthesis buttons by frequency: Daily Pulse is primary blue; Weekly/Catch-up are secondary; Career/Timecard are rare (muted secondary).",
+      "Do use var(--slds-g-shadow-2) only for the source drawer and render-warn popover — elements that physically overlap the canvas.",
+      "Do preserve hardcoded hex values for badge backgrounds and the inbox card; these semantic tints must not be inherited from SLDS surface tokens."
     ],
     "donts": [
-      "Don't add box-shadows. The depth model is tonal. Any shadow is a regression.",
-      "Don't introduce new accent colors. The seven signal colors are complete: blue (action), green (success), orange (warning), red (danger/urgency), purple (delegation), cyan (information), gold (deferred). An eighth color dilutes the vocabulary.",
-      "Don't use color for decoration. Every non-neutral color on screen must carry semantic meaning.",
-      "Don't mix radius tiers within a component. Cards are 8px. Buttons/inputs are 6px. Badges are 4px.",
-      "Don't use uppercase for body text. The uppercase register is exclusively structural.",
-      "Don't auto-reload the page after a failed job. The output panel must stay visible when returncode !== 0."
+      "Don't stack Act + Watch + Delegate vertically. The tab model is the answer to paralysis — mutually exclusive panels, not a vertical scroll.",
+      "Don't use red or destructive styling for completion or dismissal actions (Done, Dismiss, Drop). Those are secondary buttons.",
+      "Don't use emoji as icons. The sole exception is the Unicode braille dot (⠿) drag handle in the program order list.",
+      "Don't add box-shadows to cards. Flat surfaces differentiated by border only.",
+      "Don't load dark mode by default. slds-color-scheme_dark is applied only when localStorage.getItem('slds-ui-color-mode') === 'dark'.",
+      "Don't use SF Mono for UI copy, labels, nav, or badge text. Mono is strictly for machine-generated / machine-readable content.",
+      "Don't invent a new hue for a new badge type. Extend the existing semantic vocabulary: red for urgency, orange for deferred/inbox, blue for delegation, purple for interpersonal, teal for insight, green for success."
     ]
   }
 }

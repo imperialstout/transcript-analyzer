@@ -216,10 +216,13 @@ def _analyzed_files() -> list[dict]:
             try:
                 fpath = CONFIG.analyzed_path / output
                 if not fpath.exists():
-                    # check _Archive subdirs
-                    for p in (CONFIG.analyzed_path / "_Archive").rglob(output):
-                        fpath = p
-                        break
+                    # rglob() treats [...] as a character class — walk manually
+                    import os as _os
+                    archive_root = CONFIG.analyzed_path / "_Archive"
+                    for _dir, _, _files in _os.walk(archive_root):
+                        if output in _files:
+                            fpath = Path(_dir) / output
+                            break
                 if fpath.exists():
                     program = classify_program(fpath)
                     if program == "_admin":
@@ -1452,17 +1455,27 @@ _HOME_BODY = """\
 </div>
 
 <div class="ta-card">
-  <h2>Analyzed files — most recent 25 of {{ rows|length }}</h2>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+    <h2 style="margin:0">Analyzed files — {{ rows|length }} total</h2>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input id="files-search" type="search" placeholder="Filter…" oninput="filesFilter()"
+             style="padding:3px 8px;font-size:12px;border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:4px;width:160px">
+      <button class="ta-btn ta-btn-secondary ta-btn-sm" id="bulk-classify-btn" onclick="bulkClassify()" title="Auto-classify all unassigned files using the keyword classifier">
+        Auto-classify unassigned
+      </button>
+      <span id="bulk-classify-status" style="font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b)"></span>
+    </div>
+  </div>
   {% if rows %}
-  <table>
+  <table id="files-table">
     <thead>
       <tr>
         <th>Date</th><th>Source</th><th>Category</th><th>Project</th><th>Model</th><th>Cost</th><th>Shareable</th>
       </tr>
     </thead>
-    <tbody>
-    {% for r in rows[:25] %}
-    <tr>
+    <tbody id="files-tbody">
+    {% for r in rows %}
+    <tr data-search="{{ r.analyzed_at[:10] }} {{ r.output }} {{ r.category }} {{ r.program }}">
       <td class="ta-muted" style="white-space:nowrap">{{ r.analyzed_at[:10] }}</td>
       <td class="td-source">
         {% if r.mode == "synthesis" %}
@@ -1501,11 +1514,21 @@ _HOME_BODY = """\
     {% endfor %}
     </tbody>
   </table>
-  {% if rows|length > 25 %}
-  <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--slds-g-color-border-1,#e5e5e5);font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b)">
-    Showing 25 of {{ rows|length }} files — open <a class="ta-quick-link" style="font-size:12px" href="{{ analyzed_path_url }}">Analyzed/</a> in Finder for the full history.
+  <div id="files-pagination" style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--slds-g-color-border-1,#e5e5e5);font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b)">
+    <button class="ta-btn ta-btn-secondary ta-btn-sm" id="files-prev" onclick="filesPage(-1)">← Prev</button>
+    <span id="files-page-info"></span>
+    <button class="ta-btn ta-btn-secondary ta-btn-sm" id="files-next" onclick="filesPage(1)">Next →</button>
+    <span style="margin-left:auto">
+      Show
+      <select id="files-per-page" onchange="filesSetPerPage()" style="padding:2px 4px;font-size:11px;border:1px solid var(--slds-g-color-border-1,#e5e5e5);border-radius:4px">
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="0">All</option>
+      </select>
+      per page
+    </span>
   </div>
-  {% endif %}
   {% else %}
   <div style="padding:24px 0;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--slds-g-color-on-surface-4,#706e6b)">
     <span style="font-size:28px;opacity:0.4">⏳</span>
@@ -1514,6 +1537,67 @@ _HOME_BODY = """\
   </div>
   {% endif %}
 </div>
+<script>
+(function() {
+  var _rows, _filtered, _page = 0, _perPage = 25;
+
+  function init() {
+    _rows = Array.from(document.querySelectorAll('#files-tbody tr'));
+    _filtered = _rows;
+    render();
+  }
+
+  function render() {
+    var total = _filtered.length;
+    var perPage = _perPage === 0 ? total : _perPage;
+    var totalPages = perPage === 0 ? 1 : Math.max(1, Math.ceil(total / perPage));
+    if (_page >= totalPages) _page = totalPages - 1;
+    if (_page < 0) _page = 0;
+    var start = _page * perPage;
+    var end = perPage === 0 ? total : Math.min(start + perPage, total);
+
+    _rows.forEach(function(r) { r.style.display = 'none'; });
+    _filtered.slice(start, end).forEach(function(r) { r.style.display = ''; });
+
+    var info = document.getElementById('files-page-info');
+    if (info) info.textContent = total === 0 ? 'No results' : (start + 1) + '–' + end + ' of ' + total;
+    var prev = document.getElementById('files-prev');
+    var next = document.getElementById('files-next');
+    if (prev) prev.disabled = _page === 0;
+    if (next) next.disabled = _page >= totalPages - 1;
+    var pg = document.getElementById('files-pagination');
+    if (pg) pg.style.display = total <= (_perPage === 0 ? total + 1 : _perPage) && _perPage !== 0 && total <= _perPage ? 'none' : 'flex';
+  }
+
+  window.filesPage = function(delta) { _page += delta; render(); };
+  window.filesSetPerPage = function() {
+    _perPage = parseInt(document.getElementById('files-per-page').value, 10);
+    _page = 0; render();
+  };
+  window.filesFilter = function() {
+    var q = (document.getElementById('files-search').value || '').toLowerCase();
+    _filtered = q ? _rows.filter(function(r) { return (r.dataset.search || '').toLowerCase().includes(q); }) : _rows;
+    _page = 0; render();
+  };
+
+  window.bulkClassify = function() {
+    var btn = document.getElementById('bulk-classify-btn');
+    var status = document.getElementById('bulk-classify-status');
+    btn.disabled = true;
+    status.textContent = 'Running…';
+    fetch('/files/bulk-classify', {method: 'POST'})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        status.textContent = d.message || 'Done';
+        btn.disabled = false;
+        if (d.count > 0) setTimeout(function() { window.location.reload(); }, 800);
+      })
+      .catch(function() { status.textContent = 'Error'; btn.disabled = false; });
+  };
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
 """
 
 _SETTINGS_BODY = """\
@@ -2705,6 +2789,42 @@ def create_app():
         else:
             flash_msg = f"Project set to '{program}'" if program else "Project assignment cleared"
         return redirect(url_for("files_page", flash=flash_msg, ft="ok"))
+
+    @app.post("/files/bulk-classify")
+    def files_bulk_classify():
+        import json as _json
+        import os as _os
+        from .program_pulse import classify_program as _classify
+        from .manifest import load as _load_manifest
+
+        manifest = _load_manifest()
+        overrides = _load_program_overrides()
+        count = 0
+        for src, entry in manifest.items():
+            if src.startswith("plaud:"):
+                continue
+            output = entry.get("output_filename", "")
+            if not output or output in overrides:
+                continue
+            fpath = CONFIG.analyzed_path / output
+            if not fpath.exists():
+                archive_root = CONFIG.analyzed_path / "_Archive"
+                for _dir, _, _files in _os.walk(archive_root):
+                    if output in _files:
+                        fpath = Path(_dir) / output
+                        break
+            if not fpath.exists():
+                continue
+            try:
+                prog = _classify(fpath)
+            except Exception:
+                continue
+            if prog and prog != "_admin":
+                overrides[output] = prog
+                count += 1
+
+        _PROGRAM_OVERRIDES_PATH.write_text(_json.dumps(overrides, indent=2))
+        return {"count": count, "message": f"Classified {count} file(s)"}
 
     @app.post("/synthesize")
     def synthesize():

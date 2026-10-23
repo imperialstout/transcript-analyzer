@@ -50,11 +50,13 @@ _PRESALES_FS_KW = re.compile(
 
 _DISW_RCA_WORKSTREAMS = {"di-sw rca poc", "disw rca poc", "di-sw rca", "rca poc", "disw rca"}
 _DISW_RCA_PARTICIPANTS = {"chandan", "sanjay"}
-_DISW_RCA_TITLE_KW = re.compile(r"\bpoc\b|rca\s+poc|di-sw\s+rca", re.IGNORECASE)
+_DISW_RCA_TITLE_KW = re.compile(r"\bpoc\b|rca\s+poc|di-sw[\s-]rca|disw[\s-]rca", re.IGNORECASE)
+
+_SI_RCA_TITLE_KW = re.compile(r"\bsi[\s-]rca\b", re.IGNORECASE)
 
 _DISW_CPQ_WS_PREFIX = re.compile(r"^di-sw|^disw", re.IGNORECASE)
 _DISW_CPQ_TITLE_KW = re.compile(
-    r"\b(disw|digital\s+industries|neeraj|tequila|kortney)\b", re.IGNORECASE
+    r"\b(disw|di-sw|digital\s+industries|neeraj|tequila|kortney)\b", re.IGNORECASE
 )
 
 _SX_PRD_KW = re.compile(
@@ -78,7 +80,7 @@ _PRESALES_SIESALES_KW = re.compile(
 )
 _PRESALES_SIESALES_WS = re.compile(r"siesales|sie.sales|grid\s+software|\(siesales\)", re.IGNORECASE)
 
-_SIEMENS_GENERAL_WS = {"siemens all", "cross-stream", "cross-division", "executive"}
+_SIEMENS_GENERAL_WS = {"siemens all", "cross-stream", "cross-division"}
 _SIEMENS_GENERAL_KW = re.compile(r"\b(hana|eike|tara|gunnar)\b", re.IGNORECASE)
 
 _ADMIN_WS = {"internal", "internal-salesforce"}
@@ -137,8 +139,29 @@ def _parse_analyzed_meta(path: Path) -> dict:
     return {"workstream": workstream, "participants": participants, "title": title}
 
 
+_OVERRIDES_PATH = Path("~/.cache/transcript-analyzer/program-overrides.json").expanduser()
+
+
+def _load_overrides() -> dict:
+    try:
+        if _OVERRIDES_PATH.exists():
+            import json
+            return json.loads(_OVERRIDES_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
 def classify_program(path: Path) -> str:
-    """Return the program key for an Analyzed/ file (first match wins)."""
+    """Return the program key for an Analyzed/ file (first match wins).
+
+    Manual overrides stored in program-overrides.json take precedence over
+    the regex classifier.
+    """
+    overrides = _load_overrides()
+    if path.name in overrides:
+        return overrides[path.name]
+
     meta = _parse_analyzed_meta(path)
     ws = meta["workstream"]
     ws_lower = ws.lower().strip()
@@ -172,6 +195,10 @@ def classify_program(path: Path) -> str:
         return "DISW-RCA"
     if _DISW_RCA_TITLE_KW.search(title):
         return "DISW-RCA"
+
+    # SI-RCA explicit title match (before DISW-CPQ's broad \bdisw\b keyword grabs it)
+    if _SI_RCA_TITLE_KW.search(title):
+        return "SI-RCA"
 
     # DISW-CPQ — broader DI-SW workstream
     if _DISW_CPQ_WS_PREFIX.match(ws_lower):

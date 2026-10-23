@@ -20,10 +20,27 @@ import time
 from pathlib import Path
 
 _ENV_PATH = Path("~/.config/transcript-analyzer/.env").expanduser()
-# The rolling log written by bin/analyze.sh — full run history.  (The older
-# *-launchd.log only ever captured launchd's own stdout and went stale once
-# analyze.sh started teeing into its own files.)
 _LOG_PATH = Path("~/Library/Logs/transcript-analyzer.log").expanduser()
+_PROGRAM_OVERRIDES_PATH = Path("~/.cache/transcript-analyzer/program-overrides.json").expanduser()
+
+
+def _load_program_overrides() -> dict:
+    try:
+        if _PROGRAM_OVERRIDES_PATH.exists():
+            return json.loads(_PROGRAM_OVERRIDES_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_program_override(output_filename: str, program_key: str) -> None:
+    overrides = _load_program_overrides()
+    if program_key:
+        overrides[output_filename] = program_key
+    else:
+        overrides.pop(output_filename, None)
+    _PROGRAM_OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _PROGRAM_OVERRIDES_PATH.write_text(json.dumps(overrides, indent=2))
 
 # Env vars the settings page exposes.  Tuple of (key, label, kind, description).
 # kind: "text" | "url" | "toggle"
@@ -185,14 +202,33 @@ _MODE_LABELS = {
 def _analyzed_files() -> list[dict]:
     from .config import CONFIG
     from .manifest import load as load_manifest
+    from .program_pulse import classify_program
     manifest = load_manifest()
+    overrides = _load_program_overrides()
     rows = []
     for src, entry in sorted(manifest.items(), key=lambda x: x[1].get("analyzed_at", ""), reverse=True):
         if src.startswith("plaud:"):
             continue
+        output = entry.get("output_filename", "")
+        # Compute program: override wins, else classify from the Analyzed/ file
+        program = overrides.get(output, "")
+        if not program and output:
+            try:
+                fpath = CONFIG.analyzed_path / output
+                if not fpath.exists():
+                    # check _Archive subdirs
+                    for p in (CONFIG.analyzed_path / "_Archive").rglob(output):
+                        fpath = p
+                        break
+                if fpath.exists():
+                    program = classify_program(fpath)
+                    if program == "_admin":
+                        program = ""
+            except Exception:
+                program = ""
         rows.append({
             "source": src,
-            "output": entry.get("output_filename", ""),
+            "output": output,
             "shareable": entry.get("shareable_filename", ""),
             "category": entry.get("category") or entry.get("prompt_key", ""),
             "model": entry.get("model", ""),
@@ -200,6 +236,8 @@ def _analyzed_files() -> list[dict]:
             "analyzed_at": entry.get("analyzed_at", ""),
             "duration": entry.get("duration_seconds", 0),
             "mode": entry.get("mode", "transcript"),
+            "program": program,
+            "program_overridden": output in overrides,
         })
 
     # Synthesis outputs are now recorded in the manifest (new runs). Fall back to
@@ -1419,7 +1457,7 @@ _HOME_BODY = """\
   <table>
     <thead>
       <tr>
-        <th>Date</th><th>Source</th><th>Category</th><th>Model</th><th>Cost</th><th>Shareable</th>
+        <th>Date</th><th>Source</th><th>Category</th><th>Project</th><th>Model</th><th>Cost</th><th>Shareable</th>
       </tr>
     </thead>
     <tbody>
@@ -1438,6 +1476,22 @@ _HOME_BODY = """\
           <span class="ta-badge ta-badge-notes">notes</span>
         {% elif r.category %}
           <span class="ta-badge ta-badge-{{ r.category|lower }}">{{ r.category }}</span>
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap">
+        {% if r.mode not in ("synthesis",) and r.output %}
+        <form method="post" action="/files/set-program" style="display:inline-flex;gap:4px;align-items:center">
+          <input type="hidden" name="output" value="{{ r.output }}">
+          <select name="program" class="ta-btn ta-btn-secondary ta-btn-sm"
+                  style="padding:2px 4px;font-size:11px;max-width:140px{% if r.program_overridden %};font-weight:600{% endif %}"
+                  onchange="this.form.submit()" title="{% if r.program_overridden %}Manually overridden{% else %}Auto-classified{% endif %}">
+            <option value="">— project —</option>
+            {% for p in programs %}<option value="{{ p.key }}" {% if r.program == p.key %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+          </select>
+          {% if r.program_overridden %}<span title="Manually overridden" style="font-size:10px;color:var(--slds-g-color-brand-2,#0176d3)">✎</span>{% endif %}
+        </form>
+        {% else %}
+        <span class="ta-muted">—</span>
         {% endif %}
       </td>
       <td class="ta-muted">{{ r.model or "—" }}</td>
@@ -1560,6 +1614,21 @@ _SETTINGS_BODY = """\
     {% endfor %}
   </div>
   <p style="margin-top:10px;font-size:11px;color:var(--slds-g-color-on-surface-4,#706e6b)">New projects not in this list appear at the bottom.</p>
+</div>
+
+
+<div class="ta-card">
+  <h2>Re-push to STATUS.md</h2>
+  <p style="font-size:12px;color:var(--slds-g-color-on-surface-4,#706e6b);margin-bottom:14px;line-height:1.6">
+    Backfill rewrites a project's STATUS.md signal history from scratch using all files classified to it (including any overrides above). Use after correcting misclassified files.
+  </p>
+  {% for p in programs %}
+  <form method="post" action="/files/backfill-program" style="display:inline-block;margin:0 4px 6px 0"
+        onsubmit="return confirm('Backfill {{ p.label }}? This will re-write its STATUS.md Open signals section.');">
+    <input type="hidden" name="program" value="{{ p.key }}">
+    <button type="submit" class="ta-btn ta-btn-secondary ta-btn-sm">↺ {{ p.label }}</button>
+  </form>
+  {% endfor %}
 </div>
 
 </div><!-- right column -->
@@ -2594,6 +2663,7 @@ def create_app():
             _HOME_BODY,
             page="home",
             rows=rows,
+            programs=_get_programs(),
             total_cost=_total_cost(rows),
             last_analyzed=_last_ts,
             last_analyzed_stale=_last_stale,
@@ -2606,6 +2676,35 @@ def create_app():
             job_output=job_output,
             job_done=job_done,
         )
+
+    @app.post("/files/set-program")
+    def files_set_program():
+        output = request.form.get("output", "").strip()
+        program = request.form.get("program", "").strip()
+        if not output:
+            return redirect(url_for("files_page"))
+
+        _save_program_override(output, program)
+
+        # Cascade: re-assign any brief-state items sourced from this file
+        cascaded = 0
+        try:
+            from . import brief_state as _bs
+            items = _bs._load()
+            for item in items:
+                if item.get("source_analyzed") == output:
+                    item["program"] = program or None
+                    cascaded += 1
+            if cascaded:
+                _bs._save(items)
+        except Exception:
+            pass
+
+        if cascaded:
+            flash_msg = f"Project set to '{program}' — {cascaded} action item(s) updated"
+        else:
+            flash_msg = f"Project set to '{program}'" if program else "Project assignment cleared"
+        return redirect(url_for("files_page", flash=flash_msg, ft="ok"))
 
     @app.post("/synthesize")
     def synthesize():
@@ -2778,6 +2877,23 @@ def create_app():
             flash=f"Saved to inbox: {safe_name}",
             ft="ok",
         ))
+
+    @app.post("/files/backfill-program")
+    def files_backfill_program():
+        global _job
+        program = request.form.get("program", "").strip()
+        if not program:
+            return redirect(url_for("settings", flash="No program specified", ft="err"))
+        with _job_lock:
+            if _job and not _job["done"]:
+                return redirect(url_for("settings", flash="A job is already running", ft="err"))
+            _job = {"mode": "program-pulse", "output": "", "done": False, "returncode": None, "new_count": 0}
+        cmd = [
+            sys.executable, "-u", "-m", "analyzer", "synthesize",
+            "--mode", "program-pulse", "--backfill", "--programs", program,
+        ]
+        threading.Thread(target=_run_job, args=(cmd, "program-pulse"), daemon=True).start()
+        return redirect(url_for("run_page", flash=f"Backfill started for {program}", ft="ok"))
 
     @app.get("/run")
     def run_page():

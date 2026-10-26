@@ -7,6 +7,8 @@ bin/calendar_fetch
 .processed.json
 .claude/
 docs/dailyAndWeeklyPrompts.md
+.cursor/
+package-lock.json
 
 # Sensitive program content — lives in Drive (Workcall/), NEVER in the repo root.
 # These carry stakeholder politics, career notes, and named individuals.

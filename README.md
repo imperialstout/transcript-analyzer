@@ -192,10 +192,10 @@ From now on, just type `ta` in any Terminal window to launch the dashboard.
 
 ### Dashboard features
 
-- **Stats strip** at the top: total files processed, transcript count, notes count, cumulative cost.
-- **File table**: every analyzed file with its category badge (EXEC, SOLUTION, STANDUP, DAILY, B4, A3…), the model used, cost, and whether a shareable version exists.
-- **Synthesis buttons**: Daily Pulse, Weekly Slack Delta, and Career Trajectory — run synthesis right in the browser with live output. The Daily Pulse and Weekly buttons take an optional date to back-date a missed run.
-- **Settings tab**: configure the shared meeting files URL, rolodex/vocabulary paths, shareable toggle, backend, and model override — no `.env` editing required.
+- **Brief State** (home tab): your open obligations — Act items, Watch items, Waiting on, and an Inbox of triage alerts from recent meetings. Keyboard triage, program assignment, drag reorder, and close/defer/drop actions inline.
+- **File table**: paginated list of every analyzed file with category badge (EXEC, SOLUTION, STANDUP, DAILY, B4, A3…), model used, cost, source link, and shareable indicator. Bulk auto-classify to assign project tags across a batch.
+- **Synthesis buttons**: Daily Pulse, Weekly Delta, Career Trajectory, Catch-Up, and Program Pulse — run synthesis in the browser with live streaming output. Daily Pulse and Weekly Delta take an optional date to back-date a missed run; Catch-Up has a `--since` date picker for vacation recovery.
+- **Settings tab**: configure shared meeting files URL, rolodex/vocabulary paths, shareable toggle, backend, model override, program tracking list, and Plaud sync settings — no `.env` editing required.
 - **Content file shortcuts**: one-click to open PromptLibrary, Context Brief, Rolodex, and Vocabulary in your default editor.
 - **Open launchd log**: shortcut to the scheduler's log file for troubleshooting.
 
@@ -234,11 +234,19 @@ source ~/.venvs/transcript-analyzer/bin/activate
 # D1 — Daily Pulse: bundles today's [ANALYZED] files into a ~250 word pulse
 python -m analyzer synthesize --mode daily
 
-# D2 — Weekly Slack Delta: bundles this week's files into a paste-ready Slack update
+# D2 — Weekly Delta: bundles this week's files into a paste-ready Slack update
 python -m analyzer synthesize --mode weekly
 
-# D3 — Career Trajectory: bundles ALL current analyses into a strategic career review
+# D3 — Career Trajectory: incremental — chains off the prior trajectory + new files
 python -m analyzer synthesize --mode career
+
+# Catch-Up — one Daily Pulse per backlog day (vacation recovery)
+python -m analyzer synthesize --mode catch-up
+python -m analyzer synthesize --mode catch-up --since 2026-06-16  # only days on/after this date
+
+# Program Pulse — sweep Analyzed/ → update STATUS.md files in SiemensRCAGov
+python -m analyzer synthesize --mode program-pulse
+python -m analyzer synthesize --mode program-pulse --dry-run       # preview without writing
 ```
 
 **Missed a day?** Back-date daily or weekly synthesis with `--date YYYY-MM-DD` to anchor the
@@ -251,6 +259,14 @@ python -m analyzer synthesize --mode daily --date 2026-06-16
 
 # Weekly delta for the ISO week containing that date (Mon → that date)
 python -m analyzer synthesize --mode weekly --date 2026-06-16
+```
+
+**Returning from vacation?** Use catch-up mode instead of running daily repeatedly. It scans
+unarchived `[ANALYZED]` files, buckets them by meeting date, and emits one pulse per day in
+chronological order — each archives as it goes, so the output comes out dated and in sequence:
+
+```bash
+python -m analyzer synthesize --mode catch-up --since 2026-06-16
 ```
 
 Or use the buttons in the dashboard — same result. The Daily Pulse and Weekly buttons each have an
@@ -332,7 +348,7 @@ transcript-analyzer/
 ├── analyzer/
 │   ├── __main__.py        # Entry point — routes `python -m analyzer [command]` to the right module
 │   ├── main.py            # Runs the three pipelines: notes, documents, transcripts
-│   ├── synthesize.py      # Handles D1/D2/D3 synthesis and archiving
+│   ├── synthesize.py      # Handles D1/D2/D3/catch-up/program-pulse synthesis and archiving
 │   ├── ui.py              # Flask web dashboard
 │   ├── config.py          # Reads .env, sets model tiers, Drive paths
 │   ├── router.py          # Classifies each transcript into a category (Haiku call)
@@ -345,16 +361,24 @@ transcript-analyzer/
 │   ├── plaud_intake.py    # Pulls new Plaud recordings into the inbox via the plaud CLI
 │   ├── drive_client.py    # Google Drive OAuth + API for .gdoc body fetching
 │   ├── claude_cli.py      # Backend: shells out to `claude -p` (Claude Code seat)
-│   └── anthropic_client.py  # Backend: direct Anthropic API (legacy fallback)
+│   ├── anthropic_client.py  # Backend: direct Anthropic API (legacy fallback)
+│   ├── alerts.py          # Extracts Brad-directed triage items from analyzed files → alerts.json
+│   ├── brief_state.py     # Persistent triage store (act/watch/delegate/they-owe/insight items)
+│   ├── program_pulse.py   # Cross-repo sweep: updates STATUS.md files in SiemensRCAGov
+│   └── mcp_server.py      # MCP server for Claude Desktop — exposes brief-state + tools via stdio
 ├── bin/
-│   ├── analyze.sh         # Shell script launchd calls — runs analyzer, fires macOS notification
-│   └── slack_to_notes.sh  # Prepend headers to clipboard Slack digest → drops .md in notes inbox
+│   ├── analyze.sh           # Shell script launchd calls — runs analyzer, fires macOS notification
+│   ├── slack_to_notes.sh    # Prepend headers to clipboard Slack digest → drops .md in notes inbox
+│   └── brief-state-hook.py  # Session-start hook — injects pending act items into Claude Code
 ├── workcall-templates/    # ← Starting-point files to copy into your Drive Workcall/ folder
 │   ├── PromptLibrary.md           # Analysis prompts: DAILY/STANDUP/SOLUTION/EXEC + B4/A3 + REDACT
 │   ├── dailyAndWeeklyPrompts.md   # Synthesis prompts: D1 Daily Pulse, D2 Slack Delta, D3 Career
 │   ├── Program_Context_Brief.md   # Fillable template for program context, stakeholders, workstreams
 │   ├── 04_people_rolodex.md       # Template for tracking named individuals across the program
 │   └── 05_vocabulary.md           # Template for canonical spellings fed to the analyzer
+├── examples/
+│   ├── com.transcript-analyzer.plist  # launchd agent plist template
+│   └── july8sample.md                 # Sample Slack digest for testing the notes intake pipeline
 ├── docs/
 │   └── prompt_starters.md # Reference prompt bodies to paste into PromptLibrary.md
 ├── .env.example           # Template for ~/.config/transcript-analyzer/.env
@@ -610,23 +634,51 @@ Add it to your menu bar. The daily flow becomes: copy Canvas → click menu bar 
 
 ---
 
+## Part 5d: MCP server for Claude Desktop
+
+`analyzer/mcp_server.py` exposes brief-state, analyzed files, and synthesis as MCP tools that Claude Desktop (or any MCP-compatible client) can call directly — no copy-paste required.
+
+### What it exposes
+
+- **Brief state tools** — list pending act items, close or defer items, add notes
+- **Analyzed files** — query recent `[ANALYZED]` files by program or date range
+- **Synthesis trigger** — run Daily Pulse, Weekly Delta, or Program Pulse on demand from chat
+
+### Setup
+
+```bash
+# Add to Claude Desktop config (~/.config/claude/claude_desktop_config.json)
+{
+  "mcpServers": {
+    "transcript-analyzer": {
+      "command": "/Users/brad.gross/.venvs/transcript-analyzer/bin/python",
+      "args": ["/Users/brad.gross/code/transcript-analyzer/analyzer/mcp_server.py"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop. The tools appear automatically. Logs write to `~/Library/Logs/transcript-analyzer-mcp.log`.
+
+---
+
 ## Part 6: Reference
 
 ### Model tiers
 
 Different meeting types use different AI models — more powerful (and more expensive) for high-stakes meetings, cheaper for routine syncs.
 
-| Category | Model | Why |
+| Category | Default model | Work machine override |
 |---|---|---|
-| `EXEC` | `claude-opus-4-7` | Highest-stakes; executive dynamics |
-| `DOCUMENT` | `claude-opus-4-7` | Dense strategic content |
-| `SOLUTION` / `STANDUP` / `DAILY` | `claude-sonnet-4-6` | Technical design + internal syncs |
-| `B4` (Political Read) | `claude-opus-4-7` / `opus-4-8` on personal | Political dynamics; strategic reasoning |
-| `A3` (1:1/Career) | `claude-sonnet-4-6` | People and career notes |
-| Classifier | `claude-haiku-4-5-20251001` | Routing only; cheapest available |
-| Redaction | `claude-sonnet-4-6` | Post-processing structured text |
-| Synthesis D1/D2 | `claude-sonnet-4-6` | Recap; inputs already structured |
-| Synthesis D3 (career) | B4 model (`opus-4-8` on personal) | Strategic trajectory reasoning |
+| `EXEC` | `claude-opus-4-7` | `claude-opus-4-8` (`MODEL_EXEC`) |
+| `DOCUMENT` | `claude-opus-4-7` | `claude-opus-4-8` (`MODEL_DOCUMENT`) |
+| `SOLUTION` / `STANDUP` / `DAILY` | `claude-sonnet-4-6` | — |
+| `B4` (Political Read) | `claude-opus-4-7` | `claude-opus-4-8` (`MODEL_B4`) |
+| `A3` (1:1/Career) | `claude-sonnet-4-6` | — |
+| Classifier | `claude-haiku-4-5-20251001` | — |
+| Redaction | `claude-sonnet-4-6` | — |
+| Synthesis D1/D2 | `claude-sonnet-4-6` | — |
+| Synthesis D3 (career) | B4 model | — |
 
 Override any model via `.env`: `MODEL_EXEC=claude-opus-4-7`, `MODEL_B4=claude-opus-4-8`, etc.
 

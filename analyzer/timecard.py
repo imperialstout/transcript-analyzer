@@ -79,6 +79,8 @@ _DISW_TITLE_KW = re.compile(
 )
 _DISW_WORKSTREAM_PREFIX = re.compile(r"^di-sw|^disw", re.IGNORECASE)
 
+_SX_PRD_KW = re.compile(r"sx[-\s_]?prd|sx-mp|subscription\s+manag|honeycomb", re.IGNORECASE)
+
 _PRESALES_WORKSTREAM_KW = re.compile(
     r"\benergy\b|siemens\s+energy|\bse\b|healthineers|\bshs\b|financial\s+services|\bsfs\b|siemens\s+financial",
     re.IGNORECASE,
@@ -87,6 +89,13 @@ _PRESALES_TITLE_KW = re.compile(
     r"\benergy\b|siemens\s+energy|\bshs\b|healthineers|financial\s+services|\bsfs\b|siemens\s+financial",
     re.IGNORECASE,
 )
+
+# EDA is DI-SW only — never SI RCA.
+_EDA_KW = re.compile(r"\beda\b|\bgscs\b", re.IGNORECASE)
+
+# Files that are not billable meetings: Slack canvas exports and ambient audio.
+_NOISE_TITLE_KW = re.compile(r"slack\s+canvas|\bmonologue\b", re.IGNORECASE)
+_NOISE_BODY_KW = re.compile(r"no meeting content|no analysis produced", re.IGNORECASE)
 
 _ADMIN_TITLE_KW = re.compile(
     r"tune-in|practice\s+team|revcloud\s+community|introduction\s+to|survey\b|jodi\b"
@@ -158,10 +167,24 @@ def _parse_meta(path: Path) -> _FileMeta:
 # Classification
 # ---------------------------------------------------------------------------
 
+def _is_noise_file(meta: _FileMeta) -> bool:
+    if _NOISE_TITLE_KW.search(meta.title):
+        return True
+    try:
+        head = meta.path.read_text(encoding="utf-8")[:1500]
+    except OSError:
+        return False
+    return len(head) < 800 and bool(_NOISE_BODY_KW.search(head))
+
+
 def _classify(meta: _FileMeta) -> str:
     ws_lower = meta.workstream.lower().strip()
     title_lower = meta.title.lower()
     participants_lower = {p.lower() for p in meta.participants}
+
+    # 0. SX-PRD / subscription management is presales, regardless of participants
+    if _SX_PRD_KW.search(meta.workstream) or _SX_PRD_KW.search(meta.title):
+        return ROW_PRESALES
 
     # 1. DISW POC — explicit workstream, title keyword (POC/RCA PoC), or
     #    Chandan/Sanjay as participant (regardless of workstream — these names
@@ -176,7 +199,7 @@ def _classify(meta: _FileMeta) -> str:
     # 2. DISW — workstream prefix or title keyword
     if _DISW_WORKSTREAM_PREFIX.match(ws_lower):
         return ROW_DISW
-    if _DISW_TITLE_KW.search(meta.title):
+    if _DISW_TITLE_KW.search(meta.title) or _EDA_KW.search(meta.title):
         return ROW_DISW
 
     # 3. Presales — workstream or title keyword signals Energy / Healthineers / FS
@@ -238,6 +261,11 @@ _COMPRESS_SYSTEM_CLIENT = (
     "alignment, technical analysis, solution design. Justify the value of the time.\n"
     "- Actions and decisions ONLY. Drop internal process detail, uncertainty, and team friction.\n"
     "- Never name internal Salesforce team members or reference internal Salesforce dynamics.\n"
+    "- Never mention staffing changes, departures, offboarding, backfill, resourcing, roll-off, "
+    "escalations to Salesforce leadership, or account-team/engagement-model discussions. "
+    "Omit those items entirely; if a meeting was only that, describe it as 'program resourcing and "
+    "delivery planning'.\n"
+    "- Do not name individuals at all except client executives where essential; prefer roles/topics.\n"
     "- Use comma-separated shorthand: 'pricing engine design review, amendment logic validated, "
     "UC3 scope aligned with client stakeholders'.\n"
     "- Include total hours at the start only if >1h, e.g. '(3h)'.\n"
@@ -256,10 +284,33 @@ _COMPRESS_SYSTEM_INTERNAL = (
     "- Output ONLY the summary. No preamble, labels, or explanation."
 )
 
+_CLIENT_FORBIDDEN = re.compile(
+    r"backfill|offboard|departure|depart\b|roll-?\s?off|resourc|staffing|engagement model|"
+    r"\bEMs?\b|escalat\w* (?:path|to Brad)|Sanjay|Neeraj|Tequila|Kortney|Bill Schermer|Spielvogel|"
+    r"transition (?:managed|scoped)|coverage",
+    re.IGNORECASE,
+)
+
+_ROW_SCOPE = {
+    ROW_SI_RCA: (
+        "SCOPE: this entry is for the Smart Infrastructure (SI) RCA program only. Many source meetings "
+        "are mixed-topic. Include ONLY SI RCA work (BuildingX, DocGen, SI pricing/quote scaling, "
+        "translation, UC0-UC3, SIT/E2E readiness, Design Board). OMIT anything about the DI-SW PoC, "
+        "DI-SW/EDA/GSCS, BRE-limit PoC workarounds, account pipeline, and SX-PRD/subscription management."
+    ),
+    ROW_DISW: (
+        "SCOPE: this entry is for Digital Industries Software (DI-SW) only. OMIT SI RCA work and "
+        "SX-PRD/SX-MP subscription management (billed to Presales)."
+    ),
+    ROW_DISW_POC: (
+        "SCOPE: DI-SW RCA proof-of-concept only. OMIT SI RCA work and SX-PRD/subscription management."
+    ),
+}
+
 _CLIENT_ROWS = {ROW_DISW, ROW_DISW_POC, ROW_SI_RCA, ROW_PRESALES}
 
 
-def _compress(entries: list[_FileMeta], system: str, model: str) -> str:
+def _compress(entries: list[_FileMeta], system: str, model: str, client_row: bool = False) -> str:
     """Call Claude to compress meeting summaries to ≤255 chars."""
     parts = []
     for m in entries:
@@ -275,9 +326,28 @@ def _compress(entries: list[_FileMeta], system: str, model: str) -> str:
     )
     data = claude_cli.run_claude_p(prompt, model=model, system=system)
     result = claude_cli.result_text(data).strip()
-    # Hard-truncate as a last-resort safety net (model should comply)
+    for _ in range(3):
+        bad = _CLIENT_FORBIDDEN.findall(result) if client_row else []
+        if len(result) <= 255 and not bad:
+            break
+        reasons = []
+        if len(result) > 255:
+            reasons.append(f"it is {len(result)} characters; the hard limit is 255")
+        if bad:
+            reasons.append(
+                "it contains internal staffing/people language that must not appear in a client-facing "
+                f"timecard ({', '.join(sorted({b if isinstance(b, str) else b[0] for b in bad}))}); remove those items entirely"
+            )
+        retry = (
+            f"Rewrite this timecard entry: {'; '.join(reasons)}. Keep only technical/architecture work. "
+            f"Output ONLY the rewritten entry.\n\n{result}"
+        )
+        data = claude_cli.run_claude_p(retry, model=model, system=system)
+        result = claude_cli.result_text(data).strip()
     if len(result) > 255:
-        result = result[:252] + "..."
+        # Cut at the last comma that fits so the cell never ends mid-phrase
+        cut = result[:255].rfind(",")
+        result = result[:cut] if cut > 100 else result[:255].rstrip()
     return result
 
 
@@ -318,6 +388,10 @@ def run_timecard(target_date: Optional[date] = None) -> int:
 
     # Parse metadata and classify transcript-backed files
     metas = [_parse_meta(f) for f in files]
+    skipped = [m for m in metas if _is_noise_file(m)]
+    metas = [m for m in metas if m not in skipped]
+    for m in skipped:
+        print(f"  [skipped-noise] {m.meeting_date} — {m.title}")
     for m in metas:
         m.row = _classify(m)
         m.duration_min = _duration(m)
@@ -375,6 +449,8 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     def _system_for_row(row: str) -> str:
         base = _COMPRESS_SYSTEM_CLIENT if row in _CLIENT_ROWS else _COMPRESS_SYSTEM_INTERNAL
         parts = [base]
+        if row in _ROW_SCOPE:
+            parts.append(_ROW_SCOPE[row])
         if context_brief:
             parts.append(f"=== PROGRAM CONTEXT ===\n{context_brief}")
         if rolodex:
@@ -423,7 +499,7 @@ def run_timecard(target_date: Optional[date] = None) -> int:
                     f"({len(entries)} meeting(s), cell {processed}/{total_cells})..."
                 )
                 try:
-                    compressed = _compress(entries, _system_for_row(row), model)
+                    compressed = _compress(entries, _system_for_row(row), model, client_row=row in _CLIENT_ROWS)
                 except Exception as e:
                     print(
                         f"  WARNING: compression failed for {row}/{d} — {e}",
@@ -475,13 +551,13 @@ def run_timecard(target_date: Optional[date] = None) -> int:
     for row in [ROW_DISW, ROW_DISW_POC, ROW_PRESALES, ROW_SI_RCA]:
         for d in week_days:
             cell = output_rows[row][d]
-            if cell and cell != "—":
+            if cell and cell != "—" and not cell.startswith("*(cal only)*"):
                 accomplishments.append(f"[{d.isoformat()} / {row.split('(')[0].strip().split(' — ')[0].strip()}] {cell}")
 
     if accomplishments:
         lines.append("## Key Accomplishments This Week")
         lines.append("")
-        for a in accomplishments[:8]:
+        for a in accomplishments:
             lines.append(f"- {a}")
         lines.append("")
 

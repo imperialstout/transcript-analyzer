@@ -17,7 +17,7 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 # People who warrant a prep flag if they appear in title or attendees
@@ -41,7 +41,7 @@ _SKIP_PATTERNS = [
     r"\blunch\b", r"\bbreakfast\b", r"\bcommute\b", r"\bfocus time\b",
     r"\bbirthday\b", r"\bholiday\b", r"\bvacation\b",
     r"\btravel\b", r"\bflights?\b",
-    r"\bpto\b", r"[-–]\s*out\b",              # PTO / "Brad - Out" markers
+    r"\bpto\b", r"[-–]\s*out\b", r"^\s*out\s*$",              # PTO / "Brad - Out" markers
     r"cpq\s+pi\s+\d+",                         # CPQ PI sprint daily placeholders
     r"seap\s+dive|take\s+a\s+seap\b",          # SEAP office hours
     r"agentforce\s+office\s+hours",             # AMERS/regional Agentforce office hours

@@ -343,6 +343,36 @@ def set_loe(item_id: str, loe: str | None) -> bool:
     return False
 
 
+def _append_note(item: dict, notes: str) -> None:
+    if notes:
+        existing = item.get("notes", "")
+        item["notes"] = f"{existing}; {notes}" if existing else notes
+
+
+def set_deadline(item_id: str, iso_date: str, notes: str = "") -> bool:
+    """Set the deadline (ISO date) on an item, optionally appending to notes. Returns True if found."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["deadline"] = iso_date
+            _append_note(item, notes)
+            _save(items)
+            return True
+    return False
+
+
+def set_owner(item_id: str, owner: str, notes: str = "") -> bool:
+    """Set the owner on an item, optionally appending to notes. Returns True if found."""
+    items = _load()
+    for item in items:
+        if item["id"] == item_id:
+            item["owner"] = owner
+            _append_note(item, notes)
+            _save(items)
+            return True
+    return False
+
+
 def reopen(item_id: str) -> bool:
     """Reopen a closed/dropped/expired item, setting status back to pending."""
     items = _load()

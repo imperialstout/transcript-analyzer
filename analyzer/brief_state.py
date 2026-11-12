@@ -408,15 +408,13 @@ def expire_stale(business_days: int | None = None) -> list[dict]:
       act:      deadline passed (or created_at + 1 bday if no deadline) → expired
       watch:    age > 5 business days → expired
       delegate: age > 7 days → resurface (resurfaced_count++) but stay pending
-      they-owe: deadline passed → promote to act item with text "Follow up: ..."
+      they-owe: never expired here; overdue ones are surfaced by the session hook
       insight:  age > 1 business day → expired
     """
     items = _load()
     today = date.today()
     now = _now_iso()
     changed: list[dict] = []
-
-    new_items: list[dict] = []
 
     for item in items:
         if item.get("status") != "pending":
@@ -454,30 +452,8 @@ def expire_stale(business_days: int | None = None) -> list[dict]:
                 item["resurfaced_count"] = item.get("resurfaced_count", 0) + 1
                 changed.append(item)
 
-        elif itype == "they-owe":
-            if deadline_str:
-                deadline = date.fromisoformat(deadline_str)
-                if deadline < today:
-                    # Promote to act item for Brad
-                    promoted = {
-                        "id": _item_id(item.get("source_brief", ""), f"Follow up: {item['text']}"),
-                        "text": f"Follow up: {item['text']}",
-                        "type": "act",
-                        "owner": "Brad",
-                        "deadline": today.isoformat(),
-                        "source_brief": item.get("source_brief", ""),
-                        "source_pulse": item.get("source_pulse", ""),
-                        "status": "pending",
-                        "created_at": now,
-                        "closed_at": None,
-                        "deferred_to": None,
-                        "notes": f"Auto-promoted from they-owe: {item.get('owner', '?')} missed deadline {deadline_str}",
-                        "resurfaced_count": 0,
-                    }
-                    new_items.append(promoted)
-                    item["status"] = "expired"
-                    item["closed_at"] = now
-                    changed.append(item)
+        # they-owe: left pending past its deadline; brief-state-hook.py surfaces it as overdue.
+        # (Previously promoted to a duplicate "Follow up:" act, which was noisy and expired next day.)
 
         elif itype == "insight":
             threshold = _EXPIRY_BUSINESS_DAYS["insight"]
@@ -486,12 +462,7 @@ def expire_stale(business_days: int | None = None) -> list[dict]:
                 item["closed_at"] = now
                 changed.append(item)
 
-    if changed or new_items:
-        # Avoid duplicating promoted act items
-        existing_ids = {i["id"] for i in items}
-        for promoted in new_items:
-            if promoted["id"] not in existing_ids:
-                items.append(promoted)
+    if changed:
         _save(items)
 
     return changed

@@ -246,7 +246,7 @@ Expiry rules (applied at the top of each synthesis run via `expire_stale()` + `r
 - **act**: expired if deadline passed, or if no deadline and age > 1 business day
 - **watch**: expired if age > 5 business days
 - **delegate**: resurfaced (counter++) after 7 days — not expired
-- **they-owe**: promoted to a new act item ("Follow up: …") when deadline passes
+- **they-owe**: stays pending past deadline; the session hook lists it under "They owe you — past deadline" (no longer auto-promoted to an act)
 - **insight**: expired after 1 business day
 - **deferred**: flipped back to pending on or after `deferred_to` date
 

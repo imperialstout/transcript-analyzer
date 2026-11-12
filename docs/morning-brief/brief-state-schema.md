@@ -92,7 +92,7 @@ Same logic as `alerts.py` — consistent pattern across the codebase.
 | `act` | Deadline passed (or created_at + 1 business day if no deadline) → status=expired |
 | `watch` | No pulse mention for 5 business days → status=expired; resurfaces in next brief |
 | `delegate` | Age > 7 days, status=pending → resurface in brief as confirmation prompt |
-| `they-owe` | Deadline passed, status=pending → promote to act item for Brad with text "Follow up: [original text]" |
+| `they-owe` | Never auto-expired. Past deadline, it stays pending and the session hook lists it as overdue. |
 | `insight` | Age > 1 day → status=expired (insights are day-specific context) |
 
 ---

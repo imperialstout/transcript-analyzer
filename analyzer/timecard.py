@@ -105,6 +105,9 @@ _ADMIN_TITLE_KW = re.compile(
 )
 _ADMIN_WORKSTREAMS = {"internal", "internal-salesforce"}
 
+_TAYO_TITLE_KW = re.compile(r"\btayo\b", re.IGNORECASE)
+_ONE_ON_ONE_TYPES = {"1-on-1", "1:1", "one-on-one", "1on1"}
+
 _DURATION_SHORT = re.compile(r"30\s*min|30m\b|half\s+hour", re.IGNORECASE)
 _SHORT_MEETING_TYPES = {"standup", "daily", "stand-up", "standup/scrum"}
 
@@ -182,7 +185,15 @@ def _classify(meta: _FileMeta) -> str:
     title_lower = meta.title.lower()
     participants_lower = {p.lower() for p in meta.participants}
 
-    # 0. SX-PRD / subscription management is presales, regardless of participants
+    # 0a. Tayo 1:1s are practice time, never a Siemens row, even when the
+    #     conversation covers Siemens programs.
+    if _TAYO_TITLE_KW.search(meta.title) or (
+        meta.meeting_type.lower() in _ONE_ON_ONE_TYPES
+        and any("tayo" in p for p in participants_lower)
+    ):
+        return ROW_ADMIN
+
+    # 0b. SX-PRD / subscription management is presales, regardless of participants
     if _SX_PRD_KW.search(meta.workstream) or _SX_PRD_KW.search(meta.title):
         return ROW_PRESALES
 

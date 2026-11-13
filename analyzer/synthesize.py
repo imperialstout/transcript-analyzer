@@ -289,7 +289,14 @@ def _build_prior_context(
         return (priors, -1)
 
     # daily / catch-up
-    prior_daily = _most_recent_synthesis(analyzed_path, _MODE_SUFFIX["daily"])
+    # Chain only off pulses for days BEFORE the anchor, so a back-dated or
+    # same-day re-run never treats a later (or its own) pulse as "prior".
+    earlier_dailies = [
+        f for f in analyzed_path.iterdir()
+        if not f.is_dir() and _MODE_SUFFIX["daily"] in f.name
+        and (d := _date_from_filename(f.name)) and d < anchor_date
+    ]
+    prior_daily = max(earlier_dailies, key=lambda f: f.name, default=None)
     prior_weekly = _most_recent_synthesis(analyzed_path, _MODE_SUFFIX["weekly"])
 
     gap_days = -1
@@ -378,9 +385,48 @@ def _archive(files: list[Path], analyzed_path: Path) -> None:
         print(f"  archived → _Archive/{folder}/{f.name}")
 
 
+_TAYO_RE = re.compile(r"\btayo\b", re.IGNORECASE)
+_FM_MEETING_TYPE = re.compile(r"^meeting_type:\s*(.+)$", re.MULTILINE)
+_FM_PARTICIPANTS = re.compile(r"^participants:\s*\[([^\]]*)\]", re.MULTILINE)
+_ONE_ON_ONE_TYPES = {"1-on-1", "1:1", "one-on-one", "1on1"}
+
+_PRACTICE_MARKER = (
+    "[PRACTICE 1:1 — Brad/Tayo. Practice-lead conversation, NOT SherpaX program "
+    "signal. Extract only commitments Brad owes or is owed and sales "
+    "opportunities/DSRs; do not derive program risks, stakeholder politics, or "
+    "Tayo's stance on SherpaX from this file.]"
+)
+
+_PRACTICE_RULE = (
+    "Files marked [PRACTICE 1:1] are Brad's practice-lead 1:1s with Tayo, not "
+    "Siemens program signal. Keep them out of 'What changed', 'Quiet items', and "
+    "the private read. Surface only their commitments and sales opportunities, as "
+    "short entries prefixed '[PRACTICE 1:1]' under 'New entries to the board' or "
+    "'Suggested dispositions'. Never attribute a 'waiting for SherpaX / SI RCA to "
+    "go red' stance to Tayo — that is Brad's own read."
+)
+
+
+def _is_practice_one_on_one(f: Path) -> bool:
+    if _TAYO_RE.search(f.name):
+        return True
+    try:
+        with f.open("r", encoding="utf-8") as fh:
+            head = fh.read(2048)
+    except OSError:
+        return False
+    mt = _FM_MEETING_TYPE.search(head)
+    pt = _FM_PARTICIPANTS.search(head)
+    return bool(
+        mt and mt.group(1).strip().lower() in _ONE_ON_ONE_TYPES
+        and pt and _TAYO_RE.search(pt.group(1))
+    )
+
+
 def _file_block(f: Path) -> str:
     """One file rendered as a bundle section (header + body)."""
-    return f"=== ANALYSIS FILE: {f.name} ===\n\n{f.read_text(encoding='utf-8')}"
+    marker = f"{_PRACTICE_MARKER}\n" if _is_practice_one_on_one(f) else ""
+    return f"=== ANALYSIS FILE: {f.name} ===\n{marker}\n{f.read_text(encoding='utf-8')}"
 
 
 def _prior_label(p: Path) -> str:
@@ -452,7 +498,11 @@ def _digest_batches(files: list[Path], system: str, model: str) -> str:
         f"  bundle exceeds single-pass budget — map-reduce over "
         f"{len(batches)} batch(es) of {len(files)} file(s)"
     )
-    digest_system = "You are extracting structured notes from meeting analyses. Preserve all names, decisions, risks, commitments, and political signals with full attribution."
+    digest_system = (
+        "You are extracting structured notes from meeting analyses. Preserve all names, "
+        "decisions, risks, commitments, and political signals with full attribution. "
+        + _PRACTICE_RULE
+    )
     digests = []
     for i, batch in enumerate(batches, 1):
         batch_bundle = "\n\n---\n\n".join(_file_block(f) for f in batch)
@@ -661,7 +711,7 @@ def run(
         system_parts.append(f"=== PROGRAM REFERENCE (pipeline-maintained facts) ===\n{program_reference}")
     if rolodex:
         system_parts.append(f"=== PEOPLE ROLODEX ===\n{rolodex}")
-    system_parts.append(f"=== SYNTHESIS INSTRUCTIONS ===\n{prompt_body}")
+    system_parts.append(f"=== SYNTHESIS INSTRUCTIONS ===\n{prompt_body}\n\n{_PRACTICE_RULE}")
     system = "\n\n".join(system_parts)
 
     # Daily/weekly pulses are cheap recaps → Sonnet. Career trajectory is
